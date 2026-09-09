@@ -1,10 +1,10 @@
 "use client";
 
-import { ShieldCheck, Lock, UserCheck, KeyRound } from "lucide-react";
+import { ShieldCheck, Lock, UserCheck, KeyRound, EyeOff, CheckCircle2 } from "lucide-react";
 
 export function BilateralMatchDiagram() {
   return (
-    <div className="relative w-full overflow-hidden rounded-3xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/80 p-8 backdrop-blur-xl shadow-2xl">
+    <div className="relative w-full overflow-hidden rounded-3xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/80 p-6 sm:p-8 backdrop-blur-xl shadow-2xl">
       {/* Subtle Ambient Glow */}
       <div className="pointer-events-none absolute -top-12 -left-12 h-44 w-44 rounded-full bg-blue-500/10 blur-3xl" />
       <div className="pointer-events-none absolute -bottom-12 -right-12 h-44 w-44 rounded-full bg-violet-500/10 blur-3xl" />
@@ -16,25 +16,25 @@ export function BilateralMatchDiagram() {
             <Lock className="h-5 w-5" aria-hidden="true" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">
-              Birebir Gizli Teklif & Kriptografik Kasa
+            <h3 className="text-sm sm:text-base font-bold text-[var(--color-text-primary)]">
+              Birebir Gizli Teklifleşme
             </h3>
-            <p className="text-xs text-[var(--color-text-secondary)]">
-              AES-256-GCM ile şifrelenmiş, yalnızca iki tarafın görebildiği kör indeksli teklif akışı
+            <p className="text-xs text-[var(--color-text-secondary)] mt-0.5">
+              Teklif tutarlarınız ve proje detaylarınız rakiplere kapalıdır; yalnızca siz ve anlaştığınız uzman görebilir.
             </p>
           </div>
         </div>
-        <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-1 text-xs font-medium text-emerald-500 shadow-sm">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-          <span>Şifreleme Aktif</span>
+        <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-1 text-xs font-medium text-emerald-400 shadow-sm">
+          <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+          <span>Tam Gizlilik Garantisi</span>
         </div>
       </div>
 
-      {/* SVG Canvas Area */}
-      <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8 py-8 px-4">
+      {/* Visual Workflow Canvas */}
+      <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6 sm:gap-8 py-6 px-2 sm:px-6">
         {/* Left Node: Client / Project Owner */}
-        <div className="flex flex-col items-center gap-3 text-center z-10">
-          <div className="relative flex h-20 w-20 items-center justify-center rounded-3xl border border-blue-500/40 bg-blue-500/10 text-blue-500 shadow-xl shadow-blue-500/20 backdrop-blur-md">
+        <div className="flex flex-col items-center gap-3 text-center z-10 shrink-0">
+          <div className="relative flex h-20 w-20 items-center justify-center rounded-3xl border border-blue-500/40 bg-blue-500/10 text-blue-400 shadow-xl shadow-blue-500/10 backdrop-blur-md transition-transform hover:scale-105">
             <UserCheck className="h-10 w-10" aria-hidden="true" />
             <span className="absolute -top-1 -right-1 flex h-4 w-4">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
@@ -51,77 +51,82 @@ export function BilateralMatchDiagram() {
           </div>
         </div>
 
-        {/* Center Animated Path & Vault */}
+        {/* Center Animated Pipeline & Safe Box */}
         <div className="relative flex-1 flex flex-col items-center justify-center w-full max-w-md py-4">
-          {/* Animated SVG Laser Pipeline */}
-          <svg
-            className="w-full h-24 overflow-visible"
-            viewBox="0 0 300 80"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            aria-hidden="true"
-          >
-            <defs>
-              <linearGradient id="beamGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.8" />
-                <stop offset="50%" stopColor="#6366f1" stopOpacity="1" />
-                <stop offset="100%" stopColor="#a855f7" stopOpacity="0.8" />
-              </linearGradient>
-              <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-                <feGaussianBlur stdDeviation="4" result="blur" />
-                <feComposite in="SourceGraphic" in2="blur" operator="over" />
-              </filter>
-            </defs>
-
-            {/* Static Track */}
-            <path
-              d="M 10 40 Q 150 -10 290 40"
-              stroke="var(--color-border-subtle)"
-              strokeWidth="2"
-              strokeDasharray="4 4"
-            />
-            {/* Animated Laser Beam */}
-            <path
-              d="M 10 40 Q 150 -10 290 40"
-              stroke="url(#beamGradient)"
-              strokeWidth="3"
-              strokeLinecap="round"
-              filter="url(#glow)"
-              strokeDasharray="40 180"
-              strokeDashoffset="0"
-              className="animate-[dash_3s_linear_infinite]"
+          {/* Animated SVG Path */}
+          <div className="w-full relative flex items-center justify-center">
+            <svg
+              className="w-full h-20 overflow-visible"
+              viewBox="0 0 320 60"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              aria-hidden="true"
             >
-              <animate
-                attributeName="stroke-dashoffset"
-                from="220"
-                to="0"
-                dur="3s"
-                repeatCount="indefinite"
-              />
-            </path>
-          </svg>
+              <defs>
+                <linearGradient id="flowBeamGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor="#3b82f6" />
+                  <stop offset="50%" stopColor="#8b5cf6" />
+                  <stop offset="100%" stopColor="#06b6d4" />
+                </linearGradient>
+              </defs>
 
-          {/* Central Security Vault Badge */}
-          <div className="relative -mt-12 flex flex-col items-center gap-2 rounded-2xl border border-indigo-500/40 bg-[var(--color-surface-elevated)]/90 px-6 py-3.5 shadow-2xl backdrop-blur-xl">
+              {/* Guide Track */}
+              <path
+                d="M 20 30 Q 160 0 300 30"
+                stroke="var(--color-border-subtle)"
+                strokeWidth="2"
+                strokeDasharray="6 6"
+              />
+
+              {/* Animated Glowing Wave Track */}
+              <path
+                d="M 20 30 Q 160 0 300 30"
+                stroke="url(#flowBeamGradient)"
+                strokeWidth="3.5"
+                strokeLinecap="round"
+                strokeDasharray="50 150"
+              >
+                <animate
+                  attributeName="stroke-dashoffset"
+                  values="200;0"
+                  dur="2.5s"
+                  repeatCount="indefinite"
+                />
+              </path>
+
+              {/* Moving Lock Particle */}
+              <circle r="4" fill="#38bdf8" filter="drop-shadow(0 0 6px #38bdf8)">
+                <animateMotion
+                  path="M 20 30 Q 160 0 300 30"
+                  dur="2.5s"
+                  repeatCount="indefinite"
+                />
+              </circle>
+            </svg>
+          </div>
+
+          {/* Central Privacy Protection Badge */}
+          <div className="relative -mt-6 flex flex-col items-center gap-1.5 rounded-2xl border border-blue-500/30 bg-[var(--color-surface-base)] px-5 py-3 shadow-xl backdrop-blur-xl text-center">
             <div className="flex items-center gap-2">
-              <ShieldCheck className="h-5 w-5 text-indigo-400" aria-hidden="true" />
-              <span className="font-mono text-xs font-bold text-indigo-400 uppercase tracking-wider">
-                AES-256-GCM Vault
+              <ShieldCheck className="h-4 w-4 text-blue-400" aria-hidden="true" />
+              <span className="text-xs font-bold text-[var(--color-text-primary)]">
+                Özel Şifreli Teklif Akışı
               </span>
             </div>
-            <div className="font-mono text-[10px] text-[var(--color-text-tertiary)] tracking-widest">
-              HMAC-SHA256 BLIND INDEX
+            <div className="flex items-center gap-1.5 text-[11px] text-emerald-400 font-medium">
+              <EyeOff className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>Rakipler fiyatınızı ve teklifinizi göremez</span>
             </div>
           </div>
         </div>
 
         {/* Right Node: Freelancer / Engineer */}
-        <div className="flex flex-col items-center gap-3 text-center z-10">
-          <div className="relative flex h-20 w-20 items-center justify-center rounded-3xl border border-violet-500/40 bg-violet-500/10 text-violet-500 shadow-xl shadow-violet-500/20 backdrop-blur-md">
+        <div className="flex flex-col items-center gap-3 text-center z-10 shrink-0">
+          <div className="relative flex h-20 w-20 items-center justify-center rounded-3xl border border-cyan-500/40 bg-cyan-500/10 text-cyan-400 shadow-xl shadow-cyan-500/10 backdrop-blur-md transition-transform hover:scale-105">
             <KeyRound className="h-10 w-10" aria-hidden="true" />
             <span className="absolute -top-1 -right-1 flex h-4 w-4">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-4 w-4 bg-violet-500" />
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-4 w-4 bg-cyan-500" />
             </span>
           </div>
           <div>
@@ -135,19 +140,25 @@ export function BilateralMatchDiagram() {
         </div>
       </div>
 
-      {/* Bottom Features Ticker */}
-      <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3 border-t border-[var(--color-border-subtle)] pt-4 text-xs text-[var(--color-text-secondary)]">
-        <div className="flex items-center gap-2">
-          <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
-          <span>Üçüncü taraflara tamamen kapalı teklifler</span>
+      {/* Bottom Features: Clear End-User Value */}
+      <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3 border-t border-[var(--color-border-subtle)] pt-4 text-xs">
+        <div className="flex items-center gap-2.5 p-2 rounded-xl bg-[var(--color-surface-hover)]/40">
+          <CheckCircle2 className="h-4 w-4 text-blue-400 shrink-0" aria-hidden="true" />
+          <span className="text-[var(--color-text-secondary)]">
+            <strong className="text-[var(--color-text-primary)] font-medium">Fiyat Kırma Savaşı Yok:</strong> Açık artırma usulü teklif yarışı yaşanmaz.
+          </span>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="h-1.5 w-1.5 rounded-full bg-indigo-500" />
-          <span>Arama motorları teklif tutarlarını dizinleyemez</span>
+        <div className="flex items-center gap-2.5 p-2 rounded-xl bg-[var(--color-surface-hover)]/40">
+          <CheckCircle2 className="h-4 w-4 text-cyan-400 shrink-0" aria-hidden="true" />
+          <span className="text-[var(--color-text-secondary)]">
+            <strong className="text-[var(--color-text-primary)] font-medium">Tam Gizlilik:</strong> Teklif detayları arama motorlarına kapalıdır.
+          </span>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="h-1.5 w-1.5 rounded-full bg-violet-500" />
-          <span>Taraflar onaylayana kadar veriler şifrelidir</span>
+        <div className="flex items-center gap-2.5 p-2 rounded-xl bg-[var(--color-surface-hover)]/40">
+          <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" aria-hidden="true" />
+          <span className="text-[var(--color-text-secondary)]">
+            <strong className="text-[var(--color-text-primary)] font-medium">Birebir Temas:</strong> Eşleşme onaylandığında doğrudan iletişim başlar.
+          </span>
         </div>
       </div>
     </div>

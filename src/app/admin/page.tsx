@@ -1,269 +1,305 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { cookies } from "next/headers";
 import {
+  Users,
   Layers,
-  Clock,
   Send,
   Handshake,
   AlertTriangle,
-  UserX,
-  Inbox,
-  ShieldCheck,
+  ShieldAlert,
   Activity,
-  ArrowLeft,
+  ArrowRight,
 } from "lucide-react";
 import { AdminService } from "@/src/modules/admin/service";
-import { ModerationService } from "@/src/modules/moderation/service";
-import { Badge } from "@/src/components/ui/badge";
-import { Button } from "@/src/components/ui/button";
 
 export const metadata: Metadata = {
-  title: "Yönetim & Moderasyon Merkezi | Operis",
-  description: "Operis operasyonel yönetim, moderasyon merkezi ve idari denetim izleme konsolu.",
-  robots: {
-    index: false,
-    follow: false,
-  },
+  title: "Yönetim & Güvenlik Paneli | Operis Admin",
+  description: "Operis operasyonel yönetim, moderasyon merkezi ve siber güvenlik denetim konsolu.",
 };
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminDashboardPage({
-  searchParams,
-}: {
-  searchParams?: Promise<{ lang?: string }>;
-}) {
-  const sp = searchParams ? await searchParams : {};
-  const cookieStore = await cookies();
-  const cookieLocale = cookieStore.get("NEXT_LOCALE")?.value || cookieStore.get("fp_locale")?.value;
-  const effectiveLocale = sp.lang === "tr" || sp.lang === "en" ? sp.lang : (cookieLocale === "en" ? "en" : "tr");
-  const isTr = effectiveLocale === "tr";
-  const locale = isTr ? "tr" : "en";
+export default async function AdminDashboardPage() {
+  const metrics = await AdminService.getDashboardMetrics();
+  const allThreats = await AdminService.getSecurityThreats({});
+  const threats = allThreats.slice(0, 3);
+  const abuseIncidents = await AdminService.getAbuseIncidents({ status: "OPEN" });
+  const auditLogs = await AdminService.getAuditLogs(5);
 
-  let metrics = {
-    activeListings: 0,
-    expiredListingsLast24h: 0,
-    offersLast24h: 0,
-    matchesLast24h: 0,
-    openReports: 0,
-    suspendedUsers: 0,
-    deadLetters: 0,
-  };
-
-  let openReports: Array<Record<string, unknown>> = [];
-  let auditLogs: Array<Record<string, unknown>> = [];
-
-  try {
-    metrics = await AdminService.getDashboardMetrics();
-    openReports = await ModerationService.getReports("open");
-    auditLogs = await AdminService.getAuditLogs(20);
-  } catch {
-    // Graceful fallback for unconfigured database in local/preview environments
-  }
-
-  const statCards = [
+  const kpis = [
     {
-      label: isTr ? "Aktif İlanlar" : "Active Listings",
-      hint: isTr ? "7 günlük radarda canlı ilanlar" : "Currently live on 7-day radar",
-      value: metrics.activeListings,
+      label: "Toplam Kullanıcı",
+      value: metrics.totalUsers.toLocaleString(),
+      sub: "+10.000 Ölçekli Dizin",
+      icon: Users,
+      color: "from-blue-500/20 to-blue-600/10 text-blue-400 border-blue-500/20",
+      href: "/admin/users",
+    },
+    {
+      label: "Aktif Canlı İlanlar",
+      value: metrics.activeListings.toLocaleString(),
+      sub: "7 Günlük Radar Kapsamı",
       icon: Layers,
-      color: "text-blue-500",
+      color: "from-emerald-500/20 to-emerald-600/10 text-emerald-400 border-emerald-500/20",
+      href: "/admin/listings",
     },
     {
-      label: isTr ? "Süresi Dolanlar (24s)" : "Expired (Last 24h)",
-      hint: isTr ? "168 saat sınırında otomatik devredildi" : "Auto-transitioned at 168h mark",
-      value: metrics.expiredListingsLast24h,
-      icon: Clock,
-      color: "text-amber-500",
-    },
-    {
-      label: isTr ? "Teklifler (Son 24s)" : "Offers (Last 24h)",
-      hint: isTr ? "Şifrelenmiş birebir teklifler" : "Encrypted 1-to-1 proposals",
-      value: metrics.offersLast24h,
+      label: "Son 24s Teklifler",
+      value: metrics.offersLast24h.toLocaleString(),
+      sub: "Şifrelenmiş Birebir Teklifler",
       icon: Send,
-      color: "text-purple-500",
+      color: "from-purple-500/20 to-purple-600/10 text-purple-400 border-purple-500/20",
+      href: "/admin/offers",
     },
     {
-      label: isTr ? "Eşleşmeler (24s)" : "Matches (Last 24h)",
-      hint: isTr ? "Oluşturulan doğrudan çalışma alanları" : "Bilateral collaborations formed",
-      value: metrics.matchesLast24h,
+      label: "Oluşan Eşleşmeler",
+      value: metrics.matchesLast24h.toLocaleString(),
+      sub: "Doğrudan Anlaşma Ağları",
       icon: Handshake,
-      color: "text-emerald-500",
+      color: "from-indigo-500/20 to-indigo-600/10 text-indigo-400 border-indigo-500/20",
+      href: "/admin/offers",
     },
     {
-      label: isTr ? "Açık Şikayetler" : "Open Abuse Reports",
-      hint: isTr ? "İnceleme bekleyen bildirimler" : "Pending moderator review",
-      value: metrics.openReports,
+      label: "Kullanıcı İhlalleri",
+      value: metrics.openReports.toLocaleString(),
+      sub: "Küfür, Hakaret & Şikayet",
       icon: AlertTriangle,
-      color: "text-red-500",
+      color: "from-amber-500/20 to-amber-600/10 text-amber-400 border-amber-500/20",
+      href: "/admin/moderation/abuse",
     },
     {
-      label: isTr ? "Askıya Alınanlar" : "Suspended Users",
-      hint: isTr ? "Güvenlik yaptırımı uygulanan hesaplar" : "Safety enforcement actions",
-      value: metrics.suspendedUsers,
-      icon: UserX,
-      color: "text-rose-500",
-    },
-    {
-      label: isTr ? "İletilemeyen Olaylar" : "Dead Outbox Events",
-      hint: isTr ? "Kuyrukta bekleyen arkaplan görevleri" : "Undelivered background jobs",
-      value: metrics.deadLetters,
-      icon: Inbox,
-      color: "text-orange-500",
+      label: "Siber Saldırılar & Tehdit",
+      value: metrics.activeThreats.toLocaleString(),
+      sub: "Brute Force, DDoS & SQLi",
+      icon: ShieldAlert,
+      color: "from-red-500/20 to-red-600/10 text-red-400 border-red-500/20",
+      href: "/admin/security/threats",
     },
   ];
 
   return (
-    <main className="min-h-screen bg-[var(--bg-canvas)] text-[var(--text-primary)] p-6 sm:p-10 space-y-8">
-      {/* Header */}
-      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[var(--color-border-subtle)] pb-6">
+    <div className="space-y-8">
+      {/* Top Banner & Quick Operations */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800/80 pb-6">
         <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold tracking-tight">
-              {isTr ? "Operis Yönetim Konsolu" : "Operis Admin Console"}
-            </h1>
-            <Badge variant="outline">{isTr ? "Yetkili Girişi" : "Restricted"}</Badge>
-          </div>
-          <p className="text-xs text-[var(--color-text-secondary)] mt-1">
-            {isTr
-              ? "Operasyonel yönetim, moderasyon merkezi ve idari denetim izleme. Kişisel veriler en aza indirilmiştir."
-              : "Operational dashboard and moderation center. PII is strictly minimized by default."}
+          <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2.5">
+            <span>Operis Yönetim & Güvenlik Konsolu</span>
+            <span className="text-xs font-mono font-normal px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">
+              v2.4 Enterprise
+            </span>
+          </h1>
+          <p className="text-sm text-slate-400 mt-1">
+            +10.000 kullanıcı, 21 teknoloji disiplini, canlı tazelik radarı ve çift kanallı tehdit izleme merkezi.
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
           <Link
-            href={`/admin?lang=${isTr ? "en" : "tr"}`}
-            className="text-xs px-3 py-1.5 rounded-xl border border-[var(--color-border-subtle)] hover:bg-[var(--color-surface-hover)] font-medium transition-colors"
+            href="/admin/security/threats"
+            className="px-3.5 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 text-xs font-semibold flex items-center gap-1.5 transition-all"
           >
-            {isTr ? "English (EN)" : "Türkçe (TR)"}
+            <ShieldAlert className="h-4 w-4" />
+            <span>Saldırı İzleme ({metrics.activeThreats})</span>
           </Link>
-          <Link href={`/${locale}`}>
-            <Button variant="secondary" size="sm" className="gap-2">
-              <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-              <span>{isTr ? "Siteye Dön" : "Return to Site"}</span>
-            </Button>
+          <Link
+            href="/admin/moderation/abuse"
+            className="px-3.5 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 text-xs font-semibold flex items-center gap-1.5 transition-all"
+          >
+            <AlertTriangle className="h-4 w-4" />
+            <span>İhlal Kuyruğu ({metrics.openReports})</span>
           </Link>
         </div>
-      </header>
+      </div>
 
-      {/* Operational Metrics Cards */}
-      <section aria-label={isTr ? "Platform Operasyonel Metrikleri" : "Platform Operational Metrics"} className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        {statCards.map((card) => {
-          const Icon = card.icon;
+      {/* KPI Cards Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+        {kpis.map((kpi) => {
+          const Icon = kpi.icon;
           return (
-            <div
-              key={card.label}
-              className="rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)] p-5 space-y-2"
+            <Link
+              key={kpi.label}
+              href={kpi.href}
+              className={`p-4 rounded-2xl border bg-gradient-to-br transition-all hover:scale-[1.02] hover:shadow-lg ${kpi.color} flex flex-col justify-between`}
             >
               <div className="flex items-center justify-between">
-                <span className="text-xs text-[var(--color-text-secondary)] font-medium">
-                  {card.label}
-                </span>
-                <Icon className={`h-4 w-4 ${card.color}`} aria-hidden="true" />
+                <span className="text-xs font-medium text-slate-400">{kpi.label}</span>
+                <Icon className="h-4 w-4" />
               </div>
-              <div className="text-2xl font-bold tracking-tight text-[var(--color-text-primary)]">
-                {card.value}
+              <div className="my-3">
+                <div className="text-2xl font-bold tracking-tight text-white font-mono">
+                  {kpi.value}
+                </div>
+                <div className="text-[10px] text-slate-400 truncate mt-0.5">{kpi.sub}</div>
               </div>
-              <p className="text-[11px] text-[var(--color-text-tertiary)] truncate">
-                {card.hint}
-              </p>
-            </div>
+              <div className="text-[10px] font-medium inline-flex items-center gap-1 opacity-70 hover:opacity-100">
+                <span>Modülü Aç</span>
+                <ArrowRight className="h-3 w-3" />
+              </div>
+            </Link>
           );
         })}
-      </section>
+      </div>
 
-      {/* Main Grid: Open Reports & Audit Log */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Open Reports Section */}
-        <section
-          aria-label={isTr ? "Açık İhlal Bildirimleri" : "Open Abuse Reports"}
-          className="rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)] p-6 space-y-4"
-        >
-          <div className="flex items-center justify-between border-b border-[var(--color-border-subtle)] pb-3">
-            <h2 className="text-base font-bold flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-amber-500" aria-hidden="true" />
-              <span>{isTr ? "Açık İhlal Bildirimleri" : "Open Abuse Reports"}</span>
-            </h2>
-            <Badge variant="secondary">{openReports.length}</Badge>
+      {/* Dual Real-Time Feeds: Abuse & Cyber Threats */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Kanal 1: Kullanıcı Uygunsuzluk & Küfür/Hakaret Bildirimleri */}
+        <div className="rounded-2xl border border-slate-800 bg-[#12141a] p-5 space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-400" />
+              <h2 className="font-semibold text-sm text-white">
+                Kullanıcı İhlalleri & Küfür/Hakaret Uyarıları
+              </h2>
+            </div>
+            <Link
+              href="/admin/moderation/abuse"
+              className="text-xs text-blue-400 hover:text-blue-300 font-medium inline-flex items-center gap-1"
+            >
+              <span>Tümünü Gör</span>
+              <ArrowRight className="h-3 w-3" />
+            </Link>
           </div>
 
-          {openReports.length === 0 ? (
-            <div className="p-8 text-center text-xs text-[var(--color-text-tertiary)] flex flex-col items-center justify-center gap-2">
-              <ShieldCheck className="h-8 w-8 text-emerald-500/50" aria-hidden="true" />
-              <span>
-                {isTr
-                  ? "Açık ihlal veya şikayet kaydı bulunmuyor. Tüm moderasyon kuyrukları temiz."
-                  : "No open abuse reports. All moderation queues are clear."}
+          <div className="space-y-2.5">
+            {abuseIncidents.slice(0, 3).map((item) => (
+              <div
+                key={item.id}
+                className="p-3 rounded-xl border border-slate-800/80 bg-slate-900/50 space-y-1.5 text-xs hover:border-slate-700 transition-all"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-slate-200">
+                      {item.offenderDisplayName || "Şüpheli Kullanıcı"}
+                    </span>
+                    <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-mono">
+                      {item.reasonCode}
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-slate-500 font-mono">
+                    {new Date(item.createdAt).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}
+                  </span>
+                </div>
+                <p className="text-slate-400 text-[11px] leading-relaxed line-clamp-2">
+                  {item.details}
+                </p>
+                {item.flaggedTerms && item.flaggedTerms.length > 0 && (
+                  <div className="flex items-center gap-1.5 pt-1">
+                    <span className="text-[10px] text-red-400 font-medium">Tespit Edilen Kelimeler:</span>
+                    {item.flaggedTerms.map((term) => (
+                      <span
+                        key={term}
+                        className="px-1.5 py-0.2 rounded bg-red-500/20 text-red-300 font-mono text-[9px] border border-red-500/30"
+                      >
+                        {term}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Kanal 2: Siber Güvenlik Saldırıları & Hacker Uyarıları */}
+        <div className="rounded-2xl border border-slate-800 bg-[#12141a] p-5 space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
+            <div className="flex items-center gap-2">
+              <ShieldAlert className="h-5 w-5 text-red-400" />
+              <h2 className="font-semibold text-sm text-white">
+                Siber Tehditler & Anlık Saldırı Alarmları
+              </h2>
+            </div>
+            <Link
+              href="/admin/security/threats"
+              className="text-xs text-blue-400 hover:text-blue-300 font-medium inline-flex items-center gap-1"
+            >
+              <span>Tümünü Gör</span>
+              <ArrowRight className="h-3 w-3" />
+            </Link>
+          </div>
+
+          <div className="space-y-2.5">
+            {threats.map((threat) => (
+              <div
+                key={threat.id}
+                className="p-3 rounded-xl border border-slate-800/80 bg-slate-900/50 space-y-1.5 text-xs hover:border-slate-700 transition-all"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono font-bold text-red-400">
+                      {threat.sourceIp}
+                    </span>
+                    <span
+                      className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold border ${
+                        threat.severity === "CRITICAL"
+                          ? "bg-red-500/20 text-red-400 border-red-500/40"
+                          : threat.severity === "HIGH"
+                          ? "bg-orange-500/20 text-orange-400 border-orange-500/40"
+                          : "bg-blue-500/20 text-blue-400 border-blue-500/40"
+                      }`}
+                    >
+                      {threat.severity}
+                    </span>
+                    <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 text-[10px] font-mono">
+                      {threat.threatType}
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-slate-500 font-mono">
+                    {threat.attemptCount} Teşebbüs
+                  </span>
+                </div>
+                <div className="text-slate-400 font-mono text-[11px] truncate">
+                  Hedef: {threat.targetEndpoint}
+                </div>
+                <div className="flex items-center justify-between pt-1 text-[10px]">
+                  <span className="text-emerald-400 flex items-center gap-1">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                    Savunma Durumu: {threat.status}
+                  </span>
+                  <span className="text-slate-500">
+                    Risk Skoru: %{threat.riskScore}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Audit Log Stream */}
+      <div className="rounded-2xl border border-slate-800 bg-[#12141a] p-5 space-y-4">
+        <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
+          <div className="flex items-center gap-2">
+            <Activity className="h-5 w-5 text-blue-400" />
+            <h2 className="font-semibold text-sm text-white">
+              Son Yönetici & Moderasyon Denetim İzi (Audit Logs)
+            </h2>
+          </div>
+          <Link
+            href="/admin/logs?category=audit"
+            className="text-xs text-blue-400 hover:text-blue-300 font-medium inline-flex items-center gap-1"
+          >
+            <span>Tüm Logları İncele</span>
+            <ArrowRight className="h-3 w-3" />
+          </Link>
+        </div>
+
+        <div className="divide-y divide-slate-800/60">
+          {auditLogs.map((log: any) => (
+            <div key={log.id} className="py-2.5 flex items-center justify-between text-xs gap-4">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span className="px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 font-mono text-[10px] border border-blue-500/20 shrink-0">
+                  {log.action}
+                </span>
+                <span className="text-slate-300 truncate">{log.safeSummary}</span>
+              </div>
+              <span className="text-slate-500 font-mono text-[10px] shrink-0">
+                {new Date(log.createdAt).toLocaleString("tr-TR")}
               </span>
             </div>
-          ) : (
-            <div className="space-y-3 max-h-[400px] overflow-y-auto">
-              {openReports.map((report) => (
-                <div
-                  key={report.id as string}
-                  className="rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-surface-hover)] p-3 text-xs space-y-1"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold">{report.reasonCode as string}</span>
-                    <Badge variant="outline" size="sm">
-                      {report.targetType as string}
-                    </Badge>
-                  </div>
-                  <p className="text-[var(--color-text-secondary)]">
-                    {(report.details as string) || (isTr ? "Ek açıklama girilmedi." : "No extra details provided.")}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-
-        {/* Audit Log Section */}
-        <section
-          aria-label={isTr ? "İdari Denetim Günlüğü" : "Administrative Audit Log"}
-          className="rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)] p-6 space-y-4"
-        >
-          <div className="flex items-center justify-between border-b border-[var(--color-border-subtle)] pb-3">
-            <h2 className="text-base font-bold flex items-center gap-2">
-              <Activity className="h-4 w-4 text-blue-500" aria-hidden="true" />
-              <span>{isTr ? "İdari Denetim Günlüğü" : "Administrative Audit Log"}</span>
-            </h2>
-            <Badge variant="secondary">{auditLogs.length}</Badge>
-          </div>
-
-          {auditLogs.length === 0 ? (
-            <div className="p-8 text-center text-xs text-[var(--color-text-tertiary)]">
-              {isTr ? "Kayıtlı idari işlem kaydı bulunmuyor." : "No recent audit records recorded."}
-            </div>
-          ) : (
-            <div className="space-y-3 max-h-[400px] overflow-y-auto font-mono text-xs">
-              {auditLogs.map((log) => (
-                <div
-                  key={log.id as string}
-                  className="rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-surface-hover)] p-3 space-y-1"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-[var(--color-text-primary)]">
-                      {log.action as string}
-                    </span>
-                    <span className="text-[var(--color-text-tertiary)] text-[10px]">
-                      {new Date(log.createdAt as string).toISOString()}
-                    </span>
-                  </div>
-                  <div className="text-[var(--color-text-secondary)]">
-                    {isTr ? "Hedef:" : "Target:"} {log.targetType as string} ({log.targetId as string})
-                  </div>
-                  <div className="text-[var(--color-text-tertiary)] text-[11px]">
-                    {isTr ? "Gerekçe:" : "Reason:"} {log.reason as string}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
+          ))}
+        </div>
       </div>
-    </main>
+    </div>
   );
 }

@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Mail, Lock, ShieldAlert, KeyRound, Eye, EyeOff } from "lucide-react";
+import { Mail, Lock, ShieldAlert, KeyRound, Eye, EyeOff, Zap } from "lucide-react";
 import { Button } from "../ui/button";
 import { TextInput } from "../ui/text-input";
 
@@ -21,6 +21,7 @@ export function LoginForm({ locale }: LoginFormProps) {
   const [totpCode, setTotpCode] = useState("");
   const [requires2FA, setRequires2FA] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isQuickLoggingIn, setIsQuickLoggingIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -49,6 +50,7 @@ export function LoginForm({ locale }: LoginFormProps) {
       }
 
       router.push(isTr ? "/tr/akis" : "/en/feed");
+      router.refresh();
     } catch (err: unknown) {
       setError(
         err instanceof Error
@@ -60,6 +62,41 @@ export function LoginForm({ locale }: LoginFormProps) {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleQuickLogin = async () => {
+    setIsQuickLoggingIn(true);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/auth/quick-login", {
+        method: "POST",
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Hızlı giriş başarısız oldu");
+      }
+
+      router.push(isTr ? "/tr/akis" : "/en/feed");
+      router.refresh();
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : isTr
+          ? "Hızlı giriş yapılamadı. Lütfen tekrar deneyiniz."
+          : "Quick login failed. Please try again."
+      );
+    } finally {
+      setIsQuickLoggingIn(false);
+    }
+  };
+
+  const handleFillDemo = () => {
+    setEmail("kullanici@operis.pro");
+    setPassword("OperisUser2026!");
+    setError(null);
   };
 
   return (
@@ -136,6 +173,7 @@ export function LoginForm({ locale }: LoginFormProps) {
         />
       )}
 
+      {/* Main Submit Button */}
       <Button
         type="submit"
         variant="primary"
@@ -147,6 +185,48 @@ export function LoginForm({ locale }: LoginFormProps) {
           ? isTr ? "Doğrula ve Giriş Yap" : "Verify & Sign In"
           : isTr ? "Giriş Yap" : "Sign In"}
       </Button>
+
+      {/* Quick Login Section directly under Giriş Yap */}
+      <div className="pt-2 space-y-3">
+        <div className="relative flex items-center justify-center">
+          <div className="border-t border-[var(--color-border-subtle)] w-full" />
+          <span className="bg-[var(--color-surface-base)] px-3 text-[11px] font-medium text-[var(--color-text-tertiary)] uppercase tracking-wider shrink-0">
+            {isTr ? "veya tek tıkla" : "or quick access"}
+          </span>
+          <div className="border-t border-[var(--color-border-subtle)] w-full" />
+        </div>
+
+        <Button
+          type="button"
+          variant="secondary"
+          size="lg"
+          onClick={handleQuickLogin}
+          isLoading={isQuickLoggingIn}
+          className="w-full gap-2.5 font-semibold text-sm rounded-xl border border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 hover:text-blue-300 transition-all cursor-pointer shadow-sm"
+        >
+          <Zap className="h-4 w-4 fill-blue-400 text-blue-400" aria-hidden="true" />
+          <span>{isTr ? "Hızlı Giriş Yap (Normal Kullanıcı)" : "Quick Sign In (Normal User)"}</span>
+        </Button>
+
+        {/* Demo Account Info & Pre-fill Shortcut */}
+        <div className="flex items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/80 text-[11px] text-[var(--color-text-tertiary)]">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 truncate">
+            <span className="font-medium text-[var(--color-text-secondary)]">
+              {isTr ? "Kullanıcı:" : "User:"}
+            </span>
+            <span className="font-mono text-blue-400">kullanici@operis.pro</span>
+            <span className="hidden sm:inline text-[var(--color-border-subtle)]">•</span>
+            <span className="font-mono">OperisUser2026!</span>
+          </div>
+          <button
+            type="button"
+            onClick={handleFillDemo}
+            className="shrink-0 text-blue-400 hover:text-blue-300 hover:underline font-medium cursor-pointer"
+          >
+            {isTr ? "Forma Yaz" : "Pre-fill"}
+          </button>
+        </div>
+      </div>
 
       <div className="pt-2 text-center text-xs text-[var(--color-text-secondary)]">
         {isTr ? "Henüz bir hesabınız yok mu?" : "Do not have an account?"}{" "}

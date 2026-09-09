@@ -12,6 +12,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { FeedService } from "@/src/modules/listings/feed/service";
+import { getSession } from "@/src/modules/auth/session";
 import { AvatarInitials } from "@/src/components/ui/avatar-initials";
 import { Badge } from "@/src/components/ui/badge";
 import { ListingDetailActions } from "@/src/components/listings/listing-detail-actions";
@@ -92,6 +93,8 @@ export default async function ListingDetailPage({
   }
 
   const { listing, category, ownerProfile } = data;
+  const session = await getSession();
+  const isOwner = Boolean(session?.userId && session.userId === listing.ownerUserId);
 
   // Calculate remaining days
   const now = new Date();
@@ -193,7 +196,8 @@ export default async function ListingDetailPage({
   };
 
   return (
-    <main className="mx-auto max-w-5xl px-4 py-10 sm:px-6 lg:px-8 space-y-10">
+
+    <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-6">
       {/* Schema.org Structured Data */}
       <script
         type="application/ld+json"
@@ -213,206 +217,236 @@ export default async function ListingDetailPage({
         <span className="text-[var(--color-text-secondary)] font-medium">{category.key}</span>
       </nav>
 
-      {/* Main Glass Hero Card */}
-      <article className="relative overflow-hidden rounded-3xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/80 p-8 sm:p-10 backdrop-blur-xl shadow-2xl space-y-8">
-        {/* Top Status Indicators */}
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <Badge variant="secondary" size="md" className="font-medium bg-blue-500/10 text-blue-400 border-blue-500/20">
-            {category.key}
-          </Badge>
+      {/* 2-Column Responsive Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        {/* Left Main Content (Col 8) */}
+        <div className="lg:col-span-8 space-y-6">
+          {/* Header Card: Title, Status, Summary */}
+          <article className="relative overflow-hidden rounded-3xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/80 p-6 sm:p-8 backdrop-blur-xl shadow-xl space-y-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <Badge variant="secondary" size="md" className="font-medium bg-blue-500/10 text-blue-400 border-blue-500/20">
+                {category.key}
+              </Badge>
 
-          <div className="flex items-center gap-3 text-xs">
-            <div className="inline-flex items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3.5 py-1 text-cyan-400 font-medium">
-              <span className={`h-2 w-2 rounded-full ${isCurrentlyActive ? "bg-cyan-400 animate-pulse" : "bg-red-500"}`} />
-              <span>
-                {isCurrentlyActive
-                  ? isTr
-                    ? `${diffDays} gün aktif`
-                    : `Active for ${diffDays} days`
-                  : isTr
-                  ? "Süresi doldu"
-                  : "Expired"}
-              </span>
+              <div className="flex items-center gap-3 text-xs">
+                <div className="inline-flex items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3.5 py-1 text-cyan-400 font-medium">
+                  <span className={`h-2 w-2 rounded-full ${isCurrentlyActive ? "bg-cyan-400 animate-pulse" : "bg-red-500"}`} />
+                  <span>
+                    {isCurrentlyActive
+                      ? isTr
+                        ? `${diffDays} gün aktif`
+                        : `Active for ${diffDays} days`
+                      : isTr
+                      ? "Süresi doldu"
+                      : "Expired"}
+                  </span>
+                </div>
+
+                {listing.activationSeq > 1 && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-indigo-500/10 px-3 py-1 text-xs font-medium text-indigo-400 border border-indigo-500/20">
+                    <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+                    <span>{isTr ? `${listing.activationSeq}. Yayım Döngüsü` : `Cycle #${listing.activationSeq}`}</span>
+                  </span>
+                )}
+              </div>
             </div>
 
-            {listing.activationSeq > 1 && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-indigo-500/10 px-3 py-1 text-xs font-medium text-indigo-400 border border-indigo-500/20">
-                <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
-                <span>{isTr ? `${listing.activationSeq}. Yayım Döngüsü` : `Cycle #${listing.activationSeq}`}</span>
+            <div className="space-y-3">
+              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[var(--color-text-primary)] leading-tight">
+                {listing.title}
+              </h1>
+              <p className="text-sm sm:text-base text-[var(--color-text-secondary)] leading-relaxed">
+                {listing.summary}
+              </p>
+            </div>
+          </article>
+
+          {/* Scope / Requirements Section */}
+          <section className="rounded-3xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/70 p-6 sm:p-8 backdrop-blur-xl space-y-4 shadow-sm">
+            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">
+              <Layers className="h-4 w-4 text-blue-500" aria-hidden="true" />
+              <span>{isTr ? "Proje Kapsamı ve Teknik Gereksinimler" : "Project Scope & Technical Requirements"}</span>
+            </div>
+            <div className="prose prose-sm max-w-none text-[var(--color-text-secondary)] whitespace-pre-wrap leading-relaxed">
+              {listing.scope}
+            </div>
+          </section>
+
+          {/* Technologies & Tags */}
+          {listing.tags && listing.tags.length > 0 && (
+            <section className="rounded-3xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/70 p-6 sm:p-8 backdrop-blur-xl space-y-3 shadow-sm">
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">
+                {isTr ? "İlgili Teknolojiler ve Beceriler" : "Relevant Tech Stack & Skills"}
+              </h2>
+              <div className="flex flex-wrap gap-2">
+                {listing.tags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="inline-flex items-center rounded-xl bg-[var(--color-surface-hover)] border border-[var(--color-border-subtle)] px-3.5 py-1.5 text-xs font-medium text-[var(--color-text-primary)]"
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Proposal Guidance for Specialists */}
+          <section
+            aria-label={isTr ? "Teklif Rehberi" : "Proposal Guide"}
+            className="relative overflow-hidden rounded-3xl border border-blue-500/20 bg-blue-500/5 p-6 sm:p-8 space-y-6 shadow-xl backdrop-blur-xl"
+          >
+            <div className="pointer-events-none absolute -top-12 -right-12 h-40 w-40 rounded-full bg-blue-500/10 blur-3xl" />
+
+            <div className="relative z-10 flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20 shadow-sm">
+                <ShieldCheck className="h-5 w-5" aria-hidden="true" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-[var(--color-text-primary)]">
+                  {isTr ? "Bu Projeye Teklif Verirken Nelere Dikkat Edilmeli?" : "Guidelines for Submitting a Winning Proposal"}
+                </h2>
+                <p className="text-xs text-[var(--color-text-secondary)]">
+                  {isTr ? "Başarılı ve kesintisiz iş birlikleri için önerilen adımlar" : "Best practices for high-impact proposals"}
+                </p>
+              </div>
+            </div>
+
+            <div className="relative z-10 grid grid-cols-1 sm:grid-cols-3 gap-3.5 text-xs text-[var(--color-text-secondary)] leading-relaxed">
+              <div className="p-4 rounded-2xl bg-[var(--color-surface-base)]/80 border border-[var(--color-border-subtle)] backdrop-blur-md space-y-2">
+                <div className="flex items-center gap-2 font-bold text-[var(--color-text-primary)]">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-500/10 text-blue-400 text-[10px] font-bold">1</span>
+                  <span>{isTr ? "Birebir Gizlilik" : "Confidentiality"}</span>
+                </div>
+                <p>
+                  {isTr
+                    ? "Teklifiniz rakiplere kapalıdır; doğrudan ilan sahibine iletilir."
+                    : "Your proposal is encrypted and viewed solely by the client."}
+                </p>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-[var(--color-surface-base)]/80 border border-[var(--color-border-subtle)] backdrop-blur-md space-y-2">
+                <div className="flex items-center gap-2 font-bold text-[var(--color-text-primary)]">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-cyan-500/10 text-cyan-400 text-[10px] font-bold">2</span>
+                  <span>{isTr ? "Net Zaman & Bütçe" : "Milestones"}</span>
+                </div>
+                <p>
+                  {isTr
+                    ? "Teklifinizde teknik yaklaşımınızı ve tahmini aşamaları kısaca özetleyin."
+                    : "Outline your technical architecture and delivery timeline."}
+                </p>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-[var(--color-surface-base)]/80 border border-[var(--color-border-subtle)] backdrop-blur-md space-y-2">
+                <div className="flex items-center gap-2 font-bold text-[var(--color-text-primary)]">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-bold">3</span>
+                  <span>{isTr ? "%0 Komisyon" : "0% Fee"}</span>
+                </div>
+                <p>
+                  {isTr
+                    ? "Eşleştiğinizde doğrudan iletişim kurulur; kesinti yapılmaz."
+                    : "Direct connection with no platform cut or middleman fees."}
+                </p>
+              </div>
+            </div>
+          </section>
+
+          {/* Privacy & Legal Transparency Box */}
+          <aside className="relative overflow-hidden rounded-3xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/60 p-5 sm:p-6 text-xs text-[var(--color-text-tertiary)] leading-relaxed flex items-start gap-3 backdrop-blur-xl shadow-sm">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+              <Lock className="h-3.5 w-3.5" aria-hidden="true" />
+            </div>
+            <p className="mt-0.5">
+              {isTr
+                ? "Yürürlükteki mevzuatın izin verdiği azami ölçüde, bu platform üzerinden verilen teklifler AES-256-GCM ile şifrelenir ve yalnızca ilan sahibi tarafından incelenir. Platform ödeme garantisi, emanet veya aracılık hizmeti vermez; tüm ticari müzakere doğrudan taraflar arasındadır."
+                : "To the maximum extent permitted by applicable law, proposals submitted on this platform are encrypted via AES-256-GCM and viewed solely by the project owner. The platform does not hold escrow or process payments."}
+            </p>
+          </aside>
+        </div>
+
+        {/* Right Sticky Sidebar (Col 4) */}
+        <aside className="lg:col-span-4 space-y-5 lg:sticky lg:top-24">
+          {/* Key Metrics & Action Card */}
+          <div className="rounded-3xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/80 p-6 backdrop-blur-xl shadow-xl space-y-5">
+            <div className="space-y-3 border-b border-[var(--color-border-subtle)] pb-4">
+              <div className="space-y-1">
+                <span className="text-[11px] text-[var(--color-text-tertiary)] uppercase font-semibold tracking-wider block">
+                  {isTr ? "Proje Bütçesi" : "Project Budget"}
+                </span>
+                <span className="font-mono text-2xl font-extrabold text-emerald-400 block">
+                  {budgetLabel}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 pt-2 text-xs">
+                <div>
+                  <span className="text-[var(--color-text-tertiary)] block text-[11px]">
+                    {isTr ? "Tahmini Süre" : "Duration"}
+                  </span>
+                  <span className="font-semibold text-[var(--color-text-primary)] flex items-center gap-1 mt-0.5">
+                    <Clock className="h-3.5 w-3.5 text-cyan-400" />
+                    <span>{timelineLabel ?? (isTr ? "Belirtilmedi" : "Flexible")}</span>
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[var(--color-text-tertiary)] block text-[11px]">
+                    {isTr ? "Yayım Tarihi" : "Published"}
+                  </span>
+                  <span className="font-semibold text-[var(--color-text-primary)] flex items-center gap-1 mt-0.5">
+                    <Calendar className="h-3.5 w-3.5 text-blue-400" />
+                    <span className="truncate">{formattedFirstDate}</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons (Teklif Ver / Düzenle) */}
+            <div className="pt-1">
+              <ListingDetailActions
+                listingId={listing.id}
+                listingSlug={slug}
+                listingTitle={listing.title}
+                ownerUserId={listing.ownerUserId}
+                isOwner={isOwner}
+                isActive={isCurrentlyActive}
+                locale={locale}
+              />
+            </div>
+
+            <div className="pt-2 border-t border-[var(--color-border-subtle)] flex items-center justify-between text-[11px] text-emerald-400 font-semibold">
+              <span className="flex items-center gap-1">
+                <ShieldCheck className="h-3.5 w-3.5" />
+                <span>{isTr ? "%0 Komisyon & Şifreli" : "0% Fee & Encrypted"}</span>
               </span>
-            )}
-          </div>
-        </div>
-
-        {/* Title & Summary */}
-        <div className="space-y-3">
-          <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-[var(--color-text-primary)] leading-tight">
-            {listing.title}
-          </h1>
-          <p className="text-base text-[var(--color-text-secondary)] leading-relaxed max-w-3xl">
-            {listing.summary}
-          </p>
-        </div>
-
-        {/* Key Metrics Strip */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-hover)]/60 p-5 text-xs">
-          <div className="space-y-1">
-            <span className="text-[var(--color-text-tertiary)] block">
-              {isTr ? "Proje Bütçesi" : "Project Budget"}
-            </span>
-            <span className="font-mono text-base font-bold text-emerald-400 block">
-              {budgetLabel}
-            </span>
+              <span className="text-[var(--color-text-tertiary)] font-normal">
+                {isTr ? "Doğrudan Anlaşma" : "Direct Deal"}
+              </span>
+            </div>
           </div>
 
-          <div className="space-y-1">
-            <span className="text-[var(--color-text-tertiary)] block">
-              {isTr ? "Tahmini Süre" : "Target Timeline"}
-            </span>
-            <span className="font-semibold text-base text-[var(--color-text-primary)] flex items-center gap-1.5">
-              <Clock className="h-4 w-4 text-cyan-400" aria-hidden="true" />
-              <span>{timelineLabel ?? (isTr ? "Belirtilmedi" : "Flexible")}</span>
-            </span>
-          </div>
-
-          <div className="space-y-1">
-            <span className="text-[var(--color-text-tertiary)] block">
-              {isTr ? "Yayım Tarihi" : "Publication Date"}
-            </span>
-            <span className="font-semibold text-sm text-[var(--color-text-primary)] flex items-center gap-1.5">
-              <Calendar className="h-4 w-4 text-blue-400" aria-hidden="true" />
-              <span>{formattedFirstDate}</span>
-            </span>
-          </div>
-
-          <div className="space-y-1">
-            <span className="text-[var(--color-text-tertiary)] block">
+          {/* Client Profile Card */}
+          <div className="rounded-3xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/70 p-5 backdrop-blur-xl shadow-sm space-y-3 text-xs">
+            <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--color-text-tertiary)]">
               {isTr ? "İlan Sahibi" : "Posted By"}
-            </span>
+            </div>
             <Link
               href={getLocalizedProfilePath(ownerProfile.handle, locale)}
-              className="font-semibold text-sm text-[var(--color-text-primary)] hover:text-blue-400 transition-colors flex items-center gap-2"
+              className="flex items-center gap-3 group"
             >
-              <AvatarInitials name={ownerProfile.displayName} size="sm" />
-              <span className="truncate">{ownerProfile.displayName}</span>
+              <AvatarInitials name={ownerProfile.displayName} size="md" />
+              <div className="space-y-0.5 truncate">
+                <div className="font-bold text-sm text-[var(--color-text-primary)] group-hover:text-blue-400 transition-colors truncate">
+                  {ownerProfile.displayName}
+                </div>
+                <div className="font-mono text-xs text-blue-400">
+                  @{ownerProfile.handle}
+                </div>
+              </div>
             </Link>
           </div>
-        </div>
-
-        {/* Action Container with Reactive Buttons */}
-        <div className="pt-2">
-          <ListingDetailActions
-            listingId={listing.id}
-            listingTitle={listing.title}
-            ownerUserId={listing.ownerUserId}
-            isOwner={false}
-            isActive={isCurrentlyActive}
-            locale={locale}
-          />
-        </div>
-      </article>
-
-      {/* Scope / Requirements Section */}
-      <section className="rounded-3xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/70 p-8 sm:p-10 backdrop-blur-xl space-y-4 shadow-sm">
-        <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">
-          <Layers className="h-4 w-4 text-blue-500" aria-hidden="true" />
-          <span>{isTr ? "Proje Kapsamı ve Teknik Gereksinimler" : "Project Scope & Technical Requirements"}</span>
-        </div>
-        <div className="prose prose-sm max-w-none text-[var(--color-text-secondary)] whitespace-pre-wrap leading-relaxed">
-          {listing.scope}
-        </div>
-      </section>
-
-      {/* Technologies & Tags */}
-      {listing.tags && listing.tags.length > 0 && (
-        <section className="rounded-3xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/70 p-6 sm:p-8 backdrop-blur-xl space-y-3 shadow-sm">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">
-            {isTr ? "İlgili Teknolojiler ve Beceriler" : "Relevant Tech Stack & Skills"}
-          </h2>
-          <div className="flex flex-wrap gap-2">
-            {listing.tags.map((tag) => (
-              <span
-                key={tag}
-                className="inline-flex items-center rounded-xl bg-[var(--color-surface-hover)] border border-[var(--color-border-subtle)] px-3.5 py-1.5 text-xs font-medium text-[var(--color-text-primary)]"
-              >
-                {tag}
-              </span>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* Proposal Guidance for Specialists */}
-      <section
-        aria-label={isTr ? "Teklif Rehberi" : "Proposal Guide"}
-        className="relative overflow-hidden rounded-3xl border border-blue-500/20 bg-blue-500/5 p-6 sm:p-8 space-y-6 shadow-xl backdrop-blur-xl"
-      >
-        <div className="pointer-events-none absolute -top-12 -right-12 h-40 w-40 rounded-full bg-blue-500/10 blur-3xl" />
-
-        <div className="relative z-10 flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20 shadow-sm">
-            <ShieldCheck className="h-5 w-5" aria-hidden="true" />
-          </div>
-          <div>
-            <h2 className="text-base font-bold text-[var(--color-text-primary)]">
-              {isTr ? "Bu Projeye Teklif Verirken Nelere Dikkat Edilmeli?" : "Guidelines for Submitting a Winning Proposal"}
-            </h2>
-            <p className="text-xs text-[var(--color-text-secondary)]">
-              {isTr ? "Başarılı ve kesintisiz iş birlikleri için önerilen adımlar" : "Best practices for high-impact proposals"}
-            </p>
-          </div>
-        </div>
-
-        <div className="relative z-10 grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-[var(--color-text-secondary)] leading-relaxed">
-          <div className="group relative overflow-hidden p-5 rounded-2xl bg-[var(--color-surface-base)]/80 border border-[var(--color-border-subtle)] backdrop-blur-md space-y-2.5 transition-all duration-300 hover:border-blue-500/30 hover:shadow-lg hover:shadow-blue-500/5 hover:-translate-y-0.5">
-            <div className="flex items-center gap-2 font-bold text-[var(--color-text-primary)]">
-              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-500/10 text-blue-400 text-[10px] font-bold">1</span>
-              <span>{isTr ? "Birebir Gizlilik" : "Confidentiality"}</span>
-            </div>
-            <p>
-              {isTr
-                ? "Teklifiniz rakiplere tamamen kapalıdır. Fiyatınızı düşürme baskısı olmadan değerinizi yansıtın."
-                : "Your offer is completely private. Represent your true value without race-to-the-bottom pressure."}
-            </p>
-          </div>
-
-          <div className="group relative overflow-hidden p-5 rounded-2xl bg-[var(--color-surface-base)]/80 border border-[var(--color-border-subtle)] backdrop-blur-md space-y-2.5 transition-all duration-300 hover:border-blue-500/30 hover:shadow-lg hover:shadow-blue-500/5 hover:-translate-y-0.5">
-            <div className="flex items-center gap-2 font-bold text-[var(--color-text-primary)]">
-              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-cyan-500/10 text-cyan-400 text-[10px] font-bold">2</span>
-              <span>{isTr ? "Net Zaman ve Bütçe" : "Scope & Milestones"}</span>
-            </div>
-            <p>
-              {isTr
-                ? "Teklif metninizde teknik yaklaşımınızı, tecrübenizi ve tahmini aşamaları kısaca özetleyin."
-                : "Briefly articulate your architecture, relevant past work, and expected milestone phases."}
-            </p>
-          </div>
-
-          <div className="group relative overflow-hidden p-5 rounded-2xl bg-[var(--color-surface-base)]/80 border border-[var(--color-border-subtle)] backdrop-blur-md space-y-2.5 transition-all duration-300 hover:border-blue-500/30 hover:shadow-lg hover:shadow-blue-500/5 hover:-translate-y-0.5">
-            <div className="flex items-center gap-2 font-bold text-[var(--color-text-primary)]">
-              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-bold">3</span>
-              <span>{isTr ? "%0 Kesintisiz İş Birliği" : "0% Fee Autonomy"}</span>
-            </div>
-            <p>
-              {isTr
-                ? "Teklifiniz kabul edildiğinde doğrudan iletişim kurulur. Kazancınızdan komisyon kesilmez."
-                : "Upon acceptance, connect directly with the client. Keep 100% of the agreed project fees."}
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* Privacy & Legal Transparency Box */}
-      <aside className="relative overflow-hidden rounded-3xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/60 p-6 sm:p-8 text-xs text-[var(--color-text-tertiary)] leading-relaxed flex items-start gap-4 backdrop-blur-xl shadow-sm">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-          <Lock className="h-4 w-4" aria-hidden="true" />
-        </div>
-        <p className="mt-0.5">
-          {isTr
-            ? "Yürürlükteki mevzuatın izin verdiği azami ölçüde, bu platform üzerinden verilen teklifler AES-256-GCM ile şifrelenir ve yalnızca ilan sahibi tarafından incelenir. Platform ödeme garantisi, emanet veya aracılık hizmeti vermez; tüm ticari müzakere doğrudan taraflar arasındadır."
-            : "To the maximum extent permitted by applicable law, proposals submitted on this platform are encrypted via AES-256-GCM and viewed solely by the project owner. The platform does not hold escrow or process payments."}
-        </p>
-      </aside>
+        </aside>
+      </div>
     </main>
   );
 }
+

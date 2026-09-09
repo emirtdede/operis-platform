@@ -5,6 +5,7 @@ import { Lock, ShieldCheck, LogIn } from "lucide-react";
 import { getSession } from "@/src/modules/auth/session";
 import { OfferService } from "@/src/modules/offers/service";
 import { ReceivedOffersDashboard, ReceivedOfferItem } from "@/src/components/dashboard/received-offers-dashboard";
+import { DashboardTabs } from "@/src/components/dashboard/dashboard-tabs";
 import { Button } from "@/src/components/ui/button";
 
 export async function generateMetadata({
@@ -121,7 +122,7 @@ export default async function ReceivedOffersPage({
   };
 
   return (
-    <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8 space-y-8">
+    <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-8">
       {/* Schema.org Structured Data */}
       <script
         type="application/ld+json"
@@ -147,6 +148,9 @@ export default async function ReceivedOffersPage({
           </Button>
         </Link>
       </header>
+
+      {/* Unified Dashboard Navigation Tabs */}
+      <DashboardTabs locale={locale} counts={{ receivedOffers: initialOffers.length }} />
 
       {/* Acceptance Guidance & Invariant Rules */}
       <section

@@ -45,6 +45,50 @@ export const ROUTE_MAP = {
     tr: "/tr/panel/teklifler/gonderilen",
     en: "/en/dashboard/offers/sent",
   },
+  dashboardSettings: {
+    tr: "/tr/panel/ayarlar",
+    en: "/en/dashboard/settings",
+  },
+  dashboardSecurity: {
+    tr: "/tr/panel/guvenlik",
+    en: "/en/dashboard/security",
+  },
+  dashboardNotifications: {
+    tr: "/tr/panel/bildirimler",
+    en: "/en/dashboard/notifications",
+  },
+  dashboardCategories: {
+    tr: "/tr/panel/kategorilerim",
+    en: "/en/dashboard/categories",
+  },
+  forgotPassword: {
+    tr: "/tr/sifremi-unuttum",
+    en: "/en/forgot-password",
+  },
+  resetPassword: {
+    tr: "/tr/sifre-sifirla",
+    en: "/en/reset-password",
+  },
+  help: {
+    tr: "/tr/yardim",
+    en: "/en/help",
+  },
+  about: {
+    tr: "/tr/hakkimizda",
+    en: "/en/about",
+  },
+  contact: {
+    tr: "/tr/iletisim",
+    en: "/en/contact",
+  },
+  report: {
+    tr: "/tr/sikayet-bildir",
+    en: "/en/report",
+  },
+  unauthorized: {
+    tr: "/tr/yetkisiz",
+    en: "/en/unauthorized",
+  },
 } as const;
 
 export type RouteKey = keyof typeof ROUTE_MAP;

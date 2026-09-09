@@ -154,12 +154,12 @@ export default async function NewListingPage({
             </div>
           </div>
           <h2 className="text-sm font-bold text-[var(--color-text-primary)]">
-            {isTr ? "7 Günlük Canlılık Radarı" : "7-Day Freshness Window"}
+            {isTr ? "1 Haftalık Canlılık Radarı" : "1-Week Freshness Window"}
           </h2>
           <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed">
             {isTr
-              ? "İlanınız 168 saat boyunca en üstte listelenir; süre bitiminde tek tıkla ücretsiz yenilenebilir."
-              : "Your project stays fresh for 168 hours; reactivate anytime with 1 click at 0 cost."}
+              ? "İlanınız 1 hafta boyunca en üstte listelenir; süre bitiminde tek tıkla ücretsiz yenilenebilir."
+              : "Your project stays fresh for 1 week; reactivate anytime with 1 click at 0 cost."}
           </p>
         </div>
 

@@ -84,11 +84,11 @@ export const TextArea = React.forwardRef<HTMLTextAreaElement, TextAreaProps>(
           className={twMerge(
             clsx(
               "w-full min-h-[110px] p-3.5 text-sm rounded-xl font-normal transition-all duration-200 resize-y",
-              "bg-white/80 dark:bg-slate-900/60 backdrop-blur-xl text-[var(--color-text-primary)]",
-              "border border-slate-200 dark:border-white/[0.08] hover:border-slate-300 dark:hover:border-white/[0.18]",
-              "shadow-sm dark:shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_1px_2px_rgba(0,0,0,0.25)]",
-              "placeholder:text-slate-400 dark:placeholder:text-slate-500/70",
-              "focus-visible:outline-none focus-visible:border-blue-500 dark:focus-visible:border-blue-500/80 focus-visible:ring-4 focus-visible:ring-blue-500/15 focus-visible:bg-white dark:focus-visible:bg-slate-900/80",
+              "bg-[var(--bg-surface)] text-[var(--text-primary)]",
+              "border border-[var(--border-subtle)] hover:border-[var(--border-strong)]",
+              "shadow-sm",
+              "placeholder:text-[var(--text-muted)]",
+              "focus-visible:outline-none focus-visible:border-blue-500 focus-visible:ring-4 focus-visible:ring-blue-500/15 focus-visible:bg-[var(--bg-surface)]",
               error
                 ? "border-[var(--color-danger)] focus-visible:ring-[var(--color-danger)]/20"
                 : "",

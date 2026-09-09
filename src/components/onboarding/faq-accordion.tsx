@@ -33,8 +33,8 @@ export function FaqAccordion({ locale }: FaqAccordionProps) {
         ? "7 Günlük Canlılık Kuralı nedir? Süre dolunca ilanım silinir mi?"
         : "What is the 7-day lifecycle rule? Is my listing deleted upon expiration?",
       a: isTr
-        ? "Aylarca açık kalmış ve terk edilmiş ilan kalabalığını önlemek için her ilan maksimum 168 saat (7 gün) aktif kalır. 7 gün dolduğunda ilan silinmez, yalnızca pasife alınır. İlan sahibi panelinden tek tıkla ilanı 7 gün daha ücretsiz yenileyebilir."
-        : "To prevent dead or abandoned listings from cluttering search results, every project stays active for up to 168 hours (7 days). When 7 days pass, it is not deleted—it transitions to inactive. The owner can reactivate it for another 7 days with a single click at zero cost.",
+        ? "Aylarca açık kalmış ve terk edilmiş ilan kalabalığını önlemek için her ilan maksimum 1 hafta aktif kalır. 1 hafta dolduğunda ilan silinmez, yalnızca pasife alınır. İlan sahibi panelinden tek tıkla ilanı 1 hafta daha ücretsiz yenileyebilir."
+        : "To prevent dead or abandoned listings from cluttering search results, every project stays active for up to 1 week. When 1 week passes, it is not deleted—it transitions to inactive. The owner can reactivate it for another 1 week with a single click at zero cost.",
     },
     {
       q: isTr
@@ -65,8 +65,9 @@ export function FaqAccordion({ locale }: FaqAccordionProps) {
   return (
     <section
       aria-labelledby="faq-heading"
-      className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 space-y-8"
+      className="relative flex flex-col justify-center items-center min-h-[calc(100dvh-4rem)] w-full px-4 sm:px-6 lg:px-8 py-12 sm:py-16 snap-start scroll-mt-16"
     >
+      <div className="mx-auto max-w-4xl w-full space-y-8">
       <div className="text-center space-y-3">
         <h2
           id="faq-heading"
@@ -135,6 +136,7 @@ export function FaqAccordion({ locale }: FaqAccordionProps) {
             </div>
           );
         })}
+      </div>
       </div>
     </section>
   );

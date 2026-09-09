@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { validateContentAppropriateness } from "@/src/lib/security/content-moderator";
 
 const EMOJI_REGEX =
   /[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F1E6}-\u{1F1FF}\u{1F900}-\u{1F9FF}\u{1FA70}-\u{1FAFF}]/u;
@@ -22,6 +23,10 @@ export const submitOfferSchema = z
       .max(3000, "Offer message cannot exceed 3000 characters")
       .refine((val) => !EMOJI_REGEX.test(val), {
         message: "Emojis are strictly prohibited",
+      })
+      .refine((val) => validateContentAppropriateness(val).isValid, {
+        message:
+          "Mesajınız topluluk kurallarımıza aykırı uygunsuz ifadeler (küfür, hakaret veya saldırgan dil) içerdiği için engellendi.",
       }),
     budgetCurrency: z.enum(["TRY", "USD", "EUR", "GBP"]).optional().nullable(),
     budgetMin: z
@@ -64,6 +69,10 @@ export const updateOfferSchema = z
       .max(3000, "Offer message cannot exceed 3000 characters")
       .refine((val) => !EMOJI_REGEX.test(val), {
         message: "Emojis are strictly prohibited",
+      })
+      .refine((val) => validateContentAppropriateness(val).isValid, {
+        message:
+          "Mesajınız topluluk kurallarımıza aykırı uygunsuz ifadeler (küfür, hakaret veya saldırgan dil) içerdiği için engellendi.",
       }),
     budgetCurrency: z.enum(["TRY", "USD", "EUR", "GBP"]).optional().nullable(),
     budgetMin: z

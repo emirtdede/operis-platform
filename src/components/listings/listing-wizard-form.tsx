@@ -2,20 +2,31 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import {
+  FolderTree,
+  FileText,
+  ShieldCheck,
+  CheckCircle2,
+  Sparkles,
+  Info,
+  Clock,
+  Coins,
+} from "lucide-react";
 import { Button } from "../ui/button";
 import { TextInput } from "../ui/text-input";
 import { TextArea } from "../ui/text-area";
-import { Select } from "../ui/select";
 import { Checkbox } from "../ui/checkbox";
+import { Select } from "../ui/select";
 
-export interface CategoryOption {
+export interface CategoryItem {
   id: string;
+  key: string;
   slug: string;
   name: string;
 }
 
 export interface ListingWizardFormProps {
-  categories: CategoryOption[];
+  categories: CategoryItem[];
   locale: string;
 }
 
@@ -23,13 +34,18 @@ export function ListingWizardForm({ categories, locale }: ListingWizardFormProps
   const isTr = locale === "tr";
   const router = useRouter();
 
+  // Modern 3-Stage Stepper
   const [step, setStep] = useState(1);
-  const totalSteps = 9;
+  const totalSteps = 3;
 
   // Form State
   const [categoryId, setCategoryId] = useState(categories[0]?.id ?? "");
   const [title, setTitle] = useState("");
-  const [answers, setAnswers] = useState<Record<string, unknown>>({});
+  const [answers, setAnswers] = useState<Record<string, unknown>>({
+    authRequired: false,
+    adminRequired: false,
+    responsiveRequired: true,
+  });
   const [scope, setScope] = useState("");
   const [summary, setSummary] = useState("");
   const [tagsInput, setTagsInput] = useState("");
@@ -37,7 +53,6 @@ export function ListingWizardForm({ categories, locale }: ListingWizardFormProps
   const [budgetCurrency, setBudgetCurrency] = useState("TRY");
   const [budgetMin, setBudgetMin] = useState("");
   const [budgetMax, setBudgetMax] = useState("");
-  const timelineMode = "DURATION";
   const [timelineValue, setTimelineValue] = useState("2");
   const [timelineUnit, setTimelineUnit] = useState("WEEKS");
 
@@ -53,19 +68,18 @@ export function ListingWizardForm({ categories, locale }: ListingWizardFormProps
 
   const selectedCategory = categories.find((c) => c.id === categoryId);
 
-  // Validation per step
+  // Validation per stage
   const validateStep = (currentStep: number): boolean => {
     setError(null);
     if (currentStep === 1) {
       if (!categoryId) {
-        setError(isTr ? "Lütfen bir kategori seçin." : "Please select a category.");
+        setError(isTr ? "Lütfen bir proje kategorisi seçin." : "Please select a project category.");
         return false;
       }
-    } else if (currentStep === 2) {
       if (title.trim().length < 20 || title.trim().length > 120) {
         setError(
           isTr
-            ? "Başlık 20 ile 120 karakter arasında olmalıdır."
+            ? "Proje başlığı en az 20, en fazla 120 karakter olmalıdır."
             : "Title must be between 20 and 120 characters."
         );
         return false;
@@ -73,30 +87,33 @@ export function ListingWizardForm({ categories, locale }: ListingWizardFormProps
       if (title === title.toUpperCase() && title.length > 5) {
         setError(
           isTr
-            ? "Tamamı büyük harflerden oluşan başlık kullanılamaz."
+            ? "Tamamı büyük harflerden oluşan başlık kullanılamaz (§54 içerik kalite kuralı)."
             : "All-caps titles are not permitted."
         );
         return false;
       }
-    } else if (currentStep === 4) {
+      if (summary.trim().length < 80 || summary.trim().length > 280) {
+        setError(
+          isTr
+            ? "Kısa özet en az 80, en fazla 280 karakter olmalıdır (şu an: " +
+                summary.trim().length +
+                " karakter)."
+            : "Summary must be between 80 and 280 characters."
+        );
+        return false;
+      }
+    } else if (currentStep === 2) {
       if (scope.trim().length < 200 || scope.trim().length > 6000) {
         setError(
           isTr
-            ? "Proje kapsamı en az 200, en fazla 6000 karakter olmalıdır."
+            ? "Proje kapsamı en az 200, en fazla 6000 karakter olmalıdır (şu an: " +
+                scope.trim().length +
+                " karakter)."
             : "Project scope must be between 200 and 6000 characters."
         );
         return false;
       }
-    } else if (currentStep === 5) {
-      if (summary.trim().length < 50 || summary.trim().length > 280) {
-        setError(
-          isTr
-            ? "Kısa özet 50 ile 280 karakter arasında olmalıdır."
-            : "Summary must be between 50 and 280 characters."
-        );
-        return false;
-      }
-    } else if (currentStep === 7) {
+    } else if (currentStep === 3) {
       if (budgetMode === "RANGE" && budgetMin && budgetMax) {
         if (parseFloat(budgetMin) > parseFloat(budgetMax)) {
           setError(
@@ -107,7 +124,6 @@ export function ListingWizardForm({ categories, locale }: ListingWizardFormProps
           return false;
         }
       }
-    } else if (currentStep === 9) {
       if (
         !ackDirectRelationship ||
         !ackNoPlatformPayment ||
@@ -116,8 +132,8 @@ export function ListingWizardForm({ categories, locale }: ListingWizardFormProps
       ) {
         setError(
           isTr
-            ? "Yayımlamak için tüm taahhüt onay kutularını işaretlemelisiniz."
-            : "You must check all declaration checkboxes before publishing."
+            ? "Yayımlamak için lütfen 4 yasal taahhüt kutucuğunu da onaylayın."
+            : "Please accept all 4 declaration checkboxes before publishing."
         );
         return false;
       }
@@ -128,16 +144,18 @@ export function ListingWizardForm({ categories, locale }: ListingWizardFormProps
   const nextStep = () => {
     if (validateStep(step)) {
       setStep((prev) => Math.min(prev + 1, totalSteps));
+      window.scrollTo({ top: 0, behavior: "smooth" });
     }
   };
 
   const prevStep = () => {
     setError(null);
     setStep((prev) => Math.max(prev - 1, 1));
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handlePublish = async () => {
-    if (!validateStep(9)) return;
+    if (!validateStep(3)) return;
 
     setIsSubmitting(true);
     setError(null);
@@ -146,30 +164,40 @@ export function ListingWizardForm({ categories, locale }: ListingWizardFormProps
       .split(",")
       .map((t) => t.trim())
       .filter((t) => t.length > 0)
-      .slice(0, 10);
+      .slice(0, 8);
+
+    const mappedBudgetMode =
+      budgetMode === "RANGE"
+        ? "FIXED_RANGE"
+        : budgetMode === "FIXED"
+        ? "FIXED_EXACT"
+        : "NEGOTIABLE";
 
     const payload = {
       categoryId,
       title: title.trim(),
       summary: summary.trim(),
       scope: scope.trim(),
-      answersJson: answers,
+      projectType: "new_build" as const,
+      projectStage: "requirements_ready" as const,
+      answers: answers || {},
       tags,
-      budgetMode,
-      budgetCurrency: budgetMode !== "NEGOTIABLE" ? budgetCurrency : null,
-      budgetMin: budgetMin || null,
-      budgetMax: budgetMax || null,
-      timelineMode,
+      budgetMode: mappedBudgetMode,
+      budgetCurrency: mappedBudgetMode !== "NEGOTIABLE" ? budgetCurrency : "TRY",
+      budgetMin: budgetMin ? parseFloat(budgetMin) : null,
+      budgetMax: budgetMax ? parseFloat(budgetMax) : null,
+      timelineMode: "DURATION_ESTIMATE" as const,
       targetDate: null,
-      timelineValue: timelineMode === "DURATION" ? parseInt(timelineValue, 10) : null,
-      timelineUnit: timelineMode === "DURATION" ? timelineUnit : null,
-      declarations: {
-        ackDirectRelationship,
-        ackNoPlatformPayment,
-        ackSevenDayExpiry,
-        ackProhibitedContent,
-      },
+      timelineValue: timelineValue ? parseInt(timelineValue, 10) : 2,
+      timelineUnit: (timelineUnit || "WEEKS") as "DAYS" | "WEEKS" | "MONTHS",
+      workPreference: "REMOTE" as const,
+      preferredLanguage: "any" as const,
+      noSecretsConfirmed: ackNoPlatformPayment,
+      acceptableUseConfirmed: ackProhibitedContent,
+      expiryAcknowledged: ackSevenDayExpiry,
+      matchingRoleAcknowledged: ackDirectRelationship,
     };
+
 
     try {
       const res = await fetch("/api/listings/publish", {
@@ -197,6 +225,27 @@ export function ListingWizardForm({ categories, locale }: ListingWizardFormProps
     }
   };
 
+  const stageTitles = [
+    {
+      step: 1,
+      title: isTr ? "Proje Tanımı & Kategori" : "Project Info & Category",
+      desc: isTr ? "Kategori, başlık ve kısa özet" : "Category, title & summary",
+      icon: FolderTree,
+    },
+    {
+      step: 2,
+      title: isTr ? "Teknik Kapsam & Yetkinlikler" : "Technical Scope & Skills",
+      desc: isTr ? "Gereksinimler ve teknoloji etiketleri" : "Deliverables & technology tags",
+      icon: FileText,
+    },
+    {
+      step: 3,
+      title: isTr ? "Bütçe, Süreç & Yasal Onay" : "Budget, Timeline & Review",
+      desc: isTr ? "Tahmini bütçe ve yasal güvenceler" : "Budget, timeline & guarantees",
+      icon: ShieldCheck,
+    },
+  ];
+
   return (
     <div className="relative overflow-hidden mx-auto max-w-3xl rounded-3xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/70 backdrop-blur-xl p-6 sm:p-10 shadow-2xl">
       {/* Background ambient glows */}
@@ -210,403 +259,478 @@ export function ListingWizardForm({ categories, locale }: ListingWizardFormProps
       />
 
       <div className="relative z-10 space-y-8">
-        {/* Progress Bar & Header */}
-        <div>
-          <div className="flex items-center justify-between text-xs text-[var(--color-text-secondary)] mb-2 font-medium">
-            <span>{isTr ? `Adım ${step} / ${totalSteps}` : `Step ${step} of ${totalSteps}`}</span>
-            <span className="font-bold text-blue-400 font-mono">{Math.round((step / totalSteps) * 100)}%</span>
+        {/* 3-Stage Visual Stepper Header */}
+        <div className="space-y-4">
+          <div className="grid grid-cols-3 gap-2 sm:gap-3">
+            {stageTitles.map((st) => {
+              const Icon = st.icon;
+              const isActive = step === st.step;
+              const isDone = step > st.step;
+              return (
+                <button
+                  key={st.step}
+                  type="button"
+                  onClick={() => {
+                    if (isDone) setStep(st.step);
+                  }}
+                  disabled={!isDone && !isActive}
+                  className={`flex flex-col items-start p-3 sm:p-3.5 rounded-2xl border text-left transition-all ${
+                    isActive
+                      ? "border-blue-500/60 bg-blue-500/10 text-blue-400 shadow-xs"
+                      : isDone
+                      ? "border-emerald-500/40 bg-emerald-500/5 text-emerald-400 hover:bg-emerald-500/10 cursor-pointer"
+                      : "border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/40 text-[var(--color-text-tertiary)] opacity-60"
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5 text-xs font-bold mb-1">
+                    {isDone ? (
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                    ) : (
+                      <Icon className="h-3.5 w-3.5" />
+                    )}
+                    <span>{isTr ? `${st.step}. Aşama` : `Stage ${st.step}`}</span>
+                  </div>
+                  <div className="text-[11px] font-semibold text-[var(--color-text-primary)] truncate w-full">
+                    {st.title}
+                  </div>
+                </button>
+              );
+            })}
           </div>
+
           <div
-            className="h-2 w-full overflow-hidden rounded-full bg-[var(--color-surface-hover)] border border-[var(--color-border-subtle)]"
+            className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--color-surface-hover)] border border-[var(--color-border-subtle)]"
             role="progressbar"
             aria-valuenow={step}
             aria-valuemin={1}
             aria-valuemax={totalSteps}
-            aria-label={isTr ? "İlan sihirbazı ilerleme durumu" : "Listing wizard progress"}
           >
             <div
-              className="h-full bg-gradient-to-r from-blue-600 to-indigo-500 transition-all duration-300 shadow-sm"
+              className="h-full bg-gradient-to-r from-blue-600 to-indigo-500 transition-all duration-300"
               style={{ width: `${(step / totalSteps) * 100}%` }}
             />
           </div>
         </div>
 
         {error && (
-          <div className="rounded-xl border border-[var(--color-danger)]/20 bg-[var(--color-danger)]/10 p-3.5 text-xs text-[var(--color-danger)]">
+          <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-xs font-medium text-red-400 animate-in fade-in duration-200">
             {error}
           </div>
         )}
 
-        {/* Step 1: Category Selection */}
+        {/* ------------------------------------------------------------- */}
+        {/* STAGE 1: Project Info & Category */}
+        {/* ------------------------------------------------------------- */}
         {step === 1 && (
-          <div className="space-y-4">
-            <h2 className="text-xl font-bold text-[var(--color-text-primary)]">
-              {isTr ? "1. Proje Kategorisini Belirleyin" : "1. Select Project Category"}
-            </h2>
-            <p className="text-xs sm:text-sm text-[var(--color-text-secondary)]">
-              {isTr
-                ? "Projenizin ilgili olduğu ana teknoloji disiplinini seçin."
-                : "Choose the technology category that best fits your requirements."}
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-2">
-              {categories.map((cat) => (
-                <button
-                  key={cat.id}
-                  type="button"
-                  onClick={() => setCategoryId(cat.id)}
-                  className={`rounded-2xl border p-4 text-left transition-all duration-200 ${
-                    categoryId === cat.id
-                      ? "border-blue-500/60 bg-blue-500/10 shadow-md shadow-blue-500/10 font-semibold"
-                      : "border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/50 hover:border-blue-500/30 hover:bg-[var(--color-surface-hover)]"
-                  }`}
-                >
-                  <div className="text-sm font-semibold text-[var(--color-text-primary)]">{cat.name}</div>
-                  <div className="text-xs text-[var(--color-text-tertiary)] mt-1 font-mono">/{cat.slug}</div>
-                </button>
-              ))}
+          <div className="space-y-6">
+            <div className="space-y-1">
+              <h2 className="text-xl font-bold text-[var(--color-text-primary)] flex items-center gap-2">
+                <FolderTree className="h-5 w-5 text-blue-400" />
+                <span>{isTr ? "1. Proje Tanımı ve Kategori" : "1. Project Info & Category"}</span>
+              </h2>
+              <p className="text-xs sm:text-sm text-[var(--color-text-secondary)]">
+                {isTr
+                  ? "Projenizin ana disiplinini seçin, net bir başlık ve kısa bir özet belirleyin."
+                  : "Choose the technology category, clear title, and concise preview summary."}
+              </p>
             </div>
-          </div>
-        )}
 
-      {/* Step 2: Title */}
-      {step === 2 && (
-        <div className="space-y-4">
-          <h2 className="text-xl font-bold text-[var(--color-text-primary)]">
-            {isTr ? "2. Proje Başlığı" : "2. Project Title"}
-          </h2>
-          <p className="text-sm text-[var(--color-text-secondary)]">
-            {isTr
-              ? "İlanınızı en iyi özetleyen, açık ve profesyonel bir başlık girin (20–120 karakter)."
-              : "Provide a clear and professional title (20–120 characters)."}
-          </p>
-          <TextInput
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder={
-              isTr
-                ? "Örn: Next.js ve Tailwind ile Modern E-Ticaret Arayüzü Geliştirilmesi"
-                : "e.g. Next.js and Tailwind Modern E-Commerce Frontend Development"
-            }
-            maxLength={120}
-          />
-          <div className="text-right text-xs text-[var(--color-text-tertiary)]">
-            {title.length} / 120
-          </div>
-        </div>
-      )}
-
-      {/* Step 3: Template Questions */}
-      {step === 3 && (
-        <div className="space-y-4">
-          <h2 className="text-xl font-bold text-[var(--color-text-primary)]">
-            {isTr ? "3. Kategoriye Özel Sorular" : "3. Category-Specific Questions"}
-          </h2>
-          <p className="text-sm text-[var(--color-text-secondary)]">
-            {isTr
-              ? `"${selectedCategory?.name}" kategorisi için temel proje parametreleri:`
-              : `Key project parameters for "${selectedCategory?.name}":`}
-          </p>
-
-          <div className="space-y-3 pt-2">
-            <Checkbox
-              label={
-                isTr
-                  ? "Kullanıcı Girişi / Üyelik Sistemi Gerekiyor"
-                  : "User Authentication / Login System Required"
-              }
-              checked={Boolean(answers.authRequired)}
-              onChange={(e) =>
-                setAnswers({ ...answers, authRequired: e.target.checked })
-              }
-            />
-            <Checkbox
-              label={
-                isTr
-                  ? "Yönetim (Admin) Paneli Gerekiyor"
-                  : "Administration Panel Required"
-              }
-              checked={Boolean(answers.adminRequired)}
-              onChange={(e) =>
-                setAnswers({ ...answers, adminRequired: e.target.checked })
-              }
-            />
-            <Checkbox
-              label={
-                isTr
-                  ? "Mobil Cihazlarla Tam Uyumlu (Responsive) Tasarım"
-                  : "Fully Responsive Mobile/Desktop Design"
-              }
-              checked={Boolean(answers.responsiveRequired)}
-              onChange={(e) =>
-                setAnswers({ ...answers, responsiveRequired: e.target.checked })
-              }
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Step 4: Detailed Scope */}
-      {step === 4 && (
-        <div className="space-y-4">
-          <h2 className="text-xl font-bold text-[var(--color-text-primary)]">
-            {isTr ? "4. Detaylı Proje Kapsamı" : "4. Detailed Project Scope"}
-          </h2>
-          <p className="text-sm text-[var(--color-text-secondary)]">
-            {isTr
-              ? "Gereksinimlerinizi, teknik detayları ve teslim edilecek çıktıları ayrıntılı yazın (200–6000 karakter, düz metin)."
-              : "Explain your technical requirements, architecture, and expected deliverables (200–6000 characters, plain text)."}
-          </p>
-          <TextArea
-            value={scope}
-            onChange={(e) => setScope(e.target.value)}
-            placeholder={
-              isTr
-                ? "Projenin hedefleri, kullanılacak teknolojiler, beklenen özellikler ve teslim süreci hakkında detaylı bilgi verin..."
-                : "Describe project goals, required tech stack, feature breakdown, and delivery milestones..."
-            }
-            minLength={200}
-            maxLength={6000}
-            showCount
-            rows={8}
-          />
-        </div>
-      )}
-
-      {/* Step 5: Summary */}
-      {step === 5 && (
-        <div className="space-y-4">
-          <h2 className="text-xl font-bold text-[var(--color-text-primary)]">
-            {isTr ? "5. Kısa Özet" : "5. Brief Summary"}
-          </h2>
-          <p className="text-sm text-[var(--color-text-secondary)]">
-            {isTr
-              ? "Akışta ve arama kartlarında gösterilecek 1-2 cümlelik özet (50–280 karakter)."
-              : "A 1-2 sentence preview for feed and search cards (50–280 characters)."}
-          </p>
-          <TextArea
-            value={summary}
-            onChange={(e) => setSummary(e.target.value)}
-            placeholder={
-              isTr
-                ? "Örn: Mevcut Next.js web uygulamamız için yeni bir müşteri paneli ve grafik arayüzleri geliştirilecek deneyimli frontend uzmanı aranıyor."
-                : "e.g. Looking for an experienced frontend specialist to build customer dashboard and reporting views for our Next.js application."
-            }
-            minLength={50}
-            maxLength={280}
-            showCount
-            rows={3}
-          />
-        </div>
-      )}
-
-      {/* Step 6: Tags */}
-      {step === 6 && (
-        <div className="space-y-4">
-          <h2 className="text-xl font-bold text-[var(--color-text-primary)]">
-            {isTr ? "6. Teknoloji Etiketleri" : "6. Technology Tags"}
-          </h2>
-          <p className="text-sm text-[var(--color-text-secondary)]">
-            {isTr
-              ? "Projede kullanılacak teknolojileri virgülle ayırarak girin (en fazla 10 etiket)."
-              : "Enter comma-separated technology tags (up to 10 tags)."}
-          </p>
-          <TextInput
-            value={tagsInput}
-            onChange={(e) => setTagsInput(e.target.value)}
-            placeholder="React, Next.js, TypeScript, Tailwind, PostgreSQL"
-          />
-        </div>
-      )}
-
-      {/* Step 7: Budget */}
-      {step === 7 && (
-        <div className="space-y-4">
-          <h2 className="text-xl font-bold text-[var(--color-text-primary)]">
-            {isTr ? "7. Bütçe Bilgisi" : "7. Budget"}
-          </h2>
-          <p className="text-sm text-[var(--color-text-secondary)]">
-            {isTr
-              ? "Bütçe aralığınızı veya görüşülebilir olduğunu belirtin."
-              : "Specify your budget mode and range."}
-          </p>
-
-          <div className="grid grid-cols-3 gap-2">
-            <Button
-              type="button"
-              variant={budgetMode === "RANGE" ? "primary" : "secondary"}
-              onClick={() => setBudgetMode("RANGE")}
-            >
-              {isTr ? "Aralık" : "Range"}
-            </Button>
-            <Button
-              type="button"
-              variant={budgetMode === "FIXED" ? "primary" : "secondary"}
-              onClick={() => setBudgetMode("FIXED")}
-            >
-              {isTr ? "Sabit" : "Fixed"}
-            </Button>
-            <Button
-              type="button"
-              variant={budgetMode === "NEGOTIABLE" ? "primary" : "secondary"}
-              onClick={() => setBudgetMode("NEGOTIABLE")}
-            >
-              {isTr ? "Görüşülebilir" : "Negotiable"}
-            </Button>
-          </div>
-
-          {budgetMode !== "NEGOTIABLE" && (
-            <div className="grid grid-cols-3 gap-3 pt-2">
+            {/* Category Select (Clean Dropdown instead of 21 raw buttons) */}
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-[var(--color-text-primary)] block">
+                {isTr ? "Proje Kategorisi *" : "Project Category *"}
+              </label>
               <Select
-                value={budgetCurrency}
-                onChange={(e) => setBudgetCurrency(e.target.value)}
-                options={[
-                  { value: "TRY", label: "TRY (₺)" },
-                  { value: "USD", label: "USD ($)" },
-                  { value: "EUR", label: "EUR (€)" },
-                  { value: "GBP", label: "GBP (£)" },
-                ]}
+                value={categoryId}
+                onChange={(e) => setCategoryId(e.target.value)}
+                options={categories.map((c) => ({
+                  value: c.id,
+                  label: c.name,
+                }))}
               />
-              <TextInput
-                type="number"
-                placeholder={isTr ? "Min Tutar" : "Min Amount"}
-                value={budgetMin}
-                onChange={(e) => setBudgetMin(e.target.value)}
-              />
-              {budgetMode === "RANGE" && (
-                <TextInput
-                  type="number"
-                  placeholder={isTr ? "Maks Tutar" : "Max Amount"}
-                  value={budgetMax}
-                  onChange={(e) => setBudgetMax(e.target.value)}
-                />
+              {selectedCategory && (
+                <div className="text-[11px] text-blue-400 flex items-center gap-1.5 pt-0.5">
+                  <Sparkles className="h-3 w-3" />
+                  <span>
+                    {isTr
+                      ? `Seçilen alan: ${selectedCategory.name} (/${selectedCategory.slug})`
+                      : `Selected: ${selectedCategory.name}`}
+                  </span>
+                </div>
               )}
             </div>
-          )}
-        </div>
-      )}
 
-      {/* Step 8: Timeline */}
-      {step === 8 && (
-        <div className="space-y-4">
-          <h2 className="text-xl font-bold text-[var(--color-text-primary)]">
-            {isTr ? "8. Teslimat Takvimi" : "8. Project Timeline"}
-          </h2>
-          <p className="text-sm text-[var(--color-text-secondary)]">
-            {isTr
-              ? "Tahmini teslim sürenizi belirleyin."
-              : "Specify your expected project duration."}
-          </p>
+            {/* Project Title */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <label className="font-semibold text-[var(--color-text-primary)]">
+                  {isTr ? "Proje Başlığı *" : "Project Title *"}
+                </label>
+                <span
+                  className={`font-mono text-[11px] ${
+                    title.length < 20 || title.length > 120
+                      ? "text-amber-400"
+                      : "text-emerald-400"
+                  }`}
+                >
+                  {title.length} / 120 (min: 20)
+                </span>
+              </div>
+              <TextInput
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder={
+                  isTr
+                    ? "Örn: Next.js ve Tailwind ile Modern E-Ticaret Arayüzü Geliştirilmesi"
+                    : "e.g. Next.js and Tailwind Modern E-Commerce Frontend Development"
+                }
+                maxLength={120}
+              />
+              <p className="text-[11px] text-[var(--color-text-tertiary)]">
+                {isTr
+                  ? "Açık ve profesyonel bir başlık girin. Tamamı büyük harf kullanımı yasaktır."
+                  : "Keep it clear and professional. All-caps titles are forbidden."}
+              </p>
+            </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <TextInput
-              type="number"
-              placeholder="2"
-              value={timelineValue}
-              onChange={(e) => setTimelineValue(e.target.value)}
-            />
-            <Select
-              value={timelineUnit}
-              onChange={(e) => setTimelineUnit(e.target.value)}
-              options={[
-                { value: "DAYS", label: isTr ? "Gün" : "Days" },
-                { value: "WEEKS", label: isTr ? "Hafta" : "Weeks" },
-                { value: "MONTHS", label: isTr ? "Ay" : "Months" },
-              ]}
-            />
-          </div>
-        </div>
-      )}
+            {/* Project Summary */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <label className="font-semibold text-[var(--color-text-primary)]">
+                  {isTr ? "Kısa Özet (Önizleme) *" : "Short Summary (Preview) *"}
+                </label>
+                <span
+                  className={`font-mono text-[11px] ${
+                    summary.length < 80 || summary.length > 280
+                      ? "text-amber-400"
+                      : "text-emerald-400"
+                  }`}
+                >
+                  {summary.length} / 280 (min: 80)
+                </span>
+              </div>
+              <TextArea
+                value={summary}
+                onChange={(e) => setSummary(e.target.value)}
+                placeholder={
+                  isTr
+                    ? "Örn: Mevcut Next.js web uygulamamız için yeni bir müşteri paneli ve grafik arayüzleri geliştirecek deneyimli frontend uzmanı aranıyor."
+                    : "e.g. Looking for an experienced frontend specialist to build customer dashboard and reporting views."
+                }
+                minLength={80}
+                maxLength={280}
+                rows={3}
+              />
 
-      {/* Step 9: Review & Declarations */}
-      {step === 9 && (
-        <div className="space-y-6">
-          <h2 className="text-xl font-bold text-[var(--color-text-primary)]">
-            {isTr ? "9. Önizleme ve Zorunlu Taahhütler" : "9. Review & Declarations"}
-          </h2>
-
-          <div className="rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-hover)] p-4 space-y-2 text-xs">
-            <div><strong>{isTr ? "Kategori:" : "Category:"}</strong> {selectedCategory?.name}</div>
-            <div><strong>{isTr ? "Başlık:" : "Title:"}</strong> {title}</div>
-            <div><strong>{isTr ? "Özet:" : "Summary:"}</strong> {summary}</div>
-            <div>
-              <strong>{isTr ? "Bütçe:" : "Budget:"}</strong>{" "}
-              {budgetMode === "NEGOTIABLE"
-                ? isTr ? "Görüşülebilir" : "Negotiable"
-                : `${budgetMin || "0"} – ${budgetMax || budgetMin} ${budgetCurrency}`}
+              <p className="text-[11px] text-[var(--color-text-tertiary)]">
+                {isTr
+                  ? "Akış kartlarında ve arama sonuçlarında gösterilecek 1-2 cümlelik vurucu özet."
+                  : "Shown on search cards and public feed previews."}
+              </p>
             </div>
           </div>
+        )}
 
-          <div className="space-y-3 pt-2">
-            <Checkbox
-              label={
-                isTr
-                  ? "Tüm müzakere, sözleşme ve çalışma süreçlerinin doğrudan serbest çalışan ile yürütüleceğini kabul ediyorum."
-                  : "I understand that all negotiation, contract, and delivery terms are handled directly with the freelancer."
-              }
-              checked={ackDirectRelationship}
-              onChange={(e) => setAckDirectRelationship(e.target.checked)}
-              required
-            />
-            <Checkbox
-              label={
-                isTr
-                  ? "Platformun ödeme almadığını, emanet (escrow) hizmeti sunmadığını ve uyuşmazlıklarda hakem olmadığını onaylıyorum."
-                  : "I acknowledge that the platform does not process payments, provide escrow, or resolve commercial disputes."
-              }
-              checked={ackNoPlatformPayment}
-              onChange={(e) => setAckNoPlatformPayment(e.target.checked)}
-              required
-            />
-            <Checkbox
-              label={
-                isTr
-                  ? "Bu ilanın 7 gün boyunca yayında kalacağını, 7 gün sonunda otomatik olarak pasif hale geleceğini onaylıyorum."
-                  : "I acknowledge that this listing will remain active for 7 days and will expire automatically unless renewed."
-              }
-              checked={ackSevenDayExpiry}
-              onChange={(e) => setAckSevenDayExpiry(e.target.checked)}
-              required
-            />
-            <Checkbox
-              label={
-                isTr
-                  ? "İlanın platform kurallarına ve yürürlükteki mevzuata uygun olduğunu, yasaklı içerik barındırmadığını taahhüt ediyorum."
-                  : "I declare that this project complies with platform acceptable use rules and applicable laws."
-              }
-              checked={ackProhibitedContent}
-              onChange={(e) => setAckProhibitedContent(e.target.checked)}
-              required
-            />
+        {/* ------------------------------------------------------------- */}
+        {/* STAGE 2: Technical Scope & Skills */}
+        {/* ------------------------------------------------------------- */}
+        {step === 2 && (
+          <div className="space-y-6">
+            <div className="space-y-1">
+              <h2 className="text-xl font-bold text-[var(--color-text-primary)] flex items-center gap-2">
+                <FileText className="h-5 w-5 text-cyan-400" />
+                <span>{isTr ? "2. Teknik Kapsam ve Yetkinlikler" : "2. Scope & Technical Skills"}</span>
+              </h2>
+              <p className="text-xs sm:text-sm text-[var(--color-text-secondary)]">
+                {isTr
+                  ? "İşin detaylarını, mimari gereksinimleri ve beklenen çıktıları ayrıntılı tanımlayın."
+                  : "Detail the deliverables, architecture requirements, and tech stack."}
+              </p>
+            </div>
+
+            {/* Detailed Scope */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <label className="font-semibold text-[var(--color-text-primary)]">
+                  {isTr ? "Detaylı Proje Kapsamı *" : "Detailed Project Scope *"}
+                </label>
+                <span
+                  className={`font-mono text-[11px] ${
+                    scope.length < 200 ? "text-amber-400 font-bold" : "text-emerald-400"
+                  }`}
+                >
+                  {scope.length} / 6000 ({isTr ? "en az 200 karakter" : "min: 200 chars"})
+                </span>
+              </div>
+              <TextArea
+                value={scope}
+                onChange={(e) => setScope(e.target.value)}
+                placeholder={
+                  isTr
+                    ? "Projenin hedefleri, mimarisi, teslim aşamaları, API entegrasyonları veya kod kalitesi beklentilerinizi ayrıntılı yazın..."
+                    : "Describe project objectives, architecture, milestone deliverables, API expectations..."
+                }
+                minLength={200}
+                maxLength={6000}
+                rows={8}
+              />
+              <p className="text-[11px] text-[var(--color-text-tertiary)] flex items-center gap-1">
+                <Info className="h-3 w-3 text-blue-400 shrink-0" />
+                <span>
+                  {isTr
+                    ? "İlanınızın 7 günlük tazelik garantisi kapsamında onaylanması için en az 200 karakter detay yazılmalıdır."
+                    : "At least 200 characters are required for quality verification."}
+                </span>
+              </p>
+            </div>
+
+            {/* Technology Tags */}
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-[var(--color-text-primary)] block">
+                {isTr ? "Teknoloji Etiketleri ve Beceriler" : "Technology Tags & Skills"}
+              </label>
+              <TextInput
+                value={tagsInput}
+                onChange={(e) => setTagsInput(e.target.value)}
+                placeholder="React, Next.js, TypeScript, Tailwind, PostgreSQL"
+              />
+              <p className="text-[11px] text-[var(--color-text-tertiary)]">
+                {isTr
+                  ? "Kullanılacak dilleri veya kütüphaneleri virgülle ayırarak yazın (en fazla 10 etiket)."
+                  : "Comma-separated keywords (max 10 tags)."}
+              </p>
+            </div>
+
+            {/* Special Parameters Checkboxes */}
+            <div className="rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-hover)]/30 p-4 space-y-3">
+              <div className="text-xs font-bold text-[var(--color-text-primary)] uppercase tracking-wider">
+                {isTr ? "Proje Özellikleri" : "Project Attributes"}
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <Checkbox
+                  label={isTr ? "Üyelik / Auth Sistemi" : "Auth / User System"}
+                  checked={Boolean(answers.authRequired)}
+                  onChange={(e) =>
+                    setAnswers({ ...answers, authRequired: e.target.checked })
+                  }
+                />
+                <Checkbox
+                  label={isTr ? "Yönetim Paneli" : "Admin Dashboard"}
+                  checked={Boolean(answers.adminRequired)}
+                  onChange={(e) =>
+                    setAnswers({ ...answers, adminRequired: e.target.checked })
+                  }
+                />
+                <Checkbox
+                  label={isTr ? "Mobil Uyumlu (Responsive)" : "Mobile Responsive"}
+                  checked={Boolean(answers.responsiveRequired)}
+                  onChange={(e) =>
+                    setAnswers({ ...answers, responsiveRequired: e.target.checked })
+                  }
+                />
+              </div>
+            </div>
           </div>
+        )}
+
+        {/* ------------------------------------------------------------- */}
+        {/* STAGE 3: Budget, Timeline & Declarations */}
+        {/* ------------------------------------------------------------- */}
+        {step === 3 && (
+          <div className="space-y-6">
+            <div className="space-y-1">
+              <h2 className="text-xl font-bold text-[var(--color-text-primary)] flex items-center gap-2">
+                <ShieldCheck className="h-5 w-5 text-emerald-400" />
+                <span>{isTr ? "3. Bütçe, Süreç ve Yasal Beyanlar" : "3. Budget, Timeline & Terms"}</span>
+              </h2>
+              <p className="text-xs sm:text-sm text-[var(--color-text-secondary)]">
+                {isTr
+                  ? "Bütçe ve zaman planınızı belirleyin, platform kurallarını onaylayarak ilanınızı yayımlayın."
+                  : "Specify budget, estimated delivery, and confirm platform terms."}
+              </p>
+            </div>
+
+            {/* Budget & Timeline Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Budget Box */}
+              <div className="rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-hover)]/30 p-4 space-y-3">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-[var(--color-text-primary)]">
+                  <Coins className="h-4 w-4 text-emerald-400" />
+                  <span>{isTr ? "Bütçe Yapısı" : "Budget Structure"}</span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-1.5">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={budgetMode === "RANGE" ? "primary" : "secondary"}
+                    onClick={() => setBudgetMode("RANGE")}
+                  >
+                    {isTr ? "Aralık" : "Range"}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={budgetMode === "FIXED" ? "primary" : "secondary"}
+                    onClick={() => setBudgetMode("FIXED")}
+                  >
+                    {isTr ? "Sabit" : "Fixed"}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={budgetMode === "NEGOTIABLE" ? "primary" : "secondary"}
+                    onClick={() => setBudgetMode("NEGOTIABLE")}
+                  >
+                    {isTr ? "Görüşülür" : "Open"}
+                  </Button>
+                </div>
+
+                {budgetMode !== "NEGOTIABLE" && (
+                  <div className="grid grid-cols-3 gap-2 pt-1">
+                    <Select
+                      value={budgetCurrency}
+                      onChange={(e) => setBudgetCurrency(e.target.value)}
+                      options={[
+                        { value: "TRY", label: "TRY (₺)" },
+                        { value: "USD", label: "USD ($)" },
+                        { value: "EUR", label: "EUR (€)" },
+                        { value: "GBP", label: "GBP (£)" },
+                      ]}
+                    />
+                    <TextInput
+                      type="number"
+                      placeholder={isTr ? "Min Tutar" : "Min"}
+                      value={budgetMin}
+                      onChange={(e) => setBudgetMin(e.target.value)}
+                    />
+                    {budgetMode === "RANGE" && (
+                      <TextInput
+                        type="number"
+                        placeholder={isTr ? "Maks Tutar" : "Max"}
+                        value={budgetMax}
+                        onChange={(e) => setBudgetMax(e.target.value)}
+                      />
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Timeline Box */}
+              <div className="rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-hover)]/30 p-4 space-y-3">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-[var(--color-text-primary)]">
+                  <Clock className="h-4 w-4 text-cyan-400" />
+                  <span>{isTr ? "Tahmini Süre" : "Estimated Duration"}</span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <TextInput
+                    type="number"
+                    placeholder="2"
+                    value={timelineValue}
+                    onChange={(e) => setTimelineValue(e.target.value)}
+                  />
+                  <Select
+                    value={timelineUnit}
+                    onChange={(e) => setTimelineUnit(e.target.value)}
+                    options={[
+                      { value: "DAYS", label: isTr ? "Gün" : "Days" },
+                      { value: "WEEKS", label: isTr ? "Hafta" : "Weeks" },
+                      { value: "MONTHS", label: isTr ? "Ay" : "Months" },
+                    ]}
+                  />
+                </div>
+                <p className="text-[11px] text-[var(--color-text-tertiary)]">
+                  {isTr ? "Teslimat için hedeflenen takvim aralığı." : "Target milestone window."}
+                </p>
+              </div>
+            </div>
+
+            {/* Quick Preview Card */}
+            <div className="rounded-2xl border border-blue-500/20 bg-blue-500/5 p-4 space-y-1.5 text-xs">
+              <div className="font-bold text-blue-400">{isTr ? "İlan Özeti" : "Listing Summary"}</div>
+              <div className="text-[var(--color-text-primary)] font-semibold truncate">{title}</div>
+              <div className="text-[var(--color-text-secondary)] line-clamp-2">{summary}</div>
+            </div>
+
+            {/* 4 Mandatory Declarations */}
+            <div className="space-y-3 pt-1">
+              <div className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">
+                {isTr ? "Zorunlu Yasal Beyanlar" : "Mandatory Platform Declarations"}
+              </div>
+
+              <Checkbox
+                label={
+                  isTr
+                    ? "Tüm müzakere, sözleşme ve çalışma süreçlerinin doğrudan serbest çalışan ile yürütüleceğini kabul ediyorum."
+                    : "I understand that all negotiation, contract, and delivery terms are handled directly with the freelancer."
+                }
+                checked={ackDirectRelationship}
+                onChange={(e) => setAckDirectRelationship(e.target.checked)}
+                required
+              />
+              <Checkbox
+                label={
+                  isTr
+                    ? "Platformun kar amacı gütmediğini, ödeme almadığını, emanet (escrow) hizmeti sunmadığını ve uyuşmazlıklarda ticari taraf olmadığını onaylıyorum."
+                    : "I acknowledge that the platform is non-profit, does not process payments, provide escrow, or act as a commercial party."
+                }
+                checked={ackNoPlatformPayment}
+                onChange={(e) => setAckNoPlatformPayment(e.target.checked)}
+                required
+              />
+              <Checkbox
+                label={
+                  isTr
+                    ? "Bu ilanın 7 gün boyunca yayında kalacağını, 7 gün sonunda otomatik olarak pasif hale geleceğini onaylıyorum."
+                    : "I acknowledge that this listing will remain active for 7 days and will expire automatically unless renewed."
+                }
+                checked={ackSevenDayExpiry}
+                onChange={(e) => setAckSevenDayExpiry(e.target.checked)}
+                required
+              />
+              <Checkbox
+                label={
+                  isTr
+                    ? "İlanın platform kurallarına ve yürürlükteki mevzuata uygun olduğunu, yasaklı veya sahte içerik barındırmadığını taahhüt ediyorum."
+                    : "I declare that this project complies with platform acceptable use rules and applicable laws."
+                }
+                checked={ackProhibitedContent}
+                onChange={(e) => setAckProhibitedContent(e.target.checked)}
+                required
+              />
+            </div>
+          </div>
+        )}
+
+        {/* ------------------------------------------------------------- */}
+        {/* Navigation Buttons */}
+        {/* ------------------------------------------------------------- */}
+        <div className="flex items-center justify-between border-t border-[var(--color-border-subtle)] pt-6">
+          {step > 1 ? (
+            <Button type="button" variant="ghost" onClick={prevStep} disabled={isSubmitting}>
+              {isTr ? "← Önceki Aşama" : "← Previous"}
+            </Button>
+          ) : (
+            <div />
+          )}
+
+          {step < totalSteps ? (
+            <Button type="button" variant="primary" onClick={nextStep}>
+              {isTr ? "Sonraki Aşama →" : "Next Stage →"}
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              variant="primary"
+              onClick={handlePublish}
+              isLoading={isSubmitting}
+            >
+              {isTr ? "İlanı Ücretsiz Yayımla" : "Publish Listing for Free"}
+            </Button>
+          )}
         </div>
-      )}
-
-      {/* Navigation Buttons */}
-      <div className="flex items-center justify-between border-t border-[var(--color-border-subtle)] pt-6">
-        {step > 1 ? (
-          <Button type="button" variant="ghost" onClick={prevStep} disabled={isSubmitting}>
-            {isTr ? "← Geri" : "← Back"}
-          </Button>
-        ) : (
-          <div />
-        )}
-
-        {step < totalSteps ? (
-          <Button type="button" variant="primary" onClick={nextStep}>
-            {isTr ? "Devam Et →" : "Continue →"}
-          </Button>
-        ) : (
-          <Button
-            type="button"
-            variant="primary"
-            onClick={handlePublish}
-            isLoading={isSubmitting}
-          >
-            {isTr ? "İlanı Ücretsiz Yayımla" : "Publish Listing for Free"}
-          </Button>
-        )}
       </div>
     </div>
-  </div>
   );
 }

@@ -5,6 +5,7 @@ import { Clock, ShieldCheck, PlusCircle, LogIn } from "lucide-react";
 import { getSession } from "@/src/modules/auth/session";
 import { ListingService } from "@/src/modules/listings/service";
 import { OwnerListingsDashboard, OwnerListingItem } from "@/src/components/dashboard/owner-listings-dashboard";
+import { DashboardTabs } from "@/src/components/dashboard/dashboard-tabs";
 import { Button } from "@/src/components/ui/button";
 
 export async function generateMetadata({
@@ -19,8 +20,8 @@ export async function generateMetadata({
     ? "Yayınladığım İlanlar & Yaşam Döngüsü"
     : "My Published Listings & Lifecycle";
   const description = isTr
-    ? "Yayınladığınız teknoloji proje ilanlarını yönetin, teklifleri inceleyin ve 7 günlük yaşam döngüsünü yenileyin."
-    : "Manage your published technology project listings, review incoming proposals, and renew 7-day lifecycles.";
+    ? "Yayınladığınız teknoloji proje ilanlarını yönetin, teklifleri inceleyin ve 1 haftalık yaşam döngüsünü yenileyin."
+    : "Manage your published technology project listings, review incoming proposals, and renew 1-week lifecycles.";
 
   return {
     title,
@@ -113,7 +114,7 @@ export default async function DashboardListingsPage({
   };
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8 space-y-8">
+    <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-8">
       {/* Schema.org Structured Data */}
       <script
         type="application/ld+json"
@@ -128,8 +129,8 @@ export default async function DashboardListingsPage({
           </h1>
           <p className="text-sm text-[var(--color-text-secondary)]">
             {isTr
-              ? "Yayınladığınız projelerin 7 günlük durumlarını, teklifleri ve eşleşmeleri yönetin."
-              : "Manage your 7-day listing lifecycles, incoming offers, and matched projects."}
+              ? "Yayınladığınız projelerin 1 haftalık durumlarını, teklifleri ve eşleşmeleri yönetin."
+              : "Manage your 1-week listing lifecycles, incoming offers, and matched projects."}
           </p>
         </div>
 
@@ -141,6 +142,9 @@ export default async function DashboardListingsPage({
         </Link>
       </header>
 
+      {/* Unified Dashboard Navigation Tabs */}
+      <DashboardTabs locale={locale} counts={{ listings: initialListings.length }} />
+
       {/* 7-Day Lifecycle Guidance Banner */}
       <section
         aria-label={isTr ? "İlan Yönetim Rehberi" : "Listing Management Guide"}
@@ -150,12 +154,12 @@ export default async function DashboardListingsPage({
           <Clock className="h-5 w-5 text-blue-400 shrink-0 mt-0.5" aria-hidden="true" />
           <div className="space-y-1 text-xs sm:text-sm text-[var(--color-text-secondary)] leading-relaxed">
             <span className="font-semibold text-[var(--color-text-primary)] block">
-              {isTr ? "7 Günlük Canlılık ve Yenileme Kuralı" : "7-Day Freshness & Renewal Policy"}
+              {isTr ? "1 Haftalık Canlılık ve Yenileme Kuralı" : "1-Week Freshness & Renewal Policy"}
             </span>
             <p>
               {isTr
-                ? "İlanlarınız 168 saat boyunca radarımızda aktiftir. Süresi dolan ilanlar silinmez; 'Pasif / Süresi Dolanlar' sekmesinden tek tıkla 7 gün daha ücretsiz yeniden başlatabilirsiniz."
-                : "Projects stay active on our freshness radar for 168 hours. Expired listings are never deleted; reactivate them anytime for another 7 days with a single click at zero cost."}
+                ? "İlanlarınız 1 hafta boyunca radarımızda aktiftir. Süresi dolan ilanlar silinmez; 'Pasif / Süresi Dolanlar' sekmesinden tek tıkla 1 hafta daha ücretsiz yeniden başlatabilirsiniz."
+                : "Projects stay active on our freshness radar for 1 week. Expired listings are never deleted; reactivate them anytime for another 1 week with a single click at zero cost."}
             </p>
           </div>
         </div>

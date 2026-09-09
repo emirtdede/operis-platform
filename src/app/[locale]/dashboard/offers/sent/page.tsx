@@ -5,6 +5,7 @@ import { Send, ShieldCheck, Compass, LogIn } from "lucide-react";
 import { getSession } from "@/src/modules/auth/session";
 import { OfferService } from "@/src/modules/offers/service";
 import { SentOffersDashboard, SentOfferItem } from "@/src/components/dashboard/sent-offers-dashboard";
+import { DashboardTabs } from "@/src/components/dashboard/dashboard-tabs";
 import { Button } from "@/src/components/ui/button";
 
 export async function generateMetadata({
@@ -16,7 +17,7 @@ export async function generateMetadata({
   const isTr = locale === "tr";
 
   const title = isTr
-    ? "Verdiğim Teklifler — Durum Takibi"
+    ? "Teklif Verdiğim İlanlar — Durum Takibi"
     : "My Sent Proposals — Track Status";
   const description = isTr
     ? "Projeler için ilettiğiniz gizli teklifleri, beklemedeki durumları ve kabul edilen eşleşmeleri takip edin."
@@ -107,20 +108,14 @@ export default async function SentOffersPage({
       {
         "@type": "ListItem",
         position: 2,
-        name: isTr ? "İlanlar" : "Projects",
-        item: `https://operis.pro${isTr ? "/tr/akis" : "/en/feed"}`,
-      },
-      {
-        "@type": "ListItem",
-        position: 3,
-        name: isTr ? "Gönderilen Teklifler" : "Sent Offers",
+        name: isTr ? "Teklif Verdiğim İlanlar" : "My Sent Offers",
         item: sentOffersUrl,
       },
     ],
   };
 
   return (
-    <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8 space-y-8">
+    <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-8">
       {/* Schema.org Structured Data */}
       <script
         type="application/ld+json"
@@ -131,7 +126,7 @@ export default async function SentOffersPage({
       <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[var(--color-border-subtle)] pb-6">
         <div className="space-y-1">
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--color-text-primary)]">
-            {isTr ? "Gönderilen Tekliflerim" : "My Sent Offers"}
+            {isTr ? "Teklif Verdiğim İlanlar" : "Listings I Bid On"}
           </h1>
           <p className="text-sm text-[var(--color-text-secondary)]">
             {isTr
@@ -140,13 +135,16 @@ export default async function SentOffersPage({
           </p>
         </div>
 
-        <Link href={isTr ? "/tr/akis" : "/en/feed"}>
+        <Link href={isTr ? "/tr/ilanlar" : "/en/listings"}>
           <Button variant="shimmer" size="sm" className="gap-2">
             <Compass className="h-4 w-4" aria-hidden="true" />
             <span>{isTr ? "Yeni İlanları Keşfet" : "Browse Projects"}</span>
           </Button>
         </Link>
       </header>
+
+      {/* Unified Dashboard Navigation Tabs */}
+      <DashboardTabs locale={locale} counts={{ sentOffers: initialOffers.length }} />
 
       {/* Sent Offers Lifecycle Guidance Banner */}
       <section

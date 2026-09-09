@@ -221,6 +221,7 @@ html::-webkit-scrollbar {
 
 /* Respect user's reduced motion preference */
 @media (prefers-reduced-motion: reduce) {
+
   *,
   ::before,
   ::after {
@@ -239,6 +240,7 @@ html::-webkit-scrollbar {
   0% {
     offset-distance: 0%;
   }
+
   100% {
     offset-distance: 100%;
   }
@@ -248,24 +250,31 @@ html::-webkit-scrollbar {
   0% {
     transform: translateX(-100%);
   }
+
   100% {
     transform: translateX(200%);
   }
 }
 
 @keyframes aurora-drift-1 {
-  0%, 100% {
+
+  0%,
+  100% {
     transform: translate3d(0, 0, 0) scale(1);
   }
+
   50% {
     transform: translate3d(60px, -40px, 0) scale(1.15);
   }
 }
 
 @keyframes aurora-drift-2 {
-  0%, 100% {
+
+  0%,
+  100% {
     transform: translate3d(0, 0, 0) scale(1.1);
   }
+
   50% {
     transform: translate3d(-50px, 50px, 0) scale(0.95);
   }
@@ -275,15 +284,19 @@ html::-webkit-scrollbar {
   0% {
     transform: rotate(0deg);
   }
+
   100% {
     transform: rotate(360deg);
   }
 }
 
 @keyframes pulse-subtle {
-  0%, 100% {
+
+  0%,
+  100% {
     opacity: 1;
   }
+
   50% {
     opacity: 0.65;
   }
@@ -337,8 +350,7 @@ html::-webkit-scrollbar {
 /* Background Atmosphere Grid */
 .bg-grid-mesh {
   background-size: 40px 40px;
-  background-image: 
+  background-image:
     linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
     linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
 }
-

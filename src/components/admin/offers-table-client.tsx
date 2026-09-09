@@ -1,0 +1,253 @@
+"use client";
+
+import { useState } from "react";
+import {
+  Search,
+  X,
+  FileText,
+} from "lucide-react";
+import { AdminOfferItem } from "@/src/modules/admin/service";
+
+interface OffersTableClientProps {
+  initialOffers: AdminOfferItem[];
+  total: number;
+}
+
+export function OffersTableClient({ initialOffers, total: _total }: OffersTableClientProps) {
+  const [offers] = useState<AdminOfferItem[]>(initialOffers);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [selectedOffer, setSelectedOffer] = useState<AdminOfferItem | null>(null);
+
+  const filtered = offers.filter((o) => {
+    if (statusFilter !== "ALL" && o.status !== statusFilter) return false;
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      return (
+        o.listingTitle.toLowerCase().includes(q) ||
+        o.senderDisplayName.toLowerCase().includes(q) ||
+        o.senderHandle.toLowerCase().includes(q) ||
+        o.recipientDisplayName.toLowerCase().includes(q) ||
+        o.recipientHandle.toLowerCase().includes(q)
+      );
+    }
+    return true;
+  });
+
+  return (
+    <div className="space-y-4">
+      {/* Search & Filter Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-2xl bg-[#12141a] border border-slate-800">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="İlan, teklif veren (@yazilimci) veya ilan sahibi ara..."
+            className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-9 pr-3 py-1.5 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-blue-500"
+          />
+        </div>
+
+        <div className="flex items-center gap-2.5">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="bg-slate-900 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-blue-500"
+          >
+            <option value="ALL">Tüm Teklifler</option>
+            <option value="ACCEPTED">Kabul Edilenler (Eşleşen)</option>
+            <option value="PENDING">Bekleyen Teklifler</option>
+            <option value="REJECTED">Reddedilenler</option>
+          </select>
+
+          <span className="text-[11px] font-mono text-slate-400 bg-slate-900 border border-slate-800 px-2.5 py-1.5 rounded-xl">
+            {filtered.length} Kayıt
+          </span>
+        </div>
+      </div>
+
+      {/* Offers Table */}
+      <div className="rounded-2xl border border-slate-800 bg-[#12141a] overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs text-slate-300">
+            <thead className="bg-slate-900/90 border-b border-slate-800 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+              <tr>
+                <th className="py-3 px-4">İlan Başlığı</th>
+                <th className="py-3 px-4">Teklif Veren (Uzman)</th>
+                <th className="py-3 px-4">İlan Sahibi (İşveren)</th>
+                <th className="py-3 px-4">Bütçe & Süre</th>
+                <th className="py-3 px-4">Durum & Cevap</th>
+                <th className="py-3 px-4">Tarih</th>
+                <th className="py-3 px-4 text-right">İncele</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800/60">
+              {filtered.map((item) => (
+                <tr
+                  key={item.id}
+                  className="hover:bg-slate-800/40 transition-colors cursor-pointer"
+                  onClick={() => setSelectedOffer(item)}
+                >
+                  <td className="py-3 px-4">
+                    <div className="font-semibold text-white truncate max-w-xs">
+                      {item.listingTitle}
+                    </div>
+                  </td>
+
+                  <td className="py-3 px-4">
+                    <div className="font-medium text-slate-200">
+                      {item.senderDisplayName}
+                    </div>
+                    <div className="text-[10px] text-slate-500 font-mono">
+                      @{item.senderHandle}
+                    </div>
+                  </td>
+
+                  <td className="py-3 px-4">
+                    <div className="font-medium text-slate-200">
+                      {item.recipientDisplayName}
+                    </div>
+                    <div className="text-[10px] text-slate-500 font-mono">
+                      @{item.recipientHandle}
+                    </div>
+                  </td>
+
+                  <td className="py-3 px-4">
+                    <div className="font-mono text-emerald-400 font-semibold">
+                      {item.budgetFormatted}
+                    </div>
+                    <div className="text-[10px] text-slate-500">
+                      Tahmin: {item.estimatedDuration}
+                    </div>
+                  </td>
+
+                  <td className="py-3 px-4">
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${item.status === "ACCEPTED"
+                            ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                            : item.status === "PENDING"
+                              ? "bg-purple-500/10 text-purple-400 border-purple-500/20"
+                              : "bg-red-500/10 text-red-400 border-red-500/20"
+                          }`}
+                      >
+                        {item.status === "ACCEPTED"
+                          ? "KABUL EDİLDİ"
+                          : item.status === "PENDING"
+                            ? "BEKLİYOR"
+                            : "REDDEDİLDİ"}
+                      </span>
+                      {item.rejectionReasonCode && (
+                        <span className="text-[9px] font-mono text-slate-500">
+                          ({item.rejectionReasonCode})
+                        </span>
+                      )}
+                    </div>
+                  </td>
+
+                  <td className="py-3 px-4 font-mono text-[11px] text-slate-400">
+                    {new Date(item.createdAt).toLocaleDateString("tr-TR")}
+                  </td>
+
+                  <td className="py-3 px-4 text-right" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedOffer(item)}
+                      className="px-2.5 py-1 rounded-lg border border-slate-700 bg-slate-800 text-[11px] text-slate-300 hover:text-white"
+                    >
+                      Kayıt Detayı
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Offer Detail Inspection Modal */}
+      {selectedOffer && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-xl rounded-2xl border border-slate-800 bg-[#12141a] p-6 space-y-5 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <FileText className="h-5 w-5 text-purple-400" />
+                <h3 className="text-sm font-bold text-white">Teklif & Eşleşme Denetim İzi</h3>
+              </div>
+              <button
+                onClick={() => setSelectedOffer(null)}
+                className="text-slate-400 hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                <div className="text-slate-500 font-medium">İlgili Proje İlanı</div>
+                <div className="text-sm font-semibold text-white">{selectedOffer.listingTitle}</div>
+                <div className="text-[10px] font-mono text-blue-400">
+                  Slug: {selectedOffer.listingSlug}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                  <div className="text-slate-500 font-medium">Teklif Sunan Uzman</div>
+                  <div className="font-semibold text-white">{selectedOffer.senderDisplayName}</div>
+                  <div className="font-mono text-slate-400 text-[11px]">@{selectedOffer.senderHandle}</div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                  <div className="text-slate-500 font-medium">İlan Sahibi (İşveren)</div>
+                  <div className="font-semibold text-white">{selectedOffer.recipientDisplayName}</div>
+                  <div className="font-mono text-slate-400 text-[11px]">@{selectedOffer.recipientHandle}</div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                  <div className="text-slate-500 font-medium">Teklif Bütçesi</div>
+                  <div className="font-mono text-emerald-400 font-bold text-base">
+                    {selectedOffer.budgetFormatted}
+                  </div>
+                  <div className="text-[10px] text-slate-400">Süre: {selectedOffer.estimatedDuration}</div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                  <div className="text-slate-500 font-medium">Sonuç & Cevap Durumu</div>
+                  <div className="font-semibold text-white">{selectedOffer.status}</div>
+                  {selectedOffer.resolvedAt ? (
+                    <div className="text-[10px] text-slate-400 font-mono">
+                      Cevap Tarihi: {new Date(selectedOffer.resolvedAt).toLocaleString("tr-TR")}
+                    </div>
+                  ) : (
+                    <div className="text-[10px] text-amber-400">İşverenden cevap bekleniyor</div>
+                  )}
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 text-[11px] text-slate-400 space-y-1">
+                <div className="font-semibold text-slate-300">Şifreli İletişim Güvencesi:</div>
+                <p className="text-slate-500 leading-relaxed">
+                  Operis mimarisinde teklifler AES-256 ile şifrelenir ve yalnızca ilan sahibi tarafından çözülebilir. Yönetici konsolu; ticari sırları ifşa etmeksizin teklifin bütçe, süre, zaman damgası ve yanıt durumunu eksiksiz denetleme olanağı sağlar.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setSelectedOffer(null)}
+                className="px-4 py-1.5 rounded-xl border border-slate-800 text-xs text-slate-300 hover:text-white"
+              >
+                Kapat
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

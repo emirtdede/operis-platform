@@ -15,23 +15,23 @@ export function InteractiveArchitectureShowcase({ isTr = true }: { isTr?: boolea
     {
       id: "bilateral" as const,
       label: isTr ? "Birebir Gizli Teklif" : "Encrypted Blind Offers",
-      sublabel: isTr ? "AES-256-GCM Güvenliği" : "AES-256-GCM Privacy",
+      sublabel: isTr ? "Rakiplere Kapalı Özel Fiyat" : "Private & Confidential",
       icon: Lock,
       color: "text-blue-500",
       activeBg: "bg-blue-500/10 border-blue-500/40 text-blue-500",
     },
     {
       id: "lifecycle" as const,
-      label: isTr ? "7 Günlük Canlılık Radarı" : "7-Day Freshness Radar",
-      sublabel: isTr ? "Bayatlamayan Pazar" : "Zero Stale Listings",
+      label: isTr ? "1 Haftalık Canlılık Radarı" : "1-Week Freshness Radar",
+      sublabel: isTr ? "Sürekli Güncel Projeler" : "Zero Stale Listings",
       icon: Clock,
       color: "text-cyan-500",
       activeBg: "bg-cyan-500/10 border-cyan-500/40 text-cyan-500",
     },
     {
       id: "direct" as const,
-      label: isTr ? "Doğrudan P2P Ağ" : "Direct P2P Network",
-      sublabel: isTr ? "%0 Komisyon, Net Gelir" : "0% Escrow Fee",
+      label: isTr ? "Doğrudan İş Birliği" : "Direct Collaboration",
+      sublabel: isTr ? "%0 Komisyon, Net Kazanç" : "0% Fee, Direct Net",
       icon: Zap,
       color: "text-violet-500",
       activeBg: "bg-violet-500/10 border-violet-500/40 text-violet-500",
@@ -50,7 +50,7 @@ export function InteractiveArchitectureShowcase({ isTr = true }: { isTr?: boolea
               key={tab.id}
               type="button"
               onClick={() => setActiveTab(tab.id)}
-              className={`group flex items-center gap-3 rounded-2xl border px-5 py-3 text-left transition-all duration-200 active:scale-[0.98] ${
+              className={`group flex items-center gap-3 rounded-2xl border px-5 py-3 text-left transition-all duration-200 active:scale-[0.98] cursor-pointer ${
                 isActive
                   ? tab.activeBg
                   : "border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/60 text-[var(--color-text-secondary)] hover:border-[var(--color-border-strong)] hover:text-[var(--color-text-primary)]"

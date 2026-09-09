@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { setRequestLocale } from "next-intl/server";
-import { Search, Filter, PlusCircle, Clock, ShieldCheck } from "lucide-react";
+import { Search, PlusCircle, Clock, ShieldCheck } from "lucide-react";
 import { FeedService, FeedListingItem } from "@/src/modules/listings/feed/service";
 import { CategoryService } from "@/src/modules/categories/service";
 import { ListingCard } from "@/src/components/listings/listing-card";
 import { EmptyState } from "@/src/components/ui/empty-state";
 import { Button } from "@/src/components/ui/button";
 import { getLocalizedRoute } from "@/src/lib/i18n/routes";
+import { CategoryFilterBar } from "@/src/components/categories/category-filter-bar";
 
 
 export async function generateMetadata({
@@ -182,8 +183,8 @@ export default async function BrowseListingsPage({
           <Clock className="h-4 w-4 text-blue-400 shrink-0" aria-hidden="true" />
           <span>
             {isTr
-              ? "Tüm teknoloji ilanları 168 saatlik tazelik garantisi altındadır. Süresi dolan veya terk edilen projeler asla listelenmez."
-              : "All technology projects are governed by a 168-hour freshness radar. Abandoned or stale listings are automatically pruned."}
+              ? "Tüm teknoloji ilanları 1 haftalık tazelik garantisi altındadır. Süresi dolan veya terk edilen projeler asla listelenmez."
+              : "All technology projects are governed by a 1-week freshness radar. Abandoned or stale listings are automatically pruned."}
           </span>
         </div>
         <div className="flex items-center gap-1.5 font-semibold text-emerald-400 shrink-0">
@@ -192,53 +193,18 @@ export default async function BrowseListingsPage({
         </div>
       </section>
 
-      {/* Category Pills Bar (Horizontal Wrapping / No Cramped Sidebars) */}
-      <section aria-label={isTr ? "Kategori Filtreleme" : "Category Filter"} className="space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">
-            <Filter className="h-3.5 w-3.5 text-blue-500" aria-hidden="true" />
-            <span>{isTr ? "Kategoriye Göre Filtrele" : "Filter by Category"}</span>
-          </div>
-          {selectedCategory && (
-            <Link
-              href={`${listingsPath}${searchQuery ? `?q=${encodeURIComponent(searchQuery)}` : ""}`}
-              className="text-xs font-medium text-blue-500 hover:text-blue-400 transition-colors"
-            >
-              {isTr ? "Filtreyi Temizle" : "Clear Filter"}
-            </Link>
-          )}
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <Link
-            href={`${listingsPath}${searchQuery ? `?q=${encodeURIComponent(searchQuery)}` : ""}`}
-            className={`rounded-xl px-4 py-2 text-xs font-medium transition-all ${
-              !selectedCategory
-                ? "bg-blue-600 text-white shadow-md shadow-blue-500/20 font-semibold"
-                : "border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/70 text-[var(--color-text-secondary)] hover:border-[var(--color-border-strong)] hover:text-[var(--color-text-primary)]"
-            }`}
-          >
-            {isTr ? "Tüm Kategoriler" : "All Categories"}
-          </Link>
-
-          {categories.map((cat) => {
-            const isSelected = selectedCategory === cat.slug;
-            return (
-              <Link
-                key={cat.id}
-                href={`${listingsPath}?category=${cat.slug}${searchQuery ? `&q=${encodeURIComponent(searchQuery)}` : ""}`}
-                className={`rounded-xl px-4 py-2 text-xs font-medium transition-all ${
-                  isSelected
-                    ? "bg-blue-600 text-white shadow-md shadow-blue-500/20 font-semibold"
-                    : "border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/70 text-[var(--color-text-secondary)] hover:border-[var(--color-border-strong)] hover:text-[var(--color-text-primary)]"
-                }`}
-              >
-                {cat.name}
-              </Link>
-            );
-          })}
-        </div>
+      {/* Category Filter Bar (Modern Horizontal Rail + Categorized Popover) */}
+      <section aria-label={isTr ? "Kategori Filtreleme" : "Category Filter"}>
+        <CategoryFilterBar
+          categories={categories}
+          selectedCategory={selectedCategory}
+          basePath={listingsPath}
+          searchQuery={searchQuery}
+          locale={locale}
+          resultCount={feedResult.items.length}
+        />
       </section>
+
 
       {/* Listings Grid / Content Stream */}
       <section className="space-y-6">

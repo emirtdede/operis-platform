@@ -8,6 +8,7 @@ export interface EmptyStateProps {
   action?: React.ReactNode;
   icon?: React.ReactNode;
   className?: string;
+  variant?: "default" | "card";
 }
 
 export function EmptyState({
@@ -16,25 +17,32 @@ export function EmptyState({
   action,
   icon,
   className,
+  variant = "default",
 }: EmptyStateProps) {
   return (
     <div
       className={twMerge(
         clsx(
-          "flex flex-col items-center justify-center p-8 sm:p-12 text-center rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)]",
+          "flex flex-col items-center justify-center text-center",
+          variant === "card"
+            ? "p-8 sm:p-12 rounded-3xl bg-[var(--color-surface-base)]/60 border border-[var(--color-border-subtle)] backdrop-blur-xl shadow-sm"
+            : "py-4 px-2 sm:py-6",
           className
         )
       )}
     >
       {icon && (
-        <div className="mb-4 text-[var(--text-muted)] p-3 rounded-full bg-[var(--bg-elevated)]" aria-hidden="true">
+        <div
+          className="mb-4 text-[var(--color-text-tertiary)] p-3 rounded-full bg-[var(--color-surface-raised)] border border-[var(--color-border-subtle)]"
+          aria-hidden="true"
+        >
           {icon}
         </div>
       )}
-      <h3 className="text-base font-semibold tracking-tight text-[var(--text-primary)]">
+      <h3 className="text-base sm:text-lg font-semibold tracking-tight text-[var(--color-text-primary)]">
         {title}
       </h3>
-      <p className="text-sm text-[var(--text-secondary)] mt-1.5 max-w-sm">
+      <p className="text-sm text-[var(--color-text-secondary)] mt-2 max-w-md leading-relaxed">
         {description}
       </p>
       {action && <div className="mt-5">{action}</div>}

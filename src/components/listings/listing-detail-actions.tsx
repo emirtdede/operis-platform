@@ -9,6 +9,7 @@ import { getLocalizedRoute } from "@/src/lib/i18n/routes";
 
 export interface ListingDetailActionsProps {
   listingId: string;
+  listingSlug?: string;
   listingTitle: string;
   ownerUserId: string;
   currentUserId?: string;
@@ -19,6 +20,7 @@ export interface ListingDetailActionsProps {
 
 export function ListingDetailActions({
   listingId,
+  listingSlug,
   listingTitle,
   isOwner,
   isActive,
@@ -71,9 +73,16 @@ export function ListingDetailActions({
             {isTr ? "Gelen Teklifleri İncele" : "View Received Offers"}
           </Button>
         </Link>
+        {listingSlug && (
+          <Link href={isTr ? `/tr/ilanlar/${listingSlug}/duzenle` : `/en/listings/${listingSlug}/edit`}>
+            <Button variant="secondary">
+              {isTr ? "İlanı Düzenle" : "Edit Listing"}
+            </Button>
+          </Link>
+        )}
         <Link href={getLocalizedRoute("dashboardListings", locale)}>
-          <Button variant="secondary">
-            {isTr ? "İlanı Yönet" : "Manage Listing"}
+          <Button variant="outline">
+            {isTr ? "Tüm İlanlarım" : "All My Listings"}
           </Button>
         </Link>
         {copyButton}
@@ -95,19 +104,36 @@ export function ListingDetailActions({
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-3">
-      <Button variant="primary" size="lg" onClick={() => setModalOpen(true)}>
-        {isTr ? "Birebir Gizli Teklif Ver" : "Submit Private Offer"}
-      </Button>
-      {copyButton}
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-3">
+        <Button variant="primary" size="lg" onClick={() => setModalOpen(true)}>
+          {isTr ? "Birebir Gizli Teklif Ver" : "Submit Private Offer"}
+        </Button>
+        {copyButton}
 
-      <SubmitOfferModal
-        isOpen={modalOpen}
-        onClose={() => setModalOpen(false)}
-        listingId={listingId}
-        listingTitle={listingTitle}
-        locale={locale}
-      />
+        <SubmitOfferModal
+          isOpen={modalOpen}
+          onClose={() => setModalOpen(false)}
+          listingId={listingId}
+          listingTitle={listingTitle}
+          locale={locale}
+        />
+      </div>
+
+      <p className="text-[11px] text-[var(--color-text-tertiary)] flex items-center gap-1.5 pt-1">
+        <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />
+        <span>
+          {isTr
+            ? "Operis kar amacı gütmeyen ücretsiz bir buluşma platformudur; ticari risk almaz. Ödeme ve sözleşmeler tarafların kendi sorumluluğundadır."
+            : "Operis is a non-profit, zero-commission matching venue. All payments and contracts are strictly direct; the platform assumes zero commercial risk."}{" "}
+          <Link
+            href={isTr ? "/tr/yasal/eslestirme-ve-sorumluluk-reddi" : "/en/legal/matching-disclaimer"}
+            className="text-blue-400 hover:underline inline-block font-medium"
+          >
+            {isTr ? "Yasal Sorumluluk Reddi" : "Disclaimer"}
+          </Link>
+        </span>
+      </p>
     </div>
   );
 }

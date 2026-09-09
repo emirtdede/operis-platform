@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Copy, Check } from "lucide-react";
+import { Copy, Check, FileText } from "lucide-react";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
 import { AvatarInitials } from "../ui/avatar-initials";
+import { ContractDraftModal } from "./contract-draft-modal";
 
 export interface MatchDetailsViewProps {
   engagementId: string;
@@ -41,6 +42,8 @@ export function MatchDetailsView({
   budgetLabel,
   timelineLabel,
   counterparty,
+  currentUserId,
+  ownerUserId,
   isCompleted,
   userCompletionStatus,
   counterpartyCompletionStatus,
@@ -53,6 +56,7 @@ export function MatchDetailsView({
   const [isLoading, setIsLoading] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [copiedField, setCopiedField] = useState<"email" | "phone" | null>(null);
+  const [contractModalOpen, setContractModalOpen] = useState(false);
 
   const handleCopy = async (text: string, field: "email" | "phone") => {
     try {
@@ -162,6 +166,30 @@ export function MatchDetailsView({
         <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[var(--color-text-primary)]">
           {listingTitle}
         </h1>
+      </div>
+
+      {/* Bilateral Contract Draft Banner */}
+      <div className="rounded-3xl border border-blue-500/25 bg-gradient-to-r from-blue-500/10 via-[var(--color-surface-base)] to-blue-500/5 p-6 sm:p-7 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-5">
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-2 text-blue-400 font-bold text-sm">
+            <FileText className="h-4 w-4" aria-hidden="true" />
+            <span>{isTr ? "İki Tarafa Özel Sözleşme Taslağı" : "Bilateral Contract Draft"}</span>
+          </div>
+          <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed max-w-xl">
+            {isTr
+              ? "Operis emanet havuzu tutmaz ve ticari risk almaz. Haklarınızı korumak için projenize özel oluşturulan resmi sözleşme taslağını inceleyip yazdırabilir veya PDF olarak kaydedebilirsiniz."
+              : "Operis takes zero commission and operates zero escrow. Review and print your bilateral contract draft to legally self-protect your project rights."}
+          </p>
+        </div>
+        <Button
+          variant="primary"
+          size="md"
+          onClick={() => setContractModalOpen(true)}
+          className="gap-2 shrink-0 shadow-md shadow-blue-500/15"
+        >
+          <FileText className="h-4 w-4" aria-hidden="true" />
+          <span>{isTr ? "Sözleşme Taslağını İncele (PDF)" : "Review Contract Draft (PDF)"}</span>
+        </Button>
       </div>
 
       {/* Counterparty Contact Disclosure Card */}
@@ -365,14 +393,30 @@ export function MatchDetailsView({
       {/* Statutory Disclaimer */}
       <div className="rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-hover)] p-4 text-xs text-[var(--color-text-tertiary)] leading-relaxed space-y-1">
         <p className="font-semibold text-[var(--color-text-secondary)]">
-          {isTr ? "Sözleşme ve Ödeme Uyarısı:" : "Contract & Payment Warning:"}
+          {isTr ? "Sözleşme, Ödeme ve Dava Muafiyeti Uyarısı:" : "Contract, Payment & Lawsuit Immunity Warning:"}
         </p>
         <p>
           {isTr
-            ? "Yürürlükteki mevzuatın izin verdiği azami ölçüde, bu platform taraflar arasında emanet, ödeme veya sözleşmesel tahsilat hizmeti sağlamaz. Çalışma koşulları ve ödemeler doğrudan taraflar arasında gerçekleştirilmelidir."
-            : "To the maximum extent permitted by applicable law, this platform provides no escrow, payment collection, or contract guarantees. Parties are responsible for contracting directly."}
+            ? "Yürürlükteki mevzuatın izin verdiği azami ölçüde, Operis kar amacı gütmeyen ücretsiz bir eşleştirme platformudur; emanet (escrow) tutmaz, ödeme aracılığı yapmaz ve ticari risk almaz. Mağduriyet veya anlaşmazlık hallerinde taraflar münhasıran karşı tarafla muhataptır; Operis aleyhine dava açılamaz."
+            : "To the maximum extent permitted by applicable law, Operis is a non-profit, zero-escrow matching network; it takes zero commercial risk. Counterparties are solely responsible for their bilateral contract and payments; no lawsuit may be brought against the platform."}
         </p>
       </div>
+
+      <ContractDraftModal
+        isOpen={contractModalOpen}
+        onClose={() => setContractModalOpen(false)}
+        engagementId={engagementId}
+        listingTitle={listingTitle}
+        category={category}
+        matchedAt={matchedAt}
+        offerMessage={offerMessage}
+        budgetLabel={budgetLabel}
+        timelineLabel={timelineLabel}
+        counterparty={counterparty}
+        currentUser={{}}
+        isOwner={currentUserId === ownerUserId}
+        locale={locale}
+      />
     </div>
   );
 }

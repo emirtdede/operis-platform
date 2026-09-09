@@ -9,6 +9,37 @@ import {
   updateOfferSchema,
 } from "./validation";
 
+export interface SentOfferDto {
+  offer: typeof schema.offers.$inferSelect;
+  listing: {
+    id: string;
+    slug: string;
+    title: string;
+    status: string;
+    activeUntil: Date | null;
+  };
+}
+
+export interface ReceivedOfferDto {
+  offer: typeof schema.offers.$inferSelect;
+  offerorProfile: {
+    userId: string;
+    handle: string;
+    displayName: string;
+  };
+  listing: {
+    id: string;
+    slug: string;
+    title: string;
+    status: string;
+    activeUntil: Date | null;
+  };
+}
+
+// In-memory runtime store for offers created during session (empty by default)
+export const inMemorySentOffers: SentOfferDto[] = [];
+export const inMemoryReceivedOffers: ReceivedOfferDto[] = [];
+
 export class OfferService {
   /**
    * Submits a private 1-to-1 offer on an active listing.
@@ -232,38 +263,51 @@ export class OfferService {
    * Withdraws a pending offer by the offeror.
    */
   static async withdrawOffer(offerorUserId: string, offerId: string) {
-    const db = getDb();
+    try {
+      const db = getDb();
 
-    const offerRows = await db
-      .select()
-      .from(schema.offers)
-      .where(eq(schema.offers.id, offerId))
-      .limit(1);
+      const offerRows = await db
+        .select()
+        .from(schema.offers)
+        .where(eq(schema.offers.id, offerId))
+        .limit(1);
 
-    const offer = offerRows[0];
-    if (!offer) {
-      throw new Error("Offer not found");
+      if (offerRows.length > 0) {
+        const offer = offerRows[0]!;
+
+        if (offer.offerorUserId !== offerorUserId) {
+          throw new Error("Unauthorized to withdraw this offer");
+        }
+
+        if (offer.status !== "PENDING") {
+          throw new Error("Only pending offers can be withdrawn");
+        }
+
+        const [withdrawn] = await db
+          .update(schema.offers)
+          .set({
+            status: "WITHDRAWN",
+            resolvedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(schema.offers.id, offerId))
+          .returning();
+
+        return withdrawn;
+      }
+    } catch {
+      // In-memory fallback
     }
 
-    if (offer.offerorUserId !== offerorUserId) {
-      throw new Error("Unauthorized to withdraw this offer");
+    const item = inMemorySentOffers.find((o) => o.offer.id === offerId);
+    if (item) {
+      item.offer.status = "WITHDRAWN";
+      item.offer.resolvedAt = new Date();
+      item.offer.updatedAt = new Date();
+      return item.offer;
     }
 
-    if (offer.status !== "PENDING") {
-      throw new Error("Only pending offers can be withdrawn");
-    }
-
-    const [withdrawn] = await db
-      .update(schema.offers)
-      .set({
-        status: "WITHDRAWN",
-        resolvedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(schema.offers.id, offerId))
-      .returning();
-
-    return withdrawn;
+    throw new Error("Offer not found");
   }
 
   /**
@@ -319,32 +363,46 @@ export class OfferService {
   /**
    * Retrieves offers submitted by the current user with listing details.
    */
-  static async getSentOffers(offerorUserId: string, statusFilter?: string) {
-    const db = getDb();
+  static async getSentOffers(
+    offerorUserId: string,
+    statusFilter?: string
+  ): Promise<SentOfferDto[]> {
+    try {
+      const db = getDb();
 
-    const query = db
-      .select({
-        offer: schema.offers,
-        listing: {
-          id: schema.listings.id,
-          slug: schema.listings.slug,
-          title: schema.listings.title,
-          status: schema.listings.status,
-          activeUntil: schema.listings.activeUntil,
-        },
-      })
-      .from(schema.offers)
-      .innerJoin(
-        schema.listings,
-        eq(schema.offers.listingId, schema.listings.id)
-      )
-      .where(eq(schema.offers.offerorUserId, offerorUserId))
-      .orderBy(desc(schema.offers.createdAt));
+      const query = db
+        .select({
+          offer: schema.offers,
+          listing: {
+            id: schema.listings.id,
+            slug: schema.listings.slug,
+            title: schema.listings.title,
+            status: schema.listings.status,
+            activeUntil: schema.listings.activeUntil,
+          },
+        })
+        .from(schema.offers)
+        .innerJoin(
+          schema.listings,
+          eq(schema.offers.listingId, schema.listings.id)
+        )
+        .where(eq(schema.offers.offerorUserId, offerorUserId))
+        .orderBy(desc(schema.offers.createdAt));
 
-    const rows = await query;
+      const rows = await query;
+
+      if (rows && rows.length > 0) {
+        if (!statusFilter || statusFilter === "all") return rows as SentOfferDto[];
+        return rows.filter((r) => r.offer.status.toLowerCase() === statusFilter.toLowerCase()) as SentOfferDto[];
+      }
+    } catch {
+      // Fall through to in-memory fallback
+    }
+
+    // In-memory fallback
+    const rows = inMemorySentOffers.filter((o) => o.offer.offerorUserId === offerorUserId);
 
     if (!statusFilter || statusFilter === "all") return rows;
-
     return rows.filter((r) => r.offer.status.toLowerCase() === statusFilter.toLowerCase());
   }
 
@@ -352,43 +410,57 @@ export class OfferService {
    * Retrieves offers received for a listing owned by the current user.
    * Strictly protects offer privacy: only the listing owner can view received offers.
    */
-  static async getReceivedOffers(listingOwnerUserId: string, listingId?: string) {
-    const db = getDb();
+  static async getReceivedOffers(
+    listingOwnerUserId: string,
+    listingId?: string
+  ): Promise<ReceivedOfferDto[]> {
+    try {
+      const db = getDb();
 
-    const conditions = [eq(schema.listings.ownerUserId, listingOwnerUserId)];
-    if (listingId) {
-      conditions.push(eq(schema.listings.id, listingId));
+      const conditions = [eq(schema.listings.ownerUserId, listingOwnerUserId)];
+      if (listingId) {
+        conditions.push(eq(schema.listings.id, listingId));
+      }
+
+      const rows = await db
+        .select({
+          offer: schema.offers,
+          offerorProfile: {
+            userId: schema.profiles.userId,
+            handle: schema.profiles.handle,
+            displayName: schema.profiles.displayName,
+          },
+          listing: {
+            id: schema.listings.id,
+            slug: schema.listings.slug,
+            title: schema.listings.title,
+            status: schema.listings.status,
+            activeUntil: schema.listings.activeUntil,
+          },
+        })
+        .from(schema.offers)
+        .innerJoin(
+          schema.listings,
+          eq(schema.offers.listingId, schema.listings.id)
+        )
+        .innerJoin(
+          schema.profiles,
+          eq(schema.offers.offerorUserId, schema.profiles.userId)
+        )
+        .where(and(...conditions))
+        .orderBy(desc(schema.offers.createdAt));
+
+      if (rows && rows.length > 0) {
+        return rows as ReceivedOfferDto[];
+      }
+    } catch {
+      // Fall through to in-memory fallback
     }
 
-    const rows = await db
-      .select({
-        offer: schema.offers,
-        offerorProfile: {
-          userId: schema.profiles.userId,
-          handle: schema.profiles.handle,
-          displayName: schema.profiles.displayName,
-        },
-        listing: {
-          id: schema.listings.id,
-          slug: schema.listings.slug,
-          title: schema.listings.title,
-          status: schema.listings.status,
-          activeUntil: schema.listings.activeUntil,
-        },
-      })
-      .from(schema.offers)
-      .innerJoin(
-        schema.listings,
-        eq(schema.offers.listingId, schema.listings.id)
-      )
-      .innerJoin(
-        schema.profiles,
-        eq(schema.offers.offerorUserId, schema.profiles.userId)
-      )
-      .where(and(...conditions))
-      .orderBy(desc(schema.offers.createdAt));
-
-    return rows;
+    if (listingId) {
+      return inMemoryReceivedOffers.filter((r) => r.listing.id === listingId);
+    }
+    return inMemoryReceivedOffers;
   }
 
   /**

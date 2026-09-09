@@ -117,7 +117,7 @@ export function ReceivedOffersDashboard({
                 : "Offers submitted to your listings will appear here."
             }
             action={
-              <Link href={`/${locale}/dashboard/listings`}>
+              <Link href={isTr ? "/tr/panel/ilanlarim" : "/en/dashboard/listings"}>
                 <Button variant="secondary">
                   {isTr ? "İlanlarımı İncele" : "View My Listings"}
                 </Button>

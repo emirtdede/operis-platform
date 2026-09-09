@@ -194,23 +194,53 @@ export default async function PublicProfilePage({
 
         {/* Links */}
         {profile.links && profile.links.length > 0 && (
-          <section className="border-t border-[var(--color-border-subtle)] pt-4 space-y-2" aria-label={isTr ? "Doğrulanmış Bağlantılar" : "Verified Links"}>
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">
-              {isTr ? "Doğrulanmış Bağlantılar" : "Verified Links"}
+          <section className="space-y-3" aria-label={isTr ? "Portfolyo ve Dış Bağlantılar" : "Portfolio & External Links"}>
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-tertiary)] flex items-center justify-between">
+              <span>{isTr ? "Portfolyo ve Doğrulanmış Dış Bağlantılar" : "Portfolio & External Profiles"}</span>
+              <span className="text-[10px] lowercase font-normal opacity-70">
+                {isTr ? "doğrudan yönlendirme" : "direct referral"}
+              </span>
             </h2>
-            <div className="flex flex-wrap gap-3">
-              {profile.links.map((link: { id: string; url: string; label: string }) => (
-                <a
-                  key={link.id}
-                  href={link.url}
-                  target="_blank"
-                  rel="noopener noreferrer nofollow"
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-surface-hover)] px-3 py-1.5 text-xs text-[var(--color-text-primary)] hover:border-[var(--color-border-strong)] transition-colors"
-                >
-                  <span>{link.label || link.url}</span>
-                  <ExternalLink className="h-3 w-3 text-[var(--color-text-tertiary)]" aria-hidden="true" />
-                </a>
-              ))}
+            <div className="flex flex-wrap gap-2.5">
+              {profile.links.map((link: { id: string; url: string; label: string }) => {
+                const u = link.url.toLowerCase();
+                const isGithub = u.includes("github.com");
+                const isBehance = u.includes("behance.net");
+                const isDribbble = u.includes("dribbble.com");
+                const isFigma = u.includes("figma.com");
+                const isLinkedin = u.includes("linkedin.com");
+                const isGitlab = u.includes("gitlab.com");
+                const isMedium = u.includes("medium.com");
+
+                const badgeColor = isGithub
+                  ? "border-neutral-500/30 bg-neutral-500/10 text-neutral-200 hover:border-neutral-400"
+                  : isBehance
+                  ? "border-blue-500/30 bg-blue-500/10 text-blue-400 hover:border-blue-400"
+                  : isDribbble
+                  ? "border-pink-500/30 bg-pink-500/10 text-pink-400 hover:border-pink-400"
+                  : isFigma
+                  ? "border-purple-500/30 bg-purple-500/10 text-purple-400 hover:border-purple-400"
+                  : isLinkedin
+                  ? "border-sky-500/30 bg-sky-500/10 text-sky-400 hover:border-sky-400"
+                  : isGitlab
+                  ? "border-orange-500/30 bg-orange-500/10 text-orange-400 hover:border-orange-400"
+                  : isMedium
+                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:border-emerald-400"
+                  : "border-[var(--color-border-subtle)] bg-[var(--color-surface-hover)] text-[var(--color-text-primary)] hover:border-[var(--color-border-strong)]";
+
+                return (
+                  <a
+                    key={link.id}
+                    href={link.url}
+                    target="_blank"
+                    rel="noopener noreferrer nofollow"
+                    className={`inline-flex items-center gap-2 rounded-xl border px-3.5 py-2 text-xs font-medium transition-all hover:scale-[1.02] shadow-sm ${badgeColor}`}
+                  >
+                    <span>{link.label || link.url}</span>
+                    <ExternalLink className="h-3 w-3 opacity-70" aria-hidden="true" />
+                  </a>
+                );
+              })}
             </div>
           </section>
         )}

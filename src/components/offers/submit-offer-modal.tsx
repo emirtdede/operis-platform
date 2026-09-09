@@ -207,8 +207,8 @@ export function SubmitOfferModal({
           {/* Statutory disclaimer */}
           <div className="rounded-2xl border border-blue-500/20 bg-blue-500/5 p-3.5 text-xs text-[var(--color-text-secondary)] leading-relaxed">
             {isTr
-              ? "Platform üzerinden ödeme ve sözleşme hizmeti verilmez. Teklifiniz kabul edildiğinde karşı tarafla doğrudan iletişime geçeceksiniz."
-              : "The platform does not process payments or manage service contracts. Upon acceptance, approved contact channels are disclosed directly."}
+              ? "Operis kar amacı gütmeyen, ücretsiz bir platformdur; ticari risk almaz ve para tutmaz. Teklifiniz kabul edildiğinde karşı tarafla doğrudan anlaşır ve kendi bağımsız sözleşmenizi yürütürsünüz."
+              : "Operis is a non-profit, zero-commission network; we assume zero commercial risk and hold no funds. Upon acceptance, counterparties agree directly and manage their own independent contracts."}
           </div>
 
           <div className="flex items-center justify-end gap-3 pt-2">

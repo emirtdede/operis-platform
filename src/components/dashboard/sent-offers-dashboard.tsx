@@ -117,9 +117,9 @@ export function SentOffersDashboard({
                 : "You have not submitted proposals or none match this filter."
             }
             action={
-              <Link href={`/${locale}/feed`}>
+              <Link href={isTr ? "/tr/ilanlar" : "/en/listings"}>
                 <Button variant="primary">
-                  {isTr ? "Projeleri İncele" : "Explore Projects"}
+                  {isTr ? "İlanları Keşfet" : "Explore Listings"}
                 </Button>
               </Link>
             }

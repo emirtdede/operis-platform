@@ -54,11 +54,11 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
             className={twMerge(
               clsx(
                 "w-full h-12 px-3.5 pr-10 text-sm rounded-xl font-normal transition-all duration-200",
-                "bg-white/80 dark:bg-slate-900/60 backdrop-blur-xl text-[var(--color-text-primary)]",
-                "border border-slate-200 dark:border-white/[0.08] hover:border-slate-300 dark:hover:border-white/[0.18]",
-                "shadow-sm dark:shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_1px_2px_rgba(0,0,0,0.25)]",
+                "bg-[var(--bg-surface)] text-[var(--text-primary)]",
+                "border border-[var(--border-subtle)] hover:border-[var(--border-strong)]",
+                "shadow-sm",
                 "appearance-none",
-                "focus-visible:outline-none focus-visible:border-blue-500 dark:focus-visible:border-blue-500/80 focus-visible:ring-4 focus-visible:ring-blue-500/15 focus-visible:bg-white dark:focus-visible:bg-slate-900/80",
+                "focus-visible:outline-none focus-visible:border-blue-500 focus-visible:ring-4 focus-visible:ring-blue-500/15 focus-visible:bg-[var(--bg-surface)]",
                 error
                   ? "border-[var(--color-danger)] focus-visible:ring-[var(--color-danger)]/20"
                   : "",
@@ -68,7 +68,7 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
             {...props}
           >
             {options.map((opt) => (
-              <option key={opt.value} value={opt.value} disabled={opt.disabled} className="bg-[#141517] text-[var(--color-text-primary)]">
+              <option key={opt.value} value={opt.value} disabled={opt.disabled} className="bg-[var(--bg-surface)] text-[var(--text-primary)]">
                 {opt.label}
               </option>
             ))}

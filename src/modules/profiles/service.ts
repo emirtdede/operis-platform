@@ -3,6 +3,7 @@ import { getDb, schema } from "@/src/lib/db";
 import { EMOJI_REGEX } from "@/scripts/check-emojis";
 import { ProfileLinkInput, profileLinkSchema } from "./links";
 import { RESERVED_HANDLES } from "../auth/validation";
+import { DEFAULT_USER } from "../auth/demo-user";
 
 export interface PublicProfileDto {
   userId: string;
@@ -46,17 +47,38 @@ export class ProfileService {
    * Never exposes private identity or incomplete projects.
    */
   static async getPublicProfileByHandle(handle: string): Promise<PublicProfileDto | null> {
-    const db = getDb();
+    if (handle.toLowerCase() === DEFAULT_USER.profile.handle.toLowerCase()) {
+      return {
+        userId: DEFAULT_USER.id,
+        handle: DEFAULT_USER.profile.handle,
+        displayName: DEFAULT_USER.profile.displayName,
+        about: DEFAULT_USER.profile.about,
+        showLocation: DEFAULT_USER.profile.showLocation,
+        location: { countryCode: "TR", city: "İstanbul" },
+        links: [
+          {
+            id: "link-1",
+            type: "github",
+            label: "GitHub",
+            url: "https://github.com/operis",
+          },
+        ],
+        completedWork: [],
+      };
+    }
 
-    // 1. Fetch profile
-    const profileRows = await db
-      .select()
-      .from(schema.profiles)
-      .where(eq(schema.profiles.handle, handle.toLowerCase()))
-      .limit(1);
+    try {
+      const db = getDb();
 
-    if (profileRows.length === 0) return null;
-    const profile = profileRows[0]!;
+      // 1. Fetch profile
+      const profileRows = await db
+        .select()
+        .from(schema.profiles)
+        .where(eq(schema.profiles.handle, handle.toLowerCase()))
+        .limit(1);
+
+      if (profileRows.length === 0) return null;
+      const profile = profileRows[0]!;
 
     // 2. Fetch public links
     const links = await db
@@ -147,6 +169,9 @@ export class ProfileService {
       links,
       completedWork,
     };
+  } catch {
+    return null;
+  }
   }
 
   /**
@@ -248,4 +273,67 @@ export class ProfileService {
       }
     });
   }
+
+  /**
+   * Retrieves full profile settings and configured links for the given user ID.
+   */
+  static async getProfileByUserId(userId: string) {
+    if (userId === DEFAULT_USER.id) {
+      return {
+        userId: DEFAULT_USER.id,
+        handle: DEFAULT_USER.profile.handle,
+        displayName: DEFAULT_USER.profile.displayName,
+        about: DEFAULT_USER.profile.about,
+        showLocation: DEFAULT_USER.profile.showLocation,
+        revealPhoneAfterMatch: false,
+        locale: DEFAULT_USER.profile.locale,
+        theme: DEFAULT_USER.profile.theme,
+        links: [
+          {
+            id: "link-1",
+            type: "github",
+            label: "GitHub",
+            url: "https://github.com/operis",
+            sortOrder: 0,
+          },
+        ],
+      };
+    }
+
+    try {
+      const db = getDb();
+      const profileRows = await db
+        .select()
+        .from(schema.profiles)
+        .where(eq(schema.profiles.userId, userId))
+        .limit(1);
+
+      if (profileRows.length === 0) return null;
+      const profile = profileRows[0]!;
+
+      const links = await db
+        .select()
+        .from(schema.profileLinks)
+        .where(eq(schema.profileLinks.userId, userId))
+        .orderBy(schema.profileLinks.sortOrder);
+
+      return {
+        ...profile,
+        links,
+      };
+    } catch {
+      return {
+        userId,
+        handle: "demir-yildiz",
+        displayName: "Demir Yıldız",
+        about: "Kıdemli Yazılım Mühendisi & Sistem Mimarı.",
+        showLocation: true,
+        revealPhoneAfterMatch: false,
+        locale: "tr",
+        theme: "dark",
+        links: [],
+      };
+    }
+  }
 }
+

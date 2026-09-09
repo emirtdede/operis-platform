@@ -55,17 +55,17 @@ const PLAIN_SUMMARIES: Record<string, { tr: { title: string; bullets: string[] }
     tr: {
       title: "Özetle: Kullanım Koşulları Sizin İçin Ne Anlama Geliyor?",
       bullets: [
-        "%0 Komisyon: Platform, yapılan iş birliklerinden veya ödemelerden hiçbir komisyon kesintisi yapmaz.",
-        "Doğrudan Ticari Anlaşma: Sözleşme, teslimat şartları ve ödeme kanalları tamamen işveren ve yazılımcı arasındadır.",
-        "7 Günlük Tazelik Kuralı: İlanlar maksimum 7 gün aktiftir; terk edilen projeler otomatik olarak pasife alınır.",
+        "Kar Amacı Gütmeyen Ücretsiz Ağ: Platform herkese ücretsizdir; komisyon, üyelik veya işlem ücreti kesilmez.",
+        "Sıfır Ticari Risk & Taraf Olmama: Platform taraflar arasındaki ticarete maddi olarak dahil değildir; hiçbir ticari risk almaz.",
+        "Dava Muafiyeti & Doğrudan Muhataplık: Mağduriyet veya anlaşmazlıklarda platforma dava açılamaz; taraflar münhasıran birbirleriyle muhataptır.",
       ],
     },
     en: {
       title: "In Brief: What Terms of Service Mean for You",
       bullets: [
-        "0% Commission: The platform never deducts any fee or percentage from your project earnings.",
-        "Direct Commercial Autonomy: Contracts, milestones, and payment methods are agreed directly between counterparties.",
-        "7-Day Freshness Window: Projects remain active for 7 days, ensuring search results stay clutter-free and current.",
+        "Non-Profit & 100% Free Network: No commissions, platform cuts, connects fees, or subscription charges.",
+        "Zero Commercial Risk: The platform is not party to contracts, escrow, or payments and assumes zero financial risk.",
+        "Lawsuit Immunity & Counterparty Recourse: In disputes or defaults, no lawsuit may be brought against the platform; counterparties deal solely with each other.",
       ],
     },
   },
@@ -91,17 +91,17 @@ const PLAIN_SUMMARIES: Record<string, { tr: { title: string; bullets: string[] }
     tr: {
       title: "Özetle: Eşleştirme ve Sorumluluk Modeli",
       bullets: [
-        "Keşif Ağı Rolü: Platform, nitelikli yazılımcı ve işverenleri doğrudan buluşturan tarafsız bir keşif ortamıdır.",
-        "Escrow / Emanet Yoktur: Platform para toplamaz, tutmaz veya aracı ödeme sistemi işletmez.",
-        "Doğrudan Hukuki Bağımsızlık: Taraflar kendi fatura, vergi ve hizmet sözleşmelerini bağımsız olarak yürütür.",
+        "Ücretsiz Buluşma Noktası: Platform yalnızca yetenek ile projeyi bir araya getiren tarafsız bir aracı ortamdır.",
+        "Ödeme ve Emanet (Escrow) Yoktur: Platform para toplamaz, tutmaz veya aracı ödeme sistemi işletmez.",
+        "Özel Sözleşme Taslağı & Hukuki Koruma: Tarafların kendilerini koruması için sistem özel sözleşme taslağı sunar; hukuki sorumluluk taraflara aittir.",
       ],
     },
     en: {
       title: "In Brief: Operational & Matching Disclaimer",
       bullets: [
-        "Discovery Venue: We act solely as a technology matching and discovery venue connecting talent directly.",
-        "Zero Escrow Custody: We never touch, process, or hold transaction funds in escrow accounts.",
-        "Direct Accountability: Counterparties independently manage contracts, taxes, and invoicing.",
+        "Free Matching Venue: A neutral, non-profit discovery and direct introduction network.",
+        "Zero Escrow & Funds: We never touch, process, or hold project funds in escrow accounts.",
+        "Custom Contract Draft: We provide contract drafts for mutual protection; legal execution is solely up to counterparties.",
       ],
     },
   },

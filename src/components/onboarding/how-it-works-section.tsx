@@ -59,8 +59,8 @@ export function HowItWorksSection({ locale }: HowItWorksSectionProps) {
       icon: Compass,
       title: isTr ? "Canlı İlanları Keşfedin" : "Discover Active Projects",
       description: isTr
-        ? "Yalnızca son 168 saat içinde yayınlanmış veya yenilenmiş güncel yazılım projelerini filtreleyin ve inceleyin."
-        : "Browse strictly active software engineering listings published or reactivated within the last 168 hours.",
+        ? "Yalnızca son 1 hafta içinde yayınlanmış veya yenilenmiş güncel yazılım projelerini filtreleyin ve inceleyin."
+        : "Browse strictly active software engineering listings published or reactivated within the last 1 week.",
       badge: isTr ? "Taze ve Aktif" : "Strictly Fresh",
     },
     {
@@ -87,48 +87,52 @@ export function HowItWorksSection({ locale }: HowItWorksSectionProps) {
 
   return (
     <section
+      id="how-it-works"
       aria-labelledby="how-it-works-heading"
-      className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-10"
+      className="relative flex flex-col justify-center items-center min-h-[calc(100dvh-4rem)] w-full px-4 sm:px-6 lg:px-8 py-12 sm:py-16 snap-start scroll-mt-16"
     >
-      <div className="text-center max-w-3xl mx-auto space-y-3">
-        <h2
-          id="how-it-works-heading"
-          className="text-3xl sm:text-4xl font-extrabold tracking-tight text-[var(--color-text-primary)]"
-        >
-          {isTr ? "Nasıl Çalışır?" : "How It Works"}
-        </h2>
-        <p className="text-sm sm:text-base text-[var(--color-text-secondary)] max-w-2xl mx-auto">
-          {isTr
-            ? "Hem işverenler hem de yazılım profesyonelleri için doğrudan, şeffaf ve güvenli 3 adımlı süreç."
-            : "A direct, transparent 3-step pathway engineered for both project owners and software engineers."}
-        </p>
+      <div className="mx-auto max-w-7xl w-full space-y-8 sm:space-y-10">
+        <div className="text-center max-w-3xl mx-auto space-y-3">
+          <h2
+            id="how-it-works-heading"
+            className="text-3xl sm:text-4xl font-extrabold tracking-tight text-[var(--color-text-primary)]"
+          >
+            {isTr ? "Nasıl Çalışır?" : "How It Works"}
+          </h2>
+          <p className="text-sm sm:text-base text-[var(--color-text-secondary)] max-w-2xl mx-auto">
+            {isTr
+              ? "Hem işverenler hem de yazılım profesyonelleri için doğrudan, şeffaf ve güvenli 3 adımlı süreç."
+              : "A direct, transparent 3-step pathway engineered for both project owners and software engineers."}
+          </p>
+        </div>
 
         {/* Role Toggle Tabs */}
-        <div className="inline-flex items-center p-1.5 rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/80 backdrop-blur-xl shadow-sm mt-4">
-          <button
-            type="button"
-            onClick={() => setRole("client")}
-            className={`px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 ${
-              role === "client"
-                ? "bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-600 text-white shadow-md shadow-blue-500/20 border border-white/15"
-                : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]"
-            }`}
-          >
-            {isTr ? "İş Verenler İçin" : "For Project Owners"}
-          </button>
-          <button
-            type="button"
-            onClick={() => setRole("freelancer")}
-            className={`px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 ${
-              role === "freelancer"
-                ? "bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-600 text-white shadow-md shadow-blue-500/20 border border-white/15"
-                : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]"
-            }`}
-          >
-            {isTr ? "Yazılımcılar & Uzmanlar İçin" : "For Software Engineers"}
-          </button>
+        <div className="flex justify-center mt-4">
+          <div className="inline-flex items-center p-1.5 rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/80 backdrop-blur-xl shadow-sm">
+            <button
+              type="button"
+              onClick={() => setRole("client")}
+              className={`px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 ${
+                role === "client"
+                  ? "bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-600 text-white shadow-md shadow-blue-500/20 border border-white/15"
+                  : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]"
+              }`}
+            >
+              {isTr ? "İş Verenler İçin" : "For Project Owners"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setRole("freelancer")}
+              className={`px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 ${
+                role === "freelancer"
+                  ? "bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-600 text-white shadow-md shadow-blue-500/20 border border-white/15"
+                  : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]"
+              }`}
+            >
+              {isTr ? "Yazılımcılar & Uzmanlar İçin" : "For Software Engineers"}
+            </button>
+          </div>
         </div>
-      </div>
 
       {/* 3 Step Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -191,6 +195,7 @@ export function HowItWorksSection({ locale }: HowItWorksSectionProps) {
             </Button>
           </Link>
         )}
+      </div>
       </div>
     </section>
   );
