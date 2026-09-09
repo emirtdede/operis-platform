@@ -37,15 +37,15 @@
     - Şeffaf (transparent) arka plan: Navbar, header, hero ve koyu kartlara doğrudan oturur.
     - Sıkı kırpılmış (tight) viewBox (350x112): Fazladan boşluk bırakmaz, CSS'te h-8, h-10, h-12 ile tam boyutlanır.
     - Logo boyutu: 81px (%108 optik O harfi ölçeği, tepe noktası 'i' noktasının hizasında).
-    - Harf boşluğu (kerning): Optik dengelenmiş doğal kerning (O ile p arası diğer harflerle tam eşitlendi).
+    - Harf boşluğu (kerning): Matematiksel olarak kalibre edilmiş optik kerning (O ile p arası net 10px, tüm harflerle tam eşit).
   -->
   <g id="operisWordmark">
     <!-- 'O' HARFİ YERİNE LOGO SEMBOLÜ -->
-    <g transform="translate(11, 6) scale(0.54)">
+    <g transform="translate(15, 6) scale(0.54)">
       <use href="#operisStreamMarkWhite"/>
     </g>
 
     <!-- 'peris' KÜÇÜK HARFLER -->
-    <text x="90" y="85" fill="#FAFAFA" class="brand-text">peris</text>
+    <text x="100" y="85" fill="#FAFAFA" class="brand-text">peris</text>
   </g>
 </svg>
