@@ -1,0 +1,74 @@
+"use client";
+
+import { usePathname, useRouter, useParams } from "next/navigation";
+import { locales, Locale } from "@/src/lib/i18n/config";
+
+import { getAlternateLocalePath } from "@/src/lib/i18n/routes";
+
+export function LanguageSwitcher({
+  currentLocale,
+  className = "",
+}: {
+  currentLocale?: Locale;
+  className?: string;
+}) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const params = useParams();
+  const activeLocale: Locale =
+    currentLocale ||
+    ((params?.locale as Locale) && locales.includes(params?.locale as Locale)
+      ? (params.locale as Locale)
+      : pathname.startsWith("/en")
+      ? "en"
+      : "tr");
+
+  const switchLocale = (newLocale: Locale) => {
+    if (newLocale === activeLocale) return;
+
+    // Persist locale cookie
+    document.cookie = `NEXT_LOCALE=${newLocale}; path=/; max-age=31536000; SameSite=Lax`;
+    document.cookie = `fp_locale=${newLocale}; path=/; max-age=31536000; SameSite=Lax`;
+    try {
+      localStorage.setItem("fp_locale", newLocale);
+    } catch {
+      // ignore
+    }
+
+    const targetUrl = getAlternateLocalePath(pathname, newLocale);
+    router.push(targetUrl);
+  };
+
+  return (
+    <div
+      role="group"
+      aria-label="Language selection"
+      className={`inline-flex items-center rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-0.5 text-xs font-medium select-none ${className}`}
+    >
+      <button
+        type="button"
+        onClick={() => switchLocale("tr")}
+        aria-pressed={activeLocale === "tr"}
+        className={`px-2.5 py-1 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] ${
+          activeLocale === "tr"
+            ? "bg-[var(--accent)] text-[var(--accent-contrast)] font-semibold shadow-xs"
+            : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+        }`}
+      >
+        TR
+      </button>
+      <button
+        type="button"
+        onClick={() => switchLocale("en")}
+        aria-pressed={activeLocale === "en"}
+        className={`px-2.5 py-1 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] ${
+          activeLocale === "en"
+            ? "bg-[var(--accent)] text-[var(--accent-contrast)] font-semibold shadow-xs"
+            : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+        }`}
+      >
+        EN
+      </button>
+    </div>
+  );
+}

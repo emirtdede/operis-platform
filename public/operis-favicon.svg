@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <!-- Circular White Background -->
+  <circle cx="256" cy="256" r="256" fill="#FFFFFF"/>
+  <circle cx="256" cy="256" r="253" fill="#FFFFFF" stroke="#E4E4E7" stroke-width="3"/>
+
+  <!-- Operis Stream Mark 'O' (Black #09090B, Centered at 256,256) -->
+  <g transform="translate(68.5, 68.5) scale(2.5)">
+    <!-- 1. Dış Akış Şeridi -->
+    <path d="M 25.50 124.50 A 70 70 0 0 1 124.50 25.50" 
+          stroke="#09090B" stroke-width="11" stroke-linecap="round" fill="none"/>
+    
+    <!-- 2. Merkez Akış Şeridi -->
+    <path d="M 36.11 113.89 A 55 55 0 0 1 113.89 36.11" 
+          stroke="#09090B" stroke-width="11" stroke-linecap="round" fill="none"/>
+    
+    <!-- 3. İç Akış Şeridi -->
+    <path d="M 46.72 103.28 A 40 40 0 0 1 103.28 46.72" 
+          stroke="#09090B" stroke-width="11" stroke-linecap="round" fill="none"/>
+
+    <!-- 4. Birleşik Monolitik Gövde -->
+    <path d="M 113.89 36.11 A 55 55 0 0 1 36.11 113.89" 
+          stroke="#09090B" stroke-width="42" stroke-linecap="butt" fill="none"/>
+  </g>
+</svg>
