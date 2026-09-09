@@ -27,6 +27,8 @@
 ![Security](https://img.shields.io/badge/Security-AES--256--GCM-00C853?style=for-the-badge&logo=lock)
 ![Vitest](https://img.shields.io/badge/Vitest-3.0-FCC72B?style=for-the-badge&logo=vitest&logoColor=black)
 ![Playwright](https://img.shields.io/badge/Playwright-1.51-2EAD33?style=for-the-badge&logo=playwright&logoColor=white)
+[![Website](https://img.shields.io/badge/Website-operis.pro-0070F3?style=for-the-badge&logo=googlechrome&logoColor=white)](https://operis.pro)
+[![Developer](https://img.shields.io/badge/Developer-Vellium-7928CA?style=for-the-badge)](https://vellium.dev)
 ![License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)
 
 </div>
@@ -40,7 +42,7 @@
   <img src="public/operis-logo-koyu.svg" alt="Operis Platform Logo" width="240" />
   <h3>Operis Platform — Next-Gen Software & Technology Freelance Marketplace</h3>
   <p><em>Direct, Privacy-First, Zero-Commission Freelance Platform for Developers, Designers & Tech Specialists</em></p>
-  <p><strong>Developed & Published by <a href="https://vellium.dev">Vellium</a></strong></p>
+  <p><strong>Project Website: <a href="https://operis.pro">operis.pro</a> &bull; Developed & Published by <a href="https://vellium.dev">Vellium</a></strong></p>
 </div>
 
 <br>
@@ -344,7 +346,7 @@ flowchart TD
 
 Distributed under the **MIT License**. See [`LICENSE`](./LICENSE) for more information.
 
-**Official Website**: [Vellium.dev](https://vellium.dev) &bull; **Publisher**: Vellium
+**Project Website**: [operis.pro](https://operis.pro) &bull; **Developer & Publisher**: [Vellium](https://vellium.dev)
 
 ---
 
@@ -359,7 +361,7 @@ Distributed under the **MIT License**. See [`LICENSE`](./LICENSE) for more infor
   <img src="public/operis-logo-koyu.svg" alt="Operis Platform Logo" width="240" />
   <h3>Operis Platform — Yeni Nesil Yazılım ve Teknoloji Freelance Pazaryeri</h3>
   <p><em>Yazılım Geliştiriciler, Tasarımcılar ve Teknoloji Uzmanları İçin Komisyonsuz, Aracısız ve Gizlilik Odaklı İş Platformu</em></p>
-  <p><strong>Geliştirici ve Yayıncı: <a href="https://vellium.dev">Vellium</a></strong></p>
+  <p><strong>Proje Web Sitesi: <a href="https://operis.pro">operis.pro</a> &bull; Geliştirici ve Yayıncı: <a href="https://vellium.dev">Vellium</a></strong></p>
 </div>
 
 <br>
@@ -617,4 +619,4 @@ operis-platform/
 
 Bu proje **MIT Lisansı** ile lisanslanmıştır. Detaylar için [`LICENSE`](./LICENSE) dosyasına başvurabilirsiniz.
 
-**Resmi Web Sitesi**: [Vellium.dev](https://vellium.dev) &bull; **Yayıncı**: Vellium
+**Proje Web Sitesi**: [operis.pro](https://operis.pro) &bull; **Geliştirici ve Yayıncı**: [Vellium](https://vellium.dev)
