@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { FeedService } from "@/src/modules/listings/feed/service";
 import { inMemoryListings } from "@/src/modules/listings/service";
+import { getSession } from "@/src/modules/auth/session";
 import {
   checkRateLimit,
   getClientIp,
@@ -29,11 +30,13 @@ export async function GET(req: Request) {
     }
 
     try {
+      const session = await getSession().catch(() => null);
       const feed = await FeedService.getFeedListings({
         mode: "all",
         search: q,
         limit: 6,
         locale,
+        userId: session?.userId,
       });
 
       return NextResponse.json({

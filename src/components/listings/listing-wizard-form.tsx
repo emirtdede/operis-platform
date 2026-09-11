@@ -897,8 +897,8 @@ export function ListingWizardForm({ categories, locale, userId }: ListingWizardF
               <Checkbox
                 label={
                   isTr
-                    ? "Platformun kar amacı gütmediğini, ödeme almadığını, emanet (escrow) hizmeti sunmadığını ve uyuşmazlıklarda ticari taraf olmadığını onaylıyorum."
-                    : "I acknowledge that the platform is non-profit, does not process payments, provide escrow, or act as a commercial party."
+                    ? "İlanın gizli bilgi, ticari sır veya doğrudan iletişim bilgisi (telefon, e-posta vb.) içermediğini onaylıyorum."
+                    : "I confirm that this listing contains no confidential secrets, trade secrets, or direct contact information."
                 }
                 checked={ackNoPlatformPayment}
                 onChange={(e) => setAckNoPlatformPayment(e.target.checked)}
