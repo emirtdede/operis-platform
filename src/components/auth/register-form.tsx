@@ -22,9 +22,10 @@ import { LegalModal } from "../ui/legal-modal";
 
 export interface RegisterFormProps {
   locale: string;
+  returnUrl?: string;
 }
 
-export function RegisterForm({ locale }: RegisterFormProps) {
+export function RegisterForm({ locale, returnUrl }: RegisterFormProps) {
   const isTr = locale === "tr";
 
   // Form Fields
@@ -40,7 +41,6 @@ export function RegisterForm({ locale }: RegisterFormProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-
 
   // Legal Consents
   const [termsAccepted, setTermsAccepted] = useState(false);
@@ -68,9 +68,7 @@ export function RegisterForm({ locale }: RegisterFormProps) {
 
     // Frontend validation
     if (password !== confirmPassword) {
-      setError(
-        isTr ? "Şifreler eşleşmiyor." : "Passwords do not match."
-      );
+      setError(isTr ? "Şifreler eşleşmiyor." : "Passwords do not match.");
       return;
     }
 
@@ -85,11 +83,7 @@ export function RegisterForm({ locale }: RegisterFormProps) {
 
     // 18+ Age validation
     if (!dateOfBirth) {
-      setError(
-        isTr
-          ? "Doğum tarihinizi girmelisiniz."
-          : "Please provide your date of birth."
-      );
+      setError(isTr ? "Doğum tarihinizi girmelisiniz." : "Please provide your date of birth.");
       return;
     }
     const dob = new Date(dateOfBirth);
@@ -97,9 +91,7 @@ export function RegisterForm({ locale }: RegisterFormProps) {
     const age =
       today.getFullYear() -
       dob.getFullYear() -
-      (today < new Date(today.getFullYear(), dob.getMonth(), dob.getDate())
-        ? 1
-        : 0);
+      (today < new Date(today.getFullYear(), dob.getMonth(), dob.getDate()) ? 1 : 0);
 
     if (age < 18) {
       setError(
@@ -110,12 +102,7 @@ export function RegisterForm({ locale }: RegisterFormProps) {
       return;
     }
 
-    if (
-      !termsAccepted ||
-      !privacyAcknowledged ||
-      !matchingAcknowledged ||
-      !ageConfirmed
-    ) {
+    if (!termsAccepted || !privacyAcknowledged || !matchingAcknowledged || !ageConfirmed) {
       setError(
         isTr
           ? "Devam etmek için tüm yasal onay kutularını işaretlemelisiniz."
@@ -129,30 +116,34 @@ export function RegisterForm({ locale }: RegisterFormProps) {
     try {
       const res = await fetch("/api/auth/register", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-locale": locale,
+        },
         body: JSON.stringify({
-          firstName: firstName.trim(),
-          lastName: lastName.trim(),
-          handle: handle.trim(),
+          legalFirstName: firstName.trim(),
+          legalLastName: lastName.trim(),
+          handle: handle.trim().toLowerCase(),
           displayName: displayName.trim(),
-          email: email.trim(),
+          email: email.trim().toLowerCase(),
           phone: phone.trim(),
           dateOfBirth,
-          cityOfResidence: cityOfResidence.trim(),
-          countryOfResidence: "TR",
+          city: cityOfResidence.trim(),
+          countryCode: "TR",
           password,
-          legalConsents: {
-            termsAccepted,
-            privacyAcknowledged,
-            matchingDisclaimerAcknowledged: matchingAcknowledged,
-            ageConfirmed,
-          },
+          confirmPassword,
+          termsAccepted,
+          privacyAcknowledged,
+          matchingAcknowledged,
+          ageConfirmed,
+          focusCategoryKeys: ["web-development", "frontend-ui"],
+          locale: isTr ? "tr" : "en",
         }),
       });
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || "Registration failed");
+        throw new Error(data.error || (isTr ? "Kayıt işlemi başarısız oldu" : "Registration failed"));
       }
 
       setSuccess(true);
@@ -161,8 +152,8 @@ export function RegisterForm({ locale }: RegisterFormProps) {
         err instanceof Error
           ? err.message
           : isTr
-          ? "Kayıt işlemi gerçekleştirilemedi. Lütfen bilgilerinizi kontrol edin."
-          : "Registration failed. Please check your information."
+            ? "Kayıt işlemi gerçekleştirilemedi. Lütfen bilgilerinizi kontrol edin."
+            : "Registration failed. Please check your information."
       );
     } finally {
       setIsLoading(false);
@@ -180,11 +171,21 @@ export function RegisterForm({ locale }: RegisterFormProps) {
         </h2>
         <p className="text-sm text-[var(--color-text-secondary)] leading-relaxed max-w-md mx-auto">
           {isTr
-            ? "Hesabınız oluşturuldu. E-posta adresinize gönderilen doğrulama bağlantısına tıklayarak giriş yapabilirsiniz."
-            : "Your account has been created. Please check your email inbox to verify your address before logging in."}
+            ? "Hesabınız oluşturuldu. E-posta adresinize gönderilen doğrulama bağlantısına tıklayarak veya doğrudan giriş yaparak başlayabilirsiniz."
+            : "Your account has been created. Please check your email inbox to verify your address or sign in to continue."}
         </p>
         <div className="pt-3">
-          <Link href={`/${locale}/login`}>
+          <Link
+            href={
+              returnUrl
+                ? isTr
+                  ? `/tr/giris?returnUrl=${encodeURIComponent(returnUrl)}`
+                  : `/en/login?returnUrl=${encodeURIComponent(returnUrl)}`
+                : isTr
+                  ? "/tr/giris"
+                  : "/en/login"
+            }
+          >
             <Button variant="primary" size="lg" className="font-semibold">
               {isTr ? "Giriş Yap Ekranına Git" : "Go to Sign In"}
             </Button>
@@ -303,8 +304,12 @@ export function RegisterForm({ locale }: RegisterFormProps) {
               className="p-1 rounded-md text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
               aria-label={
                 showPassword
-                  ? isTr ? "Şifreyi gizle" : "Hide password"
-                  : isTr ? "Şifreyi göster" : "Show password"
+                  ? isTr
+                    ? "Şifreyi gizle"
+                    : "Hide password"
+                  : isTr
+                    ? "Şifreyi göster"
+                    : "Show password"
               }
             >
               {showPassword ? (
@@ -331,8 +336,12 @@ export function RegisterForm({ locale }: RegisterFormProps) {
               className="p-1 rounded-md text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
               aria-label={
                 showConfirmPassword
-                  ? isTr ? "Şifre tekrarını gizle" : "Hide password confirmation"
-                  : isTr ? "Şifre tekrarını göster" : "Show password confirmation"
+                  ? isTr
+                    ? "Şifre tekrarını gizle"
+                    : "Hide password confirmation"
+                  : isTr
+                    ? "Şifre tekrarını göster"
+                    : "Show password confirmation"
               }
             >
               {showConfirmPassword ? (
@@ -402,9 +411,7 @@ export function RegisterForm({ locale }: RegisterFormProps) {
                 }}
                 className="font-medium text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 transition-colors hover:underline cursor-pointer inline text-left"
               >
-                {isTr
-                  ? "Eşleştirme ve Sorumluluk Reddi Bildirimi"
-                  : "Matching & Disclaimer Notice"}
+                {isTr ? "Eşleştirme ve Sorumluluk Reddi Bildirimi" : "Matching & Disclaimer Notice"}
               </button>
               {isTr
                 ? "'ni okudum; platformun emanet, ödeme veya sözleşme hizmeti sunmadığını kabul ediyorum."
@@ -441,7 +448,11 @@ export function RegisterForm({ locale }: RegisterFormProps) {
       <div className="pt-2 text-center text-xs text-[var(--color-text-secondary)]">
         {isTr ? "Zaten bir hesabınız var mı?" : "Already have an account?"}{" "}
         <Link
-          href={`/${locale}/login`}
+          href={
+            returnUrl
+              ? `/${locale}/login?returnUrl=${encodeURIComponent(returnUrl)}`
+              : `/${locale}/login`
+          }
           className="font-medium text-blue-400 hover:text-blue-300 transition-colors hover:underline"
         >
           {isTr ? "Giriş Yapın" : "Sign In"}

@@ -6,6 +6,7 @@ import { AlertTriangle, X } from "lucide-react";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
 import { EmptyState } from "../ui/empty-state";
+import { SubmitOfferModal } from "../offers/submit-offer-modal";
 import { getLocalizedListingPath, getLocalizedWorkspacePath } from "@/src/lib/i18n/routes";
 
 export interface SentOfferItem {
@@ -30,16 +31,14 @@ export interface SentOffersDashboardProps {
   locale: string;
 }
 
-export function SentOffersDashboard({
-  initialOffers,
-  locale,
-}: SentOffersDashboardProps) {
+export function SentOffersDashboard({ initialOffers, locale }: SentOffersDashboardProps) {
   const isTr = locale === "tr";
   const [offers, setOffers] = useState<SentOfferItem[]>(initialOffers);
   const [filter, setFilter] = useState<string>("all");
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [withdrawingOffer, setWithdrawingOffer] = useState<SentOfferItem | null>(null);
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
+  const [editingOffer, setEditingOffer] = useState<SentOfferItem | null>(null);
 
   // Close modal on Escape
   useEffect(() => {
@@ -65,15 +64,27 @@ export function SentOffersDashboard({
     setWithdrawError(null);
 
     try {
-      const res = await fetch(`/api/offers/${withdrawingOffer.id}/withdraw`, { method: "POST" });
-      if (!res.ok) throw new Error(isTr ? "Teklif geri çekilemedi." : "Could not withdraw offer.");
+      const res = await fetch(`/api/offers/${withdrawingOffer.id}/withdraw`, {
+        method: "POST",
+        headers: {
+          "x-locale": locale,
+        },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(
+          data.error || (isTr ? "Teklif geri çekilemedi." : "Could not withdraw offer.")
+        );
+      }
 
       setOffers((prev) =>
         prev.map((o) => (o.id === withdrawingOffer.id ? { ...o, status: "WITHDRAWN" } : o))
       );
       setWithdrawingOffer(null);
     } catch (err: unknown) {
-      setWithdrawError(err instanceof Error ? err.message : (isTr ? "İşlem başarısız oldu." : "Operation failed."));
+      setWithdrawError(
+        err instanceof Error ? err.message : isTr ? "İşlem başarısız oldu." : "Operation failed."
+      );
     } finally {
       setLoadingId(null);
     }
@@ -95,14 +106,24 @@ export function SentOffersDashboard({
             }`}
           >
             {f === "all"
-              ? isTr ? "Tümü" : "All"
+              ? isTr
+                ? "Tümü"
+                : "All"
               : f === "pending"
-              ? isTr ? "Beklemede" : "Pending"
-              : f === "accepted"
-              ? isTr ? "Kabul Edilenler" : "Accepted"
-              : f === "rejected"
-              ? isTr ? "Reddedilenler" : "Rejected"
-              : isTr ? "Geri Çekilenler" : "Withdrawn"}
+                ? isTr
+                  ? "Beklemede"
+                  : "Pending"
+                : f === "accepted"
+                  ? isTr
+                    ? "Kabul Edilenler"
+                    : "Accepted"
+                  : f === "rejected"
+                    ? isTr
+                      ? "Reddedilenler"
+                      : "Rejected"
+                    : isTr
+                      ? "Geri Çekilenler"
+                      : "Withdrawn"}
           </button>
         ))}
       </div>
@@ -118,9 +139,7 @@ export function SentOffersDashboard({
             }
             action={
               <Link href={isTr ? "/tr/ilanlar" : "/en/listings"}>
-                <Button variant="primary">
-                  {isTr ? "İlanları Keşfet" : "Explore Listings"}
-                </Button>
+                <Button variant="primary">{isTr ? "İlanları Keşfet" : "Explore Listings"}</Button>
               </Link>
             }
           />
@@ -128,9 +147,7 @@ export function SentOffersDashboard({
       ) : (
         <div className="space-y-4">
           {filteredOffers.map((offer) => {
-            const dateStr = new Date(offer.createdAt).toLocaleDateString(
-              isTr ? "tr-TR" : "en-US"
-            );
+            const dateStr = new Date(offer.createdAt).toLocaleDateString(isTr ? "tr-TR" : "en-US");
 
             return (
               <div
@@ -144,28 +161,37 @@ export function SentOffersDashboard({
                         offer.status === "ACCEPTED"
                           ? "primary"
                           : offer.status === "PENDING"
-                          ? "secondary"
-                          : "outline"
+                            ? "secondary"
+                            : "outline"
                       }
                       size="sm"
                     >
                       {offer.status}
                     </Badge>
-                    <span className="text-xs text-[var(--color-text-tertiary)]">
-                      {dateStr}
-                    </span>
+                    <span className="text-xs text-[var(--color-text-tertiary)]">{dateStr}</span>
                   </div>
 
                   {offer.status === "PENDING" && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setWithdrawingOffer(offer)}
-                      disabled={loadingId === offer.id}
-                      className="text-[var(--color-danger)] hover:bg-[var(--color-danger)]/10 cursor-pointer"
-                    >
-                      {isTr ? "Teklifi Geri Çek" : "Withdraw"}
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setEditingOffer(offer)}
+                        disabled={loadingId === offer.id}
+                        className="cursor-pointer"
+                      >
+                        {isTr ? "Düzenle" : "Edit"}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setWithdrawingOffer(offer)}
+                        disabled={loadingId === offer.id}
+                        className="text-[var(--color-danger)] hover:bg-[var(--color-danger)]/10 cursor-pointer"
+                      >
+                        {isTr ? "Teklifi Geri Çek" : "Withdraw"}
+                      </Button>
+                    </div>
                   )}
 
                   {offer.status === "ACCEPTED" && offer.engagementId && (
@@ -195,8 +221,7 @@ export function SentOffersDashboard({
                     {offer.budgetMin && (
                       <span>
                         <strong>{isTr ? "Bütçe:" : "Budget:"}</strong> {offer.budgetMin}{" "}
-                        {offer.budgetMax ? `– ${offer.budgetMax}` : ""}{" "}
-                        {offer.budgetCurrency}
+                        {offer.budgetMax ? `– ${offer.budgetMax}` : ""} {offer.budgetCurrency}
                       </span>
                     )}
                     {offer.estimatedDurationValue && (
@@ -239,12 +264,18 @@ export function SentOffersDashboard({
               <div className="h-10 w-10 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-500 flex items-center justify-center shrink-0">
                 <AlertTriangle className="h-5 w-5" aria-hidden="true" />
               </div>
-              <h2 id="withdraw-dialog-title" className="text-base font-bold text-[var(--color-text-primary)]">
+              <h2
+                id="withdraw-dialog-title"
+                className="text-base font-bold text-[var(--color-text-primary)]"
+              >
                 {isTr ? "Teklifi Geri Çekmek İstiyor Musunuz?" : "Withdraw Proposal?"}
               </h2>
             </div>
 
-            <p id="withdraw-dialog-description" className="text-xs text-[var(--color-text-secondary)] leading-relaxed">
+            <p
+              id="withdraw-dialog-description"
+              className="text-xs text-[var(--color-text-secondary)] leading-relaxed"
+            >
               {isTr
                 ? `"${withdrawingOffer.listingTitle}" projesine verdiğiniz teklifi geri çekiyorsunuz. İlanın mevcut 7 günlük yayım döngüsü boyunca bu projeye tekrar teklif sunamazsınız.`
                 : `You are withdrawing your proposal for "${withdrawingOffer.listingTitle}". You will not be able to submit another offer for this project during its current 7-day cycle.`}
@@ -278,12 +309,65 @@ export function SentOffersDashboard({
                 className="bg-red-600 hover:bg-red-700 text-white"
               >
                 {loadingId === withdrawingOffer.id
-                  ? isTr ? "Geri Çekiliyor..." : "Withdrawing..."
-                  : isTr ? "Evet, Teklifi Geri Çek" : "Confirm Withdrawal"}
+                  ? isTr
+                    ? "Geri Çekiliyor..."
+                    : "Withdrawing..."
+                  : isTr
+                    ? "Evet, Teklifi Geri Çek"
+                    : "Confirm Withdrawal"}
               </Button>
             </div>
           </div>
         </div>
+      )}
+
+      {/* Proposal Edit Modal */}
+      {editingOffer && (
+        <SubmitOfferModal
+          isOpen={Boolean(editingOffer)}
+          onClose={() => setEditingOffer(null)}
+          listingId={editingOffer.listingId}
+          listingTitle={editingOffer.listingTitle}
+          locale={locale}
+          offerId={editingOffer.id}
+          initialData={{
+            message: editingOffer.message,
+            budgetCurrency: editingOffer.budgetCurrency ?? (isTr ? "TRY" : "USD"),
+            budgetMin: editingOffer.budgetMin ?? "",
+            budgetMax: editingOffer.budgetMax ?? "",
+            timelineValue: editingOffer.estimatedDurationValue
+              ? String(editingOffer.estimatedDurationValue)
+              : "",
+            timelineUnit: (editingOffer.estimatedDurationUnit as "DAYS" | "WEEKS" | "MONTHS") ?? "WEEKS",
+          }}
+          onSuccess={(updatedData) => {
+            if (updatedData) {
+              setOffers((prev) =>
+                prev.map((o) =>
+                  o.id === editingOffer.id
+                    ? {
+                        ...o,
+                        message: updatedData.message ?? o.message,
+                        budgetCurrency: updatedData.budgetCurrency ?? o.budgetCurrency,
+                        budgetMin: updatedData.budgetMin ?? o.budgetMin,
+                        budgetMax: updatedData.budgetMax ?? o.budgetMax,
+                        estimatedDurationValue:
+                          updatedData.estimatedDurationValue !== undefined
+                            ? updatedData.estimatedDurationValue
+                            : o.estimatedDurationValue,
+                        estimatedDurationUnit:
+                          updatedData.estimatedDurationUnit !== undefined
+                            ? updatedData.estimatedDurationUnit
+                            : o.estimatedDurationUnit,
+                        updatedAt: new Date(),
+                      }
+                    : o
+                )
+              );
+            }
+            setEditingOffer(null);
+          }}
+        />
       )}
     </div>
   );

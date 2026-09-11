@@ -3,6 +3,7 @@ import Link from "next/link";
 import { setRequestLocale } from "next-intl/server";
 import { AlertTriangle, ArrowLeft } from "lucide-react";
 import { ReportForm } from "@/src/components/reports/report-form";
+import { getSession } from "@/src/modules/auth/session";
 
 export async function generateMetadata({
   params,
@@ -34,6 +35,7 @@ export default async function ReportPage({
   const { locale } = await params;
   const sp = searchParams ? await searchParams : {};
   setRequestLocale(locale);
+  const session = await getSession();
   const isTr = locale === "tr";
 
   return (
@@ -57,6 +59,7 @@ export default async function ReportPage({
           locale={locale}
           defaultTargetType={sp.type || "listing"}
           defaultTargetIdentifier={sp.target || ""}
+          hasSession={Boolean(session?.userId)}
         />
 
         <div className="pt-2 text-center border-t border-[var(--color-border-subtle)]/60">

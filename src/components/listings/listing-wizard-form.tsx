@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   FolderTree,
@@ -17,6 +17,8 @@ import { TextInput } from "../ui/text-input";
 import { TextArea } from "../ui/text-area";
 import { Checkbox } from "../ui/checkbox";
 import { Select } from "../ui/select";
+import { getLocalizedListingPath } from "@/src/lib/i18n/routes";
+import type { ListingWizardInput } from "@/src/modules/listings/wizard/schema";
 
 export interface CategoryItem {
   id: string;
@@ -53,8 +55,92 @@ export function ListingWizardForm({ categories, locale }: ListingWizardFormProps
   const [budgetCurrency, setBudgetCurrency] = useState("TRY");
   const [budgetMin, setBudgetMin] = useState("");
   const [budgetMax, setBudgetMax] = useState("");
+  const [timelineMode, setTimelineMode] = useState<string>("DURATION_ESTIMATE");
   const [timelineValue, setTimelineValue] = useState("2");
   const [timelineUnit, setTimelineUnit] = useState("WEEKS");
+  const [targetDate, setTargetDate] = useState("");
+  const [projectType, setProjectType] = useState<string>("new_build");
+  const [projectStage, setProjectStage] = useState<string>("requirements_ready");
+  const [workPreference, setWorkPreference] = useState<string>("REMOTE");
+  const [preferredLanguage, setPreferredLanguage] = useState<string>("any");
+
+  // LocalStorage Draft Persistence
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("operis_listing_draft");
+      if (saved) {
+        const d = JSON.parse(saved);
+        if (d.categoryId) setCategoryId(d.categoryId);
+        if (d.title) setTitle(d.title);
+        if (d.summary) setSummary(d.summary);
+        if (d.scope) setScope(d.scope);
+        if (d.tagsInput) setTagsInput(d.tagsInput);
+        if (d.budgetMode) setBudgetMode(d.budgetMode);
+        if (d.budgetCurrency) setBudgetCurrency(d.budgetCurrency);
+        if (d.budgetMin) setBudgetMin(d.budgetMin);
+        if (d.budgetMax) setBudgetMax(d.budgetMax);
+        if (d.timelineMode) setTimelineMode(d.timelineMode);
+        if (d.timelineValue) setTimelineValue(d.timelineValue);
+        if (d.timelineUnit) setTimelineUnit(d.timelineUnit);
+        if (d.targetDate) setTargetDate(d.targetDate);
+        if (d.projectType) setProjectType(d.projectType);
+        if (d.projectStage) setProjectStage(d.projectStage);
+        if (d.workPreference) setWorkPreference(d.workPreference);
+        if (d.preferredLanguage) setPreferredLanguage(d.preferredLanguage);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      if (title || summary || scope) {
+        localStorage.setItem(
+          "operis_listing_draft",
+          JSON.stringify({
+            categoryId,
+            title,
+            summary,
+            scope,
+            tagsInput,
+            budgetMode,
+            budgetCurrency,
+            budgetMin,
+            budgetMax,
+            timelineMode,
+            timelineValue,
+            timelineUnit,
+            targetDate,
+            projectType,
+            projectStage,
+            workPreference,
+            preferredLanguage,
+          })
+        );
+      }
+    } catch {
+      // ignore
+    }
+  }, [
+    categoryId,
+    title,
+    summary,
+    scope,
+    tagsInput,
+    budgetMode,
+    budgetCurrency,
+    budgetMin,
+    budgetMax,
+    timelineMode,
+    timelineValue,
+    timelineUnit,
+    targetDate,
+    projectType,
+    projectStage,
+    workPreference,
+    preferredLanguage,
+  ]);
 
   // Review Declarations
   const [ackDirectRelationship, setAckDirectRelationship] = useState(false);
@@ -124,6 +210,16 @@ export function ListingWizardForm({ categories, locale }: ListingWizardFormProps
           return false;
         }
       }
+      if (timelineMode === "SPECIFIC_DATE") {
+        if (!targetDate || new Date(targetDate).getTime() <= Date.now()) {
+          setError(
+            isTr
+              ? "Lütfen gelecekte geçerli bir hedef teslim tarihi seçin."
+              : "Please select a valid future target delivery date."
+          );
+          return false;
+        }
+      }
       if (
         !ackDirectRelationship ||
         !ackNoPlatformPayment ||
@@ -170,55 +266,64 @@ export function ListingWizardForm({ categories, locale }: ListingWizardFormProps
       budgetMode === "RANGE"
         ? "FIXED_RANGE"
         : budgetMode === "FIXED"
-        ? "FIXED_EXACT"
-        : "NEGOTIABLE";
+          ? "FIXED_EXACT"
+          : "NEGOTIABLE";
 
     const payload = {
       categoryId,
       title: title.trim(),
       summary: summary.trim(),
       scope: scope.trim(),
-      projectType: "new_build" as const,
-      projectStage: "requirements_ready" as const,
+      projectType: projectType as ListingWizardInput["projectType"],
+      projectStage: projectStage as ListingWizardInput["projectStage"],
       answers: answers || {},
       tags,
       budgetMode: mappedBudgetMode,
       budgetCurrency: mappedBudgetMode !== "NEGOTIABLE" ? budgetCurrency : "TRY",
       budgetMin: budgetMin ? parseFloat(budgetMin) : null,
       budgetMax: budgetMax ? parseFloat(budgetMax) : null,
-      timelineMode: "DURATION_ESTIMATE" as const,
-      targetDate: null,
-      timelineValue: timelineValue ? parseInt(timelineValue, 10) : 2,
+      timelineMode: timelineMode as ListingWizardInput["timelineMode"],
+      targetDate: timelineMode === "SPECIFIC_DATE" && targetDate ? targetDate : null,
+      timelineValue:
+        timelineMode === "DURATION_ESTIMATE" && timelineValue ? parseInt(timelineValue, 10) : 2,
       timelineUnit: (timelineUnit || "WEEKS") as "DAYS" | "WEEKS" | "MONTHS",
-      workPreference: "REMOTE" as const,
-      preferredLanguage: "any" as const,
+      workPreference: workPreference as ListingWizardInput["workPreference"],
+      preferredLanguage: preferredLanguage as ListingWizardInput["preferredLanguage"],
       noSecretsConfirmed: ackNoPlatformPayment,
       acceptableUseConfirmed: ackProhibitedContent,
       expiryAcknowledged: ackSevenDayExpiry,
       matchingRoleAcknowledged: ackDirectRelationship,
     };
 
-
     try {
       const res = await fetch("/api/listings/publish", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-locale": locale,
+        },
         body: JSON.stringify(payload),
       });
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || "Failed to publish listing");
+        throw new Error(data.error || (isTr ? "İlan yayınlanamadı." : "Failed to publish listing."));
       }
 
-      router.push(`/${locale}/listings/${data.listing.slug}`);
+      try {
+        localStorage.removeItem("operis_listing_draft");
+      } catch {
+        // ignore
+      }
+
+      router.push(getLocalizedListingPath(data.listing.slug, locale));
     } catch (err: unknown) {
       setError(
         err instanceof Error
           ? err.message
           : isTr
-          ? "İlan yayımlanamadı. Lütfen giriş yaptığınızdan emin olun."
-          : "Could not publish listing. Please ensure you are logged in."
+            ? "İlan yayımlanamadı. Lütfen giriş yaptığınızdan emin olun."
+            : "Could not publish listing. Please ensure you are logged in."
       );
     } finally {
       setIsSubmitting(false);
@@ -278,8 +383,8 @@ export function ListingWizardForm({ categories, locale }: ListingWizardFormProps
                     isActive
                       ? "border-blue-500/60 bg-blue-500/10 text-blue-400 shadow-xs"
                       : isDone
-                      ? "border-emerald-500/40 bg-emerald-500/5 text-emerald-400 hover:bg-emerald-500/10 cursor-pointer"
-                      : "border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/40 text-[var(--color-text-tertiary)] opacity-60"
+                        ? "border-emerald-500/40 bg-emerald-500/5 text-emerald-400 hover:bg-emerald-500/10 cursor-pointer"
+                        : "border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/40 text-[var(--color-text-tertiary)] opacity-60"
                   }`}
                 >
                   <div className="flex items-center gap-1.5 text-xs font-bold mb-1">
@@ -368,9 +473,7 @@ export function ListingWizardForm({ categories, locale }: ListingWizardFormProps
                 </label>
                 <span
                   className={`font-mono text-[11px] ${
-                    title.length < 20 || title.length > 120
-                      ? "text-amber-400"
-                      : "text-emerald-400"
+                    title.length < 20 || title.length > 120 ? "text-amber-400" : "text-emerald-400"
                   }`}
                 >
                   {title.length} / 120 (min: 20)
@@ -439,7 +542,9 @@ export function ListingWizardForm({ categories, locale }: ListingWizardFormProps
             <div className="space-y-1">
               <h2 className="text-xl font-bold text-[var(--color-text-primary)] flex items-center gap-2">
                 <FileText className="h-5 w-5 text-cyan-400" />
-                <span>{isTr ? "2. Teknik Kapsam ve Yetkinlikler" : "2. Scope & Technical Skills"}</span>
+                <span>
+                  {isTr ? "2. Teknik Kapsam ve Yetkinlikler" : "2. Scope & Technical Skills"}
+                </span>
               </h2>
               <p className="text-xs sm:text-sm text-[var(--color-text-secondary)]">
                 {isTr
@@ -510,23 +615,87 @@ export function ListingWizardForm({ categories, locale }: ListingWizardFormProps
                 <Checkbox
                   label={isTr ? "Üyelik / Auth Sistemi" : "Auth / User System"}
                   checked={Boolean(answers.authRequired)}
-                  onChange={(e) =>
-                    setAnswers({ ...answers, authRequired: e.target.checked })
-                  }
+                  onChange={(e) => setAnswers({ ...answers, authRequired: e.target.checked })}
                 />
                 <Checkbox
                   label={isTr ? "Yönetim Paneli" : "Admin Dashboard"}
                   checked={Boolean(answers.adminRequired)}
-                  onChange={(e) =>
-                    setAnswers({ ...answers, adminRequired: e.target.checked })
-                  }
+                  onChange={(e) => setAnswers({ ...answers, adminRequired: e.target.checked })}
                 />
                 <Checkbox
                   label={isTr ? "Mobil Uyumlu (Responsive)" : "Mobile Responsive"}
                   checked={Boolean(answers.responsiveRequired)}
-                  onChange={(e) =>
-                    setAnswers({ ...answers, responsiveRequired: e.target.checked })
-                  }
+                  onChange={(e) => setAnswers({ ...answers, responsiveRequired: e.target.checked })}
+                />
+              </div>
+            </div>
+
+            {/* Project Context & Working Model */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-[var(--color-text-primary)] block">
+                  {isTr ? "Proje Türü" : "Project Type"}
+                </label>
+                <Select
+                  value={projectType}
+                  onChange={(e) => setProjectType(e.target.value)}
+                  options={[
+                    { value: "new_build", label: isTr ? "Sıfırdan Yeni Proje" : "New Build / Green-field" },
+                    { value: "improvement", label: isTr ? "Mevcut Projeyi Geliştirme" : "Feature Improvement" },
+                    { value: "bug_fix", label: isTr ? "Hata Çözümü & Optimizasyon" : "Bug Fix & Optimization" },
+                    { value: "migration", label: isTr ? "Altyapı / Versiyon Geçişi" : "Migration & Upgrade" },
+                    { value: "integration", label: isTr ? "API & Servis Entegrasyonu" : "API & Integration" },
+                    { value: "consulting", label: isTr ? "Teknik Mimari & Danışmanlık" : "Technical Consulting" },
+                    { value: "audit", label: isTr ? "Güvenlik & Kod Denetimi" : "Security & Code Audit" },
+                    { value: "maintenance", label: isTr ? "Sürekli Bakım & Destek" : "Ongoing Maintenance" },
+                  ]}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-[var(--color-text-primary)] block">
+                  {isTr ? "Proje Aşaması" : "Project Stage"}
+                </label>
+                <Select
+                  value={projectStage}
+                  onChange={(e) => setProjectStage(e.target.value)}
+                  options={[
+                    { value: "idea", label: isTr ? "Fikir Aşaması (Kavramsal)" : "Idea / Conceptual" },
+                    { value: "requirements_ready", label: isTr ? "Gereksinimler Hazır" : "Requirements Ready" },
+                    { value: "design_ready", label: isTr ? "Tasarım / UI/UX Hazır" : "Design / Wireframes Ready" },
+                    { value: "existing_code", label: isTr ? "Mevcut Kod Tabanı Var" : "Existing Codebase" },
+                    { value: "production_system", label: isTr ? "Canlıda Çalışan Sistem" : "Production System" },
+                  ]}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-[var(--color-text-primary)] block">
+                  {isTr ? "Çalışma Şekli" : "Work Preference"}
+                </label>
+                <Select
+                  value={workPreference}
+                  onChange={(e) => setWorkPreference(e.target.value)}
+                  options={[
+                    { value: "REMOTE", label: isTr ? "Uzaktan (Remote)" : "Remote" },
+                    { value: "HYBRID", label: isTr ? "Hibrit" : "Hybrid" },
+                    { value: "ONSITE", label: isTr ? "Ofiste / Yerinde" : "Onsite" },
+                  ]}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-[var(--color-text-primary)] block">
+                  {isTr ? "İletişim Dili" : "Preferred Language"}
+                </label>
+                <Select
+                  value={preferredLanguage}
+                  onChange={(e) => setPreferredLanguage(e.target.value)}
+                  options={[
+                    { value: "any", label: isTr ? "Fark etmez (TR / EN)" : "Any (TR / EN)" },
+                    { value: "tr", label: isTr ? "Türkçe" : "Turkish" },
+                    { value: "en", label: isTr ? "İngilizce" : "English" },
+                  ]}
                 />
               </div>
             </div>
@@ -541,7 +710,9 @@ export function ListingWizardForm({ categories, locale }: ListingWizardFormProps
             <div className="space-y-1">
               <h2 className="text-xl font-bold text-[var(--color-text-primary)] flex items-center gap-2">
                 <ShieldCheck className="h-5 w-5 text-emerald-400" />
-                <span>{isTr ? "3. Bütçe, Süreç ve Yasal Beyanlar" : "3. Budget, Timeline & Terms"}</span>
+                <span>
+                  {isTr ? "3. Bütçe, Süreç ve Yasal Beyanlar" : "3. Budget, Timeline & Terms"}
+                </span>
               </h2>
               <p className="text-xs sm:text-sm text-[var(--color-text-secondary)]">
                 {isTr
@@ -620,35 +791,83 @@ export function ListingWizardForm({ categories, locale }: ListingWizardFormProps
               <div className="rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-hover)]/30 p-4 space-y-3">
                 <div className="flex items-center gap-1.5 text-xs font-bold text-[var(--color-text-primary)]">
                   <Clock className="h-4 w-4 text-cyan-400" />
-                  <span>{isTr ? "Tahmini Süre" : "Estimated Duration"}</span>
+                  <span>{isTr ? "Zaman Planı" : "Timeline Plan"}</span>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 pt-1">
-                  <TextInput
-                    type="number"
-                    placeholder="2"
-                    value={timelineValue}
-                    onChange={(e) => setTimelineValue(e.target.value)}
-                  />
-                  <Select
-                    value={timelineUnit}
-                    onChange={(e) => setTimelineUnit(e.target.value)}
-                    options={[
-                      { value: "DAYS", label: isTr ? "Gün" : "Days" },
-                      { value: "WEEKS", label: isTr ? "Hafta" : "Weeks" },
-                      { value: "MONTHS", label: isTr ? "Ay" : "Months" },
-                    ]}
-                  />
+                <div className="grid grid-cols-3 gap-1.5">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={timelineMode === "DURATION_ESTIMATE" ? "primary" : "secondary"}
+                    onClick={() => setTimelineMode("DURATION_ESTIMATE")}
+                  >
+                    {isTr ? "Süre" : "Duration"}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={timelineMode === "SPECIFIC_DATE" ? "primary" : "secondary"}
+                    onClick={() => setTimelineMode("SPECIFIC_DATE")}
+                  >
+                    {isTr ? "Tarih" : "Target Date"}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={timelineMode === "FLEXIBLE" ? "primary" : "secondary"}
+                    onClick={() => setTimelineMode("FLEXIBLE")}
+                  >
+                    {isTr ? "Esnek" : "Flexible"}
+                  </Button>
                 </div>
+
+                {timelineMode === "DURATION_ESTIMATE" && (
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <TextInput
+                      type="number"
+                      placeholder="2"
+                      value={timelineValue}
+                      onChange={(e) => setTimelineValue(e.target.value)}
+                    />
+                    <Select
+                      value={timelineUnit}
+                      onChange={(e) => setTimelineUnit(e.target.value)}
+                      options={[
+                        { value: "DAYS", label: isTr ? "Gün" : "Days" },
+                        { value: "WEEKS", label: isTr ? "Hafta" : "Weeks" },
+                        { value: "MONTHS", label: isTr ? "Ay" : "Months" },
+                      ]}
+                    />
+                  </div>
+                )}
+
+                {timelineMode === "SPECIFIC_DATE" && (
+                  <div className="pt-1">
+                    <TextInput
+                      type="date"
+                      value={targetDate}
+                      onChange={(e) => setTargetDate(e.target.value)}
+                    />
+                  </div>
+                )}
+
                 <p className="text-[11px] text-[var(--color-text-tertiary)]">
-                  {isTr ? "Teslimat için hedeflenen takvim aralığı." : "Target milestone window."}
+                  {timelineMode === "FLEXIBLE"
+                    ? isTr
+                      ? "Teslimat takvimi karşılıklı görüşülerek netleştirilecektir."
+                      : "Milestone timeline to be agreed with the partner."
+                    : isTr
+                      ? "Teslimat için hedeflenen takvim aralığı."
+                      : "Target milestone window."}
                 </p>
               </div>
             </div>
 
             {/* Quick Preview Card */}
             <div className="rounded-2xl border border-blue-500/20 bg-blue-500/5 p-4 space-y-1.5 text-xs">
-              <div className="font-bold text-blue-400">{isTr ? "İlan Özeti" : "Listing Summary"}</div>
+              <div className="font-bold text-blue-400">
+                {isTr ? "İlan Özeti" : "Listing Summary"}
+              </div>
               <div className="text-[var(--color-text-primary)] font-semibold truncate">{title}</div>
               <div className="text-[var(--color-text-secondary)] line-clamp-2">{summary}</div>
             </div>

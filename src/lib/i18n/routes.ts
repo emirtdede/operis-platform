@@ -89,6 +89,14 @@ export const ROUTE_MAP = {
     tr: "/tr/yetkisiz",
     en: "/en/unauthorized",
   },
+  legalCenter: {
+    tr: "/tr/yasal",
+    en: "/en/legal",
+  },
+  brand: {
+    tr: "/tr/marka",
+    en: "/en/brand",
+  },
 } as const;
 
 export type RouteKey = keyof typeof ROUTE_MAP;
@@ -121,6 +129,18 @@ export const LEGAL_SLUGS: Record<string, { tr: string; en: string }> = {
     tr: "iletisim",
     en: "contact",
   },
+  "intellectual-property": {
+    tr: "fikri-mulkiyet-ve-telif",
+    en: "intellectual-property",
+  },
+  consent: {
+    tr: "acik-riza-metni",
+    en: "consent",
+  },
+  "dispute-resolution": {
+    tr: "uyusmazlik-cozumu",
+    en: "dispute-resolution",
+  },
 };
 
 /**
@@ -133,6 +153,9 @@ export const TR_TO_INTERNAL_LEGAL_SLUG: Record<string, string> = {
   "kabul-edilebilir-kullanim": "acceptable-use",
   "cerez-politikasi": "cookies",
   iletisim: "contact",
+  "fikri-mulkiyet-ve-telif": "intellectual-property",
+  "acik-riza-metni": "consent",
+  "uyusmazlik-cozumu": "dispute-resolution",
 };
 
 /**
@@ -193,6 +216,20 @@ export function getAlternateLocalePath(pathname: string, targetLocale: Locale | 
     if (cleanPath === mapping.tr || cleanPath === mapping.en) {
       return mapping[normTarget];
     }
+  }
+
+  // Check listings edit: /tr/ilanlar/:slug/duzenle or /en/listings/:slug/edit
+  const trListingEditMatch = cleanPath.match(/^\/tr\/ilanlar\/(.+)\/duzenle$/);
+  if (trListingEditMatch?.[1]) {
+    return normTarget === "en"
+      ? `/en/listings/${trListingEditMatch[1]}/edit`
+      : `/tr/ilanlar/${trListingEditMatch[1]}/duzenle`;
+  }
+  const enListingEditMatch = cleanPath.match(/^\/en\/listings\/(.+)\/edit$/);
+  if (enListingEditMatch?.[1]) {
+    return normTarget === "tr"
+      ? `/tr/ilanlar/${enListingEditMatch[1]}/duzenle`
+      : `/en/listings/${enListingEditMatch[1]}/edit`;
   }
 
   // Check listings detail: /tr/ilanlar/:slug or /en/listings/:slug

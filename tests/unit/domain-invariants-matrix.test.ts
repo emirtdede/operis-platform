@@ -29,12 +29,7 @@ export function canTransitionListing(from: ListingStatus, to: ListingStatus): bo
 }
 
 type OfferStatus =
-  | "PENDING"
-  | "ACCEPTED"
-  | "REJECTED"
-  | "REJECTED_OTHER_SELECTED"
-  | "WITHDRAWN"
-  | "EXPIRED_LISTING";
+  "PENDING" | "ACCEPTED" | "REJECTED" | "REJECTED_OTHER_SELECTED" | "WITHDRAWN" | "EXPIRED_LISTING";
 
 const VALID_OFFER_TRANSITIONS: Record<OfferStatus, OfferStatus[]> = {
   PENDING: ["ACCEPTED", "REJECTED", "REJECTED_OTHER_SELECTED", "WITHDRAWN", "EXPIRED_LISTING"],

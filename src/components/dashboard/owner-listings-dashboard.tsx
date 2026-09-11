@@ -2,9 +2,12 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { Eye, MousePointerClick } from "lucide-react";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
 import { EmptyState } from "../ui/empty-state";
+import { getLocalizedWorkspacePath, getLocalizedListingPath } from "@/src/lib/i18n/routes";
+import { Locale } from "@/src/lib/i18n/config";
 
 export interface OwnerListingItem {
   id: string;
@@ -19,6 +22,9 @@ export interface OwnerListingItem {
   lastActivatedAt: string | Date | null;
   activeUntil: string | Date | null;
   activationSeq: number;
+  viewCount?: number;
+  clickCount?: number;
+  engagementId?: string | null;
 }
 
 export interface OwnerListingsDashboardProps {
@@ -26,10 +32,7 @@ export interface OwnerListingsDashboardProps {
   locale: string;
 }
 
-export function OwnerListingsDashboard({
-  initialListings,
-  locale,
-}: OwnerListingsDashboardProps) {
+export function OwnerListingsDashboard({ initialListings, locale }: OwnerListingsDashboardProps) {
   const isTr = locale === "tr";
   const [listings, setListings] = useState<OwnerListingItem[]>(initialListings);
   const [tab, setTab] = useState<"all" | "active" | "inactive" | "matched">("all");
@@ -39,8 +42,7 @@ export function OwnerListingsDashboard({
   const filteredListings = listings.filter((l) => {
     if (tab === "all") return true;
     if (tab === "active") return l.status === "ACTIVE";
-    if (tab === "inactive")
-      return l.status === "INACTIVE_EXPIRED" || l.status === "INACTIVE_OWNER";
+    if (tab === "inactive") return l.status === "INACTIVE_EXPIRED" || l.status === "INACTIVE_OWNER";
     if (tab === "matched") return l.status === "MATCHED" || l.status === "COMPLETED";
     return true;
   });
@@ -49,12 +51,27 @@ export function OwnerListingsDashboard({
     setLoadingId(id);
     setActionError(null);
     try {
-      const res = await fetch(`/api/listings/${id}/reactivate`, { method: "POST" });
+      const res = await fetch(`/api/listings/${id}/reactivate`, {
+        method: "POST",
+        headers: { "x-locale": locale },
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Reactivation failed");
 
       setListings((prev) =>
-        prev.map((l) => (l.id === id ? { ...l, status: "ACTIVE", activationSeq: l.activationSeq + 1 } : l))
+        prev.map((l) =>
+          l.id === id
+            ? {
+                ...l,
+                ...(data.listing || {}),
+                status: "ACTIVE",
+                activationSeq: data.listing?.activationSeq ?? l.activationSeq + 1,
+                activeUntil:
+                  data.listing?.activeUntil ??
+                  new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+              }
+            : l
+        )
       );
     } catch (err: unknown) {
       setActionError(err instanceof Error ? err.message : "Error reactivating listing");
@@ -67,12 +84,23 @@ export function OwnerListingsDashboard({
     setLoadingId(id);
     setActionError(null);
     try {
-      const res = await fetch(`/api/listings/${id}/deactivate`, { method: "POST" });
+      const res = await fetch(`/api/listings/${id}/deactivate`, {
+        method: "POST",
+        headers: { "x-locale": locale },
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Deactivation failed");
 
       setListings((prev) =>
-        prev.map((l) => (l.id === id ? { ...l, status: "INACTIVE_OWNER" } : l))
+        prev.map((l) =>
+          l.id === id
+            ? {
+                ...l,
+                ...(data.listing || {}),
+                status: "INACTIVE_OWNER",
+              }
+            : l
+        )
       );
     } catch (err: unknown) {
       setActionError(err instanceof Error ? err.message : "Error deactivating listing");
@@ -82,14 +110,23 @@ export function OwnerListingsDashboard({
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm(isTr ? "Bu ilanı silmek istediğinize emin misiniz?" : "Are you sure you want to delete this listing?")) {
+    if (
+      !confirm(
+        isTr
+          ? "Bu ilanı silmek istediğinize emin misiniz?"
+          : "Are you sure you want to delete this listing?"
+      )
+    ) {
       return;
     }
 
     setLoadingId(id);
     setActionError(null);
     try {
-      const res = await fetch(`/api/listings/${id}/delete`, { method: "POST" });
+      const res = await fetch(`/api/listings/${id}/delete`, {
+        method: "POST",
+        headers: { "x-locale": locale },
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Deletion failed");
 
@@ -117,12 +154,20 @@ export function OwnerListingsDashboard({
             }`}
           >
             {t === "all"
-              ? isTr ? "Tümü" : "All"
+              ? isTr
+                ? "Tümü"
+                : "All"
               : t === "active"
-              ? isTr ? "Aktif (1 Hafta)" : "Active (1-Week)"
-              : t === "inactive"
-              ? isTr ? "Pasif / Süresi Dolanlar" : "Inactive / Expired"
-              : isTr ? "Eşleşenler" : "Matched"}
+                ? isTr
+                  ? "Aktif (1 Hafta)"
+                  : "Active (1-Week)"
+                : t === "inactive"
+                  ? isTr
+                    ? "Pasif / Süresi Dolanlar"
+                    : "Inactive / Expired"
+                  : isTr
+                    ? "Eşleşenler"
+                    : "Matched"}
           </button>
         ))}
       </div>
@@ -184,7 +229,11 @@ export function OwnerListingsDashboard({
             />
           ) : (
             <EmptyState
-              title={isTr ? "Henüz Bir Proje İlanı Yayınlamadınız" : "You Haven't Published Any Listings Yet"}
+              title={
+                isTr
+                  ? "Henüz Bir Proje İlanı Yayınlamadınız"
+                  : "You Haven't Published Any Listings Yet"
+              }
               description={
                 isTr
                   ? "%100 komisyonsuz ve doğrudan iletişimle projeniz için bağımsız mühendis arayışınızı hemen başlatabilirsiniz."
@@ -219,8 +268,8 @@ export function OwnerListingsDashboard({
                         listing.status === "ACTIVE"
                           ? "primary"
                           : listing.status === "MATCHED"
-                          ? "secondary"
-                          : "outline"
+                            ? "secondary"
+                            : "outline"
                       }
                       size="sm"
                     >
@@ -238,25 +287,70 @@ export function OwnerListingsDashboard({
 
                   <h3 className="text-base font-semibold text-[var(--color-text-primary)]">
                     <Link
-                      href={`/${locale}/listings/${listing.slug}`}
+                      href={getLocalizedListingPath(listing.slug, locale as Locale)}
                       className="hover:underline"
                     >
                       {listing.title}
                     </Link>
                   </h3>
+
+                  {/* Views & Clicks Stats */}
+                  <div className="flex items-center gap-2 pt-1 text-xs text-[var(--color-text-secondary)] font-medium">
+                    <span
+                      className="inline-flex items-center gap-1 rounded-lg bg-[var(--color-surface-hover)] border border-[var(--color-border-subtle)] px-2.5 py-1"
+                      title={isTr ? "Toplam Görüntülenme Sayısı" : "Total View Count"}
+                    >
+                      <Eye className="h-3.5 w-3.5 text-blue-400" aria-hidden="true" />
+                      <span>
+                        {(listing.viewCount ?? 0).toLocaleString(isTr ? "tr-TR" : "en-US")}{" "}
+                        {isTr ? "görüntülenme" : "views"}
+                      </span>
+                    </span>
+                    <span
+                      className="inline-flex items-center gap-1 rounded-lg bg-[var(--color-surface-hover)] border border-[var(--color-border-subtle)] px-2.5 py-1"
+                      title={isTr ? "Toplam Tıklanma Sayısı" : "Total Click Count"}
+                    >
+                      <MousePointerClick
+                        className="h-3.5 w-3.5 text-emerald-400"
+                        aria-hidden="true"
+                      />
+                      <span>
+                        {(listing.clickCount ?? 0).toLocaleString(isTr ? "tr-TR" : "en-US")}{" "}
+                        {isTr ? "tıklanma" : "clicks"}
+                      </span>
+                    </span>
+                  </div>
                 </div>
 
                 {/* Actions */}
                 <div className="flex flex-wrap items-center gap-2">
                   <Link
-                    href={`/${locale}/dashboard/offers/received?listingId=${listing.id}`}
+                    href={
+                      isTr
+                        ? `/tr/panel/teklifler/gelen?listingId=${listing.id}`
+                        : `/en/dashboard/offers/received?listingId=${listing.id}`
+                    }
                   >
                     <Button variant="secondary" size="sm">
                       {isTr ? "Teklifler" : "Offers"}
                     </Button>
                   </Link>
 
-                  {listing.status === "ACTIVE" ? (
+                  {listing.status === "ACTIVE" && (
+                    <Link
+                      href={
+                        isTr
+                          ? `/tr/ilanlar/${listing.slug}/duzenle`
+                          : `/en/listings/${listing.slug}/edit`
+                      }
+                    >
+                      <Button variant="outline" size="sm">
+                        {isTr ? "Düzenle" : "Edit"}
+                      </Button>
+                    </Link>
+                  )}
+
+                  {listing.status === "ACTIVE" && (
                     <Button
                       variant="ghost"
                       size="sm"
@@ -265,7 +359,10 @@ export function OwnerListingsDashboard({
                     >
                       {isTr ? "Durdur" : "Deactivate"}
                     </Button>
-                  ) : (
+                  )}
+
+                  {(listing.status === "INACTIVE_EXPIRED" ||
+                    listing.status === "INACTIVE_OWNER") && (
                     <Button
                       variant="ghost"
                       size="sm"
@@ -276,15 +373,25 @@ export function OwnerListingsDashboard({
                     </Button>
                   )}
 
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleDelete(listing.id)}
-                    disabled={loadingId === listing.id}
-                    className="text-[var(--color-danger)] hover:bg-[var(--color-danger)]/10"
-                  >
-                    {isTr ? "Sil" : "Delete"}
-                  </Button>
+                  {listing.status === "MATCHED" && listing.engagementId && (
+                    <Link href={getLocalizedWorkspacePath(listing.engagementId, locale)}>
+                      <Button variant="primary" size="sm">
+                        {isTr ? "Çalışma Alanı →" : "Workspace →"}
+                      </Button>
+                    </Link>
+                  )}
+
+                  {listing.status !== "MATCHED" && listing.status !== "COMPLETED" && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDelete(listing.id)}
+                      disabled={loadingId === listing.id}
+                      className="text-[var(--color-danger)] hover:bg-[var(--color-danger)]/10"
+                    >
+                      {isTr ? "Sil" : "Delete"}
+                    </Button>
+                  )}
                 </div>
               </div>
             );

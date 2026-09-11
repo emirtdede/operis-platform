@@ -13,9 +13,7 @@ export async function generateMetadata({
   const { locale } = await params;
   const isTr = locale === "tr";
 
-  const title = isTr
-    ? "Teknoloji Alanları & Kategori Keşfi"
-    : "Explore Tech Domains & Categories";
+  const title = isTr ? "Teknoloji Alanları & Kategori Keşfi" : "Explore Tech Domains & Categories";
   const description = isTr
     ? "Yazılım, bulut, mobil, veri ve yapay zeka alanlarındaki kategorileri keşfedin, takip edin ve doğrudan projelere ulaşın."
     : "Discover and follow categories across software engineering, cloud, mobile, and AI to customize your direct project feed.";
@@ -52,20 +50,21 @@ export async function generateMetadata({
 
 export const dynamic = "force-dynamic";
 
-export default async function CategoriesPage({
-  params,
-}: {
-  params: Promise<{ locale: string }>;
-}) {
+export default async function CategoriesPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
   setRequestLocale(locale);
 
   const isTr = locale === "tr";
   const session = await getSession();
-  const categories = await CategoryService.getAllCategories(isTr ? "tr" : "en", session?.userId).catch(() => []);
+  const categories = await CategoryService.getAllCategories(
+    isTr ? "tr" : "en",
+    session?.userId
+  ).catch(() => []);
   const initialFollowedIds = categories.filter((c) => c.isFollowed).map((c) => c.id);
 
-  const categoriesUrl = isTr ? "https://operis.pro/tr/kategoriler" : "https://operis.pro/en/categories";
+  const categoriesUrl = isTr
+    ? "https://operis.pro/tr/kategoriler"
+    : "https://operis.pro/en/categories";
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -139,7 +138,9 @@ export default async function CategoriesPage({
           <Lock className="h-5 w-5 text-indigo-400 shrink-0 mt-0.5" aria-hidden="true" />
           <div className="space-y-1 text-xs sm:text-sm text-[var(--color-text-secondary)] leading-relaxed">
             <span className="font-semibold text-[var(--color-text-primary)] block">
-              {isTr ? "Gizli Takip ve Doğrudan Akış Entegrasyonu" : "Private Following & Direct Feed Integration"}
+              {isTr
+                ? "Gizli Takip ve Doğrudan Akış Entegrasyonu"
+                : "Private Following & Direct Feed Integration"}
             </span>
             <p>
               {isTr
@@ -161,6 +162,7 @@ export default async function CategoriesPage({
           categories={categories}
           initialFollowedIds={initialFollowedIds}
           locale={locale}
+          hasSession={Boolean(session?.userId)}
         />
       </section>
     </main>

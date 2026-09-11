@@ -6,6 +6,7 @@ import { locales, Locale } from "@/src/lib/i18n/config";
 import { ThemeProvider } from "@/src/components/layout/theme-provider";
 import { Header } from "@/src/components/layout/header";
 import { Footer } from "@/src/components/layout/footer";
+import { CookieConsentModal } from "@/src/components/legal/cookie-consent-modal";
 import { getSession } from "@/src/modules/auth/session";
 import { ProfileService } from "@/src/modules/profiles/service";
 import "@/src/styles/tokens.css";
@@ -81,6 +82,7 @@ export default async function RootLocaleLayout({
         initialProfile = {
           displayName: p.displayName,
           handle: p.handle,
+          avatarUrl: p.avatarUrl || null,
         };
       }
     } catch {
@@ -103,6 +105,7 @@ export default async function RootLocaleLayout({
             {children}
           </div>
           <Footer />
+          <CookieConsentModal locale={locale} />
         </div>
       </ThemeProvider>
     </NextIntlClientProvider>

@@ -45,9 +45,7 @@ export const TextInput = React.forwardRef<HTMLInputElement, TextInputProps>(
             ref={ref}
             id={inputId}
             aria-invalid={!!error}
-            aria-describedby={
-              clsx(error && errorId, hint && hintId) || undefined
-            }
+            aria-describedby={clsx(error && errorId, hint && hintId) || undefined}
             className={twMerge(
               clsx(
                 "w-full h-12 text-sm rounded-xl font-normal transition-all duration-200",

@@ -29,17 +29,16 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const auth = await getAdminSession();
   if (!auth.isAdmin || !auth.session) {
     return (
       <AdminAccessDeniedClient
         currentRole={auth.session?.role || "GİRİŞ YAPILMADI"}
-        errorReason={auth.error || "Standart kullanıcı hesaplarının bu yönetim konsoluna erişim izni bulunmamaktadır."}
+        errorReason={
+          auth.error ||
+          "Standart kullanıcı hesaplarının bu yönetim konsoluna erişim izni bulunmamaktadır."
+        }
       />
     );
   }
@@ -230,9 +229,7 @@ export default async function AdminLayout({
         </header>
 
         {/* Scrollable Content Viewport */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-6">
-          {children}
-        </main>
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-6">{children}</main>
       </div>
     </div>
   );

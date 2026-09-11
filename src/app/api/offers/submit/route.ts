@@ -1,20 +1,85 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { getSession } from "@/src/modules/auth/session";
 import { OfferService } from "@/src/modules/offers/service";
+import {
+  checkRateLimit,
+  getClientIp,
+  rateLimitExceededResponse,
+} from "@/src/lib/security/rate-limit";
 
 export async function POST(req: Request) {
+  const ip = getClientIp(req);
+  const limitCheck = checkRateLimit(`offer:submit:${ip}`, 25, 60 * 1000);
+  const locale = req.headers.get("x-locale") || "tr";
+  const isEn = locale === "en";
+
+  if (!limitCheck.success) {
+    return rateLimitExceededResponse(
+      limitCheck.reset,
+      isEn
+        ? "Too many proposals submitted. Please wait a minute."
+        : "Çok fazla teklif gönderildi. Lütfen bir dakika bekleyin."
+    );
+  }
+
   try {
     const session = await getSession();
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const body = await req.json();
+    const locale = req.headers.get("x-locale") || body?.locale || "tr";
+    const isEn = locale === "en";
+
+    if (!session?.userId) {
+      return NextResponse.json(
+        { error: isEn ? "Unauthorized" : "Yetkisiz erişim" },
+        { status: 401 }
+      );
     }
 
-    const body = await req.json();
     const offer = await OfferService.submitOffer(session.userId, body);
 
     return NextResponse.json({ success: true, offer }, { status: 201 });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Failed to submit offer";
+    const locale = req.headers.get("x-locale") || "tr";
+    const isEn = locale === "en";
+
+    let message = isEn ? "Failed to submit offer." : "Teklif iletilemedi.";
+    if (err instanceof z.ZodError) {
+      message =
+        err.issues[0]?.message || (isEn ? "Invalid proposal format." : "Geçersiz teklif formatı.");
+    } else if (err instanceof Error) {
+      const raw = err.message;
+      if (raw.includes("Listing not found")) {
+        message = isEn ? "Listing not found." : "İlan bulunamadı.";
+      } else if (raw.includes("own listing")) {
+        message = isEn
+          ? "You cannot submit an offer on your own listing."
+          : "Kendi ilanınıza teklif veremezsiniz.";
+      } else if (raw.includes("not currently active")) {
+        message = isEn
+          ? "Listing is not currently active for offers."
+          : "İlan şu anda teklif kabul etmiyor veya süresi dolmuş.";
+      } else if (raw.includes("Cannot submit an offer to this listing")) {
+        message = isEn
+          ? "Cannot submit an offer to this listing."
+          : "Bu ilana teklif verilemez (engelleme kısıtı).";
+      } else if (raw.includes("already have an active pending offer")) {
+        message = isEn
+          ? "You already have an active pending offer on this listing."
+          : "Bu ilana yönelik zaten aktif ve bekleyen bir teklifiniz bulunmaktadır.";
+      } else if (raw.includes("after withdrawing")) {
+        message = isEn
+          ? "You cannot submit another offer after withdrawing during this activation cycle."
+          : "Bu yayın döngüsünde teklifinizi geri çektiğiniz için yeni bir teklif iletemezsiniz.";
+      } else if (raw.includes("e-posta adresinizi doğrulamanız")) {
+        message = isEn
+          ? "You must verify your email address before submitting an offer."
+          : "Teklif verebilmek için önce e-posta adresinizi doğrulamanız gerekmektedir.";
+      } else {
+        message = raw;
+      }
+    }
+
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }

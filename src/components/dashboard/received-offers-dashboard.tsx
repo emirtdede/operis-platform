@@ -9,6 +9,7 @@ import { Dialog } from "../ui/dialog";
 import { Select } from "../ui/select";
 import { TextArea } from "../ui/text-area";
 import { EmptyState } from "../ui/empty-state";
+import { getLocalizedWorkspacePath, getLocalizedProfilePath } from "@/src/lib/i18n/routes";
 
 export interface ReceivedOfferItem {
   id: string;
@@ -25,6 +26,7 @@ export interface ReceivedOfferItem {
   estimatedDurationValue: number | null;
   estimatedDurationUnit: string | null;
   createdAt: string | Date;
+  engagementId?: string | null;
 }
 
 export interface ReceivedOffersDashboardProps {
@@ -32,10 +34,7 @@ export interface ReceivedOffersDashboardProps {
   locale: string;
 }
 
-export function ReceivedOffersDashboard({
-  initialOffers,
-  locale,
-}: ReceivedOffersDashboardProps) {
+export function ReceivedOffersDashboard({ initialOffers, locale }: ReceivedOffersDashboardProps) {
   const isTr = locale === "tr";
   const [offers, setOffers] = useState<ReceivedOfferItem[]>(initialOffers);
 
@@ -59,16 +58,18 @@ export function ReceivedOffersDashboard({
     try {
       const res = await fetch(`/api/offers/${acceptingOffer.id}/accept`, {
         method: "POST",
+        headers: {
+          "x-locale": locale,
+        },
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to accept offer");
 
       // Redirect to match page
-      window.location.href = `/${locale}/work/${data.engagement.id}`;
+      const targetPath = getLocalizedWorkspacePath(data.engagement.id, locale);
+      window.location.href = targetPath;
     } catch (err: unknown) {
-      setAcceptError(
-        err instanceof Error ? err.message : "Error accepting offer"
-      );
+      setAcceptError(err instanceof Error ? err.message : "Error accepting offer");
       setIsAccepting(false);
     }
   };
@@ -81,7 +82,10 @@ export function ReceivedOffersDashboard({
     try {
       const res = await fetch(`/api/offers/${rejectingOffer.id}/reject`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-locale": locale,
+        },
         body: JSON.stringify({
           rejectionCode,
           rejectionNote: rejectionNote || null,
@@ -91,15 +95,11 @@ export function ReceivedOffersDashboard({
       if (!res.ok) throw new Error(data.error || "Failed to reject offer");
 
       setOffers((prev) =>
-        prev.map((o) =>
-          o.id === rejectingOffer.id ? { ...o, status: "REJECTED" } : o
-        )
+        prev.map((o) => (o.id === rejectingOffer.id ? { ...o, status: "REJECTED" } : o))
       );
       setRejectingOffer(null);
     } catch (err: unknown) {
-      setRejectError(
-        err instanceof Error ? err.message : "Error rejecting offer"
-      );
+      setRejectError(err instanceof Error ? err.message : "Error rejecting offer");
     } finally {
       setIsRejecting(false);
     }
@@ -128,9 +128,7 @@ export function ReceivedOffersDashboard({
       ) : (
         <div className="space-y-4">
           {offers.map((offer) => {
-            const dateStr = new Date(offer.createdAt).toLocaleDateString(
-              isTr ? "tr-TR" : "en-US"
-            );
+            const dateStr = new Date(offer.createdAt).toLocaleDateString(isTr ? "tr-TR" : "en-US");
 
             return (
               <div
@@ -140,7 +138,7 @@ export function ReceivedOffersDashboard({
                 {/* Header: Offeror details and status */}
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--color-border-subtle)] pb-3">
                   <Link
-                    href={`/${locale}/u/${offer.offerorHandle}`}
+                    href={getLocalizedProfilePath(offer.offerorHandle, locale)}
                     className="flex items-center gap-3 hover:opacity-80 transition-opacity"
                   >
                     <AvatarInitials name={offer.offerorDisplayName} size="sm" />
@@ -160,16 +158,14 @@ export function ReceivedOffersDashboard({
                         offer.status === "ACCEPTED"
                           ? "primary"
                           : offer.status === "PENDING"
-                          ? "secondary"
-                          : "outline"
+                            ? "secondary"
+                            : "outline"
                       }
                       size="sm"
                     >
                       {offer.status}
                     </Badge>
-                    <span className="text-xs text-[var(--color-text-tertiary)]">
-                      {dateStr}
-                    </span>
+                    <span className="text-xs text-[var(--color-text-tertiary)]">{dateStr}</span>
                   </div>
                 </div>
 
@@ -192,8 +188,7 @@ export function ReceivedOffersDashboard({
                     {offer.budgetMin && (
                       <span>
                         <strong>{isTr ? "Bütçe:" : "Budget:"}</strong> {offer.budgetMin}{" "}
-                        {offer.budgetMax ? `– ${offer.budgetMax}` : ""}{" "}
-                        {offer.budgetCurrency}
+                        {offer.budgetMax ? `– ${offer.budgetMax}` : ""} {offer.budgetCurrency}
                       </span>
                     )}
                     {offer.estimatedDurationValue && (
@@ -215,13 +210,20 @@ export function ReceivedOffersDashboard({
                       >
                         {isTr ? "Reddet" : "Reject"}
                       </Button>
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        onClick={() => setAcceptingOffer(offer)}
-                      >
+                      <Button variant="primary" size="sm" onClick={() => setAcceptingOffer(offer)}>
                         {isTr ? "Teklifi Kabul Et" : "Accept Offer"}
                       </Button>
+                    </div>
+                  )}
+
+                  {/* Actions for ACCEPTED offers */}
+                  {offer.status === "ACCEPTED" && offer.engagementId && (
+                    <div className="flex items-center gap-2">
+                      <Link href={getLocalizedWorkspacePath(offer.engagementId, locale)}>
+                        <Button variant="primary" size="sm">
+                          {isTr ? "Çalışma Alanına Git →" : "Go to Workspace →"}
+                        </Button>
+                      </Link>
                     </div>
                   )}
                 </div>
@@ -252,7 +254,9 @@ export function ReceivedOffersDashboard({
 
             <div className="rounded-2xl border border-blue-500/20 bg-blue-500/5 p-4 text-xs leading-relaxed text-[var(--color-text-secondary)] space-y-2">
               <p className="font-semibold text-[var(--color-text-primary)]">
-                {isTr ? "Önemli Eşleştirme ve Sorumluluk Hatırlatması:" : "Important Matching Notice:"}
+                {isTr
+                  ? "Önemli Eşleştirme ve Sorumluluk Hatırlatması:"
+                  : "Important Matching Notice:"}
               </p>
               <p>
                 {isTr
@@ -269,11 +273,7 @@ export function ReceivedOffersDashboard({
               >
                 {isTr ? "Vazgeç" : "Cancel"}
               </Button>
-              <Button
-                variant="primary"
-                onClick={handleAcceptConfirm}
-                isLoading={isAccepting}
-              >
+              <Button variant="primary" onClick={handleAcceptConfirm} isLoading={isAccepting}>
                 {isTr ? "Onayla ve Eşleş" : "Confirm & Match"}
               </Button>
             </div>
@@ -306,8 +306,14 @@ export function ReceivedOffersDashboard({
               onChange={(e) => setRejectionCode(e.target.value)}
               options={[
                 { value: "BUDGET_MISMATCH", label: isTr ? "Bütçe Uyuşmazlığı" : "Budget Mismatch" },
-                { value: "TIMELINE_MISMATCH", label: isTr ? "Zamanlama Uyuşmazlığı" : "Timeline Mismatch" },
-                { value: "SCOPE_MISMATCH", label: isTr ? "Kapsam / Yetkinlik Uyuşmazlığı" : "Scope Mismatch" },
+                {
+                  value: "TIMELINE_MISMATCH",
+                  label: isTr ? "Zamanlama Uyuşmazlığı" : "Timeline Mismatch",
+                },
+                {
+                  value: "SCOPE_MISMATCH",
+                  label: isTr ? "Kapsam / Yetkinlik Uyuşmazlığı" : "Scope Mismatch",
+                },
                 { value: "OTHER", label: isTr ? "Diğer" : "Other" },
               ]}
             />
@@ -330,11 +336,7 @@ export function ReceivedOffersDashboard({
               >
                 {isTr ? "İptal" : "Cancel"}
               </Button>
-              <Button
-                variant="secondary"
-                onClick={handleRejectConfirm}
-                isLoading={isRejecting}
-              >
+              <Button variant="secondary" onClick={handleRejectConfirm} isLoading={isRejecting}>
                 {isTr ? "Reddi Onayla" : "Confirm Rejection"}
               </Button>
             </div>

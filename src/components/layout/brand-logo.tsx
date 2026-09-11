@@ -4,19 +4,9 @@ interface BrandLogoProps {
   showText?: boolean;
 }
 
-export function BrandLogo({
-  className = "",
-  size = "md",
-  showText = true,
-}: BrandLogoProps) {
+export function BrandLogo({ className = "", size = "md", showText = true }: BrandLogoProps) {
   const numericHeight =
-    typeof size === "number"
-      ? size
-      : size === "sm"
-      ? 24
-      : size === "lg"
-      ? 40
-      : 32;
+    typeof size === "number" ? size : size === "sm" ? 24 : size === "lg" ? 40 : 32;
 
   const numericWidth = Math.round(numericHeight * (350 / 112));
 

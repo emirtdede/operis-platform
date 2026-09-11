@@ -4,7 +4,8 @@ import { Activity } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "Sistem Durumu & Performans İzleme | Operis Admin",
-  description: "Veritabanı bağlantı havuzu, sorgu gecikmesi, heap bellek kullanımı ve sistem optimizasyon araçları.",
+  description:
+    "Veritabanı bağlantı havuzu, sorgu gecikmesi, heap bellek kullanımı ve sistem optimizasyon araçları.",
 };
 
 export const dynamic = "force-dynamic";
@@ -22,7 +23,8 @@ export default function AdminMonitoringPage() {
             </span>
           </h1>
           <p className="text-xs text-slate-400 mt-1">
-            PostgreSQL bağlantı havuzu, 7 günlük otomatik yaşam döngüsü worker&apos;ı, gecikme süreleri ve 1-tıkla anlık optimizasyon araçları.
+            PostgreSQL bağlantı havuzu, 7 günlük otomatik yaşam döngüsü worker&apos;ı, gecikme
+            süreleri ve 1-tıkla anlık optimizasyon araçları.
           </p>
         </div>
       </div>

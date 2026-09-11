@@ -44,12 +44,7 @@ const config: Config = {
           "Cantarell",
           "sans-serif",
         ],
-        display: [
-          '"Space Grotesk"',
-          '"Plus Jakarta Sans"',
-          "-apple-system",
-          "sans-serif",
-        ],
+        display: ['"Space Grotesk"', '"Plus Jakarta Sans"', "-apple-system", "sans-serif"],
       },
       maxWidth: {
         container: "1280px",
@@ -60,8 +55,8 @@ const config: Config = {
         pill: "9999px",
       },
       animation: {
-        "shimmer": "shimmer-slide 3s ease-in-out infinite",
-        "radar": "radar-sweep 6s linear infinite",
+        shimmer: "shimmer-slide 3s ease-in-out infinite",
+        radar: "radar-sweep 6s linear infinite",
         "pulse-subtle": "pulse-subtle 3s ease-in-out infinite",
       },
       backgroundImage: {

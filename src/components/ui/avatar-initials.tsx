@@ -1,8 +1,12 @@
+"use client";
+
+import { useState, useEffect } from "react";
 import { clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 
 export interface AvatarInitialsProps {
   name: string;
+  avatarUrl?: string | null;
   size?: "sm" | "md" | "lg" | "xl";
   className?: string;
 }
@@ -19,12 +23,13 @@ export function getInitials(name: string): string {
   return (first + last).toUpperCase();
 }
 
-export function AvatarInitials({
-  name,
-  size = "md",
-  className,
-}: AvatarInitialsProps) {
+export function AvatarInitials({ name, avatarUrl, size = "md", className }: AvatarInitialsProps) {
+  const [imageError, setImageError] = useState(false);
   const initials = getInitials(name);
+
+  useEffect(() => {
+    setImageError(false);
+  }, [avatarUrl]);
 
   const sizeStyles = {
     sm: "w-7 h-7 text-xs",
@@ -33,20 +38,33 @@ export function AvatarInitials({
     xl: "w-16 h-16 text-xl font-bold",
   };
 
+  const hasValidUrl = Boolean(avatarUrl && !imageError && avatarUrl.trim().length > 0);
+
   return (
     <div
       role="img"
       aria-label={`Avatar for ${name}`}
       className={twMerge(
         clsx(
-          "inline-flex items-center justify-center rounded-full select-none shrink-0 font-medium",
+          "inline-flex items-center justify-center rounded-full select-none shrink-0 font-medium overflow-hidden",
           "bg-[var(--bg-elevated)] text-[var(--text-primary)] border border-[var(--border-strong)]",
           sizeStyles[size],
           className
         )
       )}
     >
-      {initials}
+      {hasValidUrl ? (
+        <img
+          src={avatarUrl!}
+          alt={name}
+          className="w-full h-full object-cover rounded-full"
+          onError={() => setImageError(true)}
+          loading="lazy"
+          referrerPolicy="no-referrer"
+        />
+      ) : (
+        initials
+      )}
     </div>
   );
 }

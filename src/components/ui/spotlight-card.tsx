@@ -7,6 +7,7 @@ import { twMerge } from "tailwind-merge";
 export interface SpotlightCardProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;
   className?: string;
+  contentClassName?: string;
   spotlightColor?: string;
   borderColor?: string;
 }
@@ -14,6 +15,7 @@ export interface SpotlightCardProps extends React.HTMLAttributes<HTMLDivElement>
 export function SpotlightCard({
   children,
   className,
+  contentClassName,
   spotlightColor = "rgba(56, 189, 248, 0.1)",
   borderColor = "rgba(129, 140, 248, 0.35)",
   ...props
@@ -46,7 +48,7 @@ export function SpotlightCard({
       onMouseLeave={handleMouseLeave}
       className={twMerge(
         clsx(
-          "relative overflow-hidden rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/80 backdrop-blur-md transition-all duration-300 hover:border-[var(--color-border-strong)] hover:shadow-lg",
+          "relative overflow-hidden rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/80 backdrop-blur-md transition-all duration-300 hover:border-[var(--color-border-strong)] hover:shadow-lg flex flex-col h-full",
           className
         )
       )}
@@ -69,14 +71,20 @@ export function SpotlightCard({
           opacity,
           background: `radial-gradient(300px circle at ${position.x}px ${position.y}px, ${borderColor}, transparent 60%)`,
           mask: "linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)",
-          WebkitMask:
-            "linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)",
+          WebkitMask: "linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)",
           maskComposite: "exclude",
           WebkitMaskComposite: "xor",
           padding: "1px",
         }}
       />
-      <div className="relative z-10">{children}</div>
+      <div
+        className={twMerge(
+          "relative z-10 flex flex-col justify-between h-full flex-1",
+          contentClassName
+        )}
+      >
+        {children}
+      </div>
     </div>
   );
 }

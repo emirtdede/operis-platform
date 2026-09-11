@@ -228,7 +228,8 @@ export const SEED_CATEGORIES: SeedCategory[] = [
       },
       en: {
         name: "Computer Hardware & Technical Support",
-        description: "Hardware diagnostics, custom builds, performance tuning, and technical support.",
+        description:
+          "Hardware diagnostics, custom builds, performance tuning, and technical support.",
       },
     },
   },
@@ -238,11 +239,13 @@ export const SEED_CATEGORIES: SeedCategory[] = [
     translations: {
       tr: {
         name: "Gömülü Sistemler ve IoT",
-        description: "Mikrodenetleyici programlama, Arduino, ESP32, Raspberry Pi ve donanım yazılımları.",
+        description:
+          "Mikrodenetleyici programlama, Arduino, ESP32, Raspberry Pi ve donanım yazılımları.",
       },
       en: {
         name: "Embedded & IoT",
-        description: "Microcontroller programming, firmware, Arduino, ESP32, and connected devices.",
+        description:
+          "Microcontroller programming, firmware, Arduino, ESP32, and connected devices.",
       },
     },
   },
@@ -270,7 +273,8 @@ export const SEED_CATEGORIES: SeedCategory[] = [
       },
       en: {
         name: "Technical Consulting",
-        description: "Architecture review, code audit, technology stack evaluation, and feasibility.",
+        description:
+          "Architecture review, code audit, technology stack evaluation, and feasibility.",
       },
     },
   },
@@ -280,7 +284,8 @@ export const SEED_CATEGORIES: SeedCategory[] = [
     translations: {
       tr: {
         name: "Diğer Teknoloji Hizmetleri",
-        description: "Listelenen kategorilerin dışındaki özel teknoloji ve mühendislik gereksinimleri.",
+        description:
+          "Listelenen kategorilerin dışındaki özel teknoloji ve mühendislik gereksinimleri.",
       },
       en: {
         name: "Other Technology",

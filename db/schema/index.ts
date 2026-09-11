@@ -56,10 +56,15 @@ export const profiles = pgTable("profiles", {
   handle: varchar("handle", { length: 30 }).unique().notNull(),
   displayName: varchar("display_name", { length: 80 }).notNull(),
   about: varchar("about", { length: 1000 }),
+  avatarUrl: text("avatar_url"),
   showLocation: boolean("show_location").default(false).notNull(),
   revealPhoneAfterMatch: boolean("reveal_phone_after_match").default(false).notNull(),
   locale: varchar("locale", { length: 5 }).default("tr").notNull(),
   theme: varchar("theme", { length: 10 }).default("light").notNull(),
+  trackedSkills: text("tracked_skills")
+    .array()
+    .default(sql`'{}'::text[]`)
+    .notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
@@ -77,9 +82,7 @@ export const profileLinks = pgTable(
     url: text("url").notNull(),
     sortOrder: smallint("sort_order").notNull(),
   },
-  (table) => [
-    uniqueIndex("profile_links_user_sort_idx").on(table.userId, table.sortOrder),
-  ]
+  (table) => [uniqueIndex("profile_links_user_sort_idx").on(table.userId, table.sortOrder)]
 );
 
 // 5. Categories
@@ -104,9 +107,7 @@ export const categoryTranslations = pgTable(
     name: varchar("name", { length: 100 }).notNull(),
     description: text("description"),
   },
-  (table) => [
-    primaryKey({ columns: [table.categoryId, table.locale] }),
-  ]
+  (table) => [primaryKey({ columns: [table.categoryId, table.locale] })]
 );
 
 // 7. Category Follows (Private to user)
@@ -121,9 +122,7 @@ export const categoryFollows = pgTable(
       .references(() => categories.id, { onDelete: "cascade" }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
-  (table) => [
-    primaryKey({ columns: [table.userId, table.categoryId] }),
-  ]
+  (table) => [primaryKey({ columns: [table.userId, table.categoryId] })]
 );
 
 // 8. Listing Templates (Wizard Schemas)
@@ -158,7 +157,10 @@ export const listings = pgTable(
     summary: varchar("summary", { length: 280 }).notNull(),
     scope: text("scope").notNull(),
     answersJson: jsonb("answers_json").default({}).notNull(),
-    tags: text("tags").array().default(sql`'{}'::text[]`).notNull(),
+    tags: text("tags")
+      .array()
+      .default(sql`'{}'::text[]`)
+      .notNull(),
     budgetMode: varchar("budget_mode", { length: 30 }).notNull(),
     budgetCurrency: char("budget_currency", { length: 3 }),
     budgetMin: numeric("budget_min", { precision: 18, scale: 2 }),
@@ -168,6 +170,8 @@ export const listings = pgTable(
     timelineValue: integer("timeline_value"),
     timelineUnit: varchar("timeline_unit", { length: 20 }),
     activationSeq: integer("activation_seq").default(0).notNull(),
+    viewCount: integer("view_count").default(0).notNull(),
+    clickCount: integer("click_count").default(0).notNull(),
     firstPublishedAt: timestamp("first_published_at", { withTimezone: true }),
     lastActivatedAt: timestamp("last_activated_at", { withTimezone: true }),
     activeUntil: timestamp("active_until", { withTimezone: true }),
@@ -181,22 +185,29 @@ export const listings = pgTable(
     index("listings_feed_idx").on(table.status, table.lastActivatedAt, table.id),
     index("listings_category_feed_idx").on(table.categoryId, table.status, table.lastActivatedAt),
     index("listings_owner_status_idx").on(table.ownerUserId, table.status),
+    index("listings_search_multi_idx").on(table.status, table.title),
   ]
 );
 
 // 10. Listing Revisions
-export const listingRevisions = pgTable("listing_revisions", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  listingId: uuid("listing_id")
-    .notNull()
-    .references(() => listings.id, { onDelete: "cascade" }),
-  editorUserId: uuid("editor_user_id")
-    .notNull()
-    .references(() => users.id),
-  revisionNo: integer("revision_no").notNull(),
-  snapshotJson: jsonb("snapshot_json").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-});
+export const listingRevisions = pgTable(
+  "listing_revisions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    listingId: uuid("listing_id")
+      .notNull()
+      .references(() => listings.id, { onDelete: "cascade" }),
+    editorUserId: uuid("editor_user_id")
+      .notNull()
+      .references(() => users.id),
+    revisionNo: integer("revision_no").notNull(),
+    snapshotJson: jsonb("snapshot_json").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("listing_revisions_uniq_idx").on(table.listingId, table.revisionNo),
+  ]
+);
 
 // 11. Listing Status Events
 export const listingStatusEvents = pgTable("listing_status_events", {
@@ -254,15 +265,44 @@ export const offers = pgTable(
 );
 
 // 13. Offer Revisions
-export const offerRevisions = pgTable("offer_revisions", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  offerId: uuid("offer_id")
-    .notNull()
-    .references(() => offers.id, { onDelete: "cascade" }),
-  revisionNo: integer("revision_no").notNull(),
-  snapshotJson: jsonb("snapshot_json").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-});
+export const offerRevisions = pgTable(
+  "offer_revisions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    offerId: uuid("offer_id")
+      .notNull()
+      .references(() => offers.id, { onDelete: "cascade" }),
+    revisionNo: integer("revision_no").notNull(),
+    snapshotJson: jsonb("snapshot_json").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("offer_revisions_uniq_idx").on(table.offerId, table.revisionNo),
+  ]
+);
+
+// 13b. Offer Templates
+export const offerTemplates = pgTable(
+  "offer_templates",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 80 }).notNull(),
+    message: text("message").notNull(),
+    budgetCurrency: char("budget_currency", { length: 3 }),
+    budgetMin: numeric("budget_min", { precision: 18, scale: 2 }),
+    budgetMax: numeric("budget_max", { precision: 18, scale: 2 }),
+    estimatedDurationValue: integer("estimated_duration_value"),
+    estimatedDurationUnit: varchar("estimated_duration_unit", { length: 20 }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("offer_templates_user_idx").on(table.userId),
+  ]
+);
 
 // 14. Engagements (Matches)
 export const engagements = pgTable("engagements", {
@@ -303,9 +343,7 @@ export const engagementCompletionMarks = pgTable(
     status: varchar("status", { length: 30 }).notNull(), // MARKED_COMPLETE, DISPUTES_COMPLETION
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
-  (table) => [
-    primaryKey({ columns: [table.engagementId, table.userId] }),
-  ]
+  (table) => [primaryKey({ columns: [table.engagementId, table.userId] })]
 );
 
 // 16. User Blocks
@@ -320,9 +358,7 @@ export const blocks = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
-  (table) => [
-    primaryKey({ columns: [table.blockerUserId, table.blockedUserId] }),
-  ]
+  (table) => [primaryKey({ columns: [table.blockerUserId, table.blockedUserId] })]
 );
 
 // 17. Reports (Abuse & Moderation)
@@ -415,3 +451,27 @@ export const adminAuditLog = pgTable("admin_audit_log", {
   safeSummary: text("safe_summary").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
+
+// 24. Endorsements (Bilateral 1-paragraph verified vouches upon completion)
+export const endorsements = pgTable(
+  "endorsements",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    engagementId: uuid("engagement_id")
+      .notNull()
+      .references(() => engagements.id, { onDelete: "cascade" }),
+    authorUserId: uuid("author_user_id")
+      .notNull()
+      .references(() => users.id),
+    recipientUserId: uuid("recipient_user_id")
+      .notNull()
+      .references(() => users.id),
+    content: varchar("content", { length: 500 }).notNull(),
+    projectTitleSnapshot: varchar("project_title_snapshot", { length: 120 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("endorsements_engagement_author_idx").on(table.engagementId, table.authorUserId),
+    index("endorsements_recipient_idx").on(table.recipientUserId),
+  ]
+);

@@ -1,10 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { setRequestLocale } from "next-intl/server";
-import { Send, ShieldCheck, Compass, LogIn } from "lucide-react";
+import { Send, ShieldCheck, Compass } from "lucide-react";
 import { getSession } from "@/src/modules/auth/session";
 import { OfferService } from "@/src/modules/offers/service";
-import { SentOffersDashboard, SentOfferItem } from "@/src/components/dashboard/sent-offers-dashboard";
+import {
+  SentOffersDashboard,
+  SentOfferItem,
+} from "@/src/components/dashboard/sent-offers-dashboard";
 import { DashboardTabs } from "@/src/components/dashboard/dashboard-tabs";
 import { Button } from "@/src/components/ui/button";
 
@@ -55,40 +59,41 @@ export async function generateMetadata({
 
 export const dynamic = "force-dynamic";
 
-export default async function SentOffersPage({
-  params,
-}: {
-  params: Promise<{ locale: string }>;
-}) {
+export default async function SentOffersPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
   setRequestLocale(locale);
 
   const isTr = locale === "tr";
   const session = await getSession();
+  if (!session?.userId) {
+    redirect(
+      isTr
+        ? "/tr/giris?returnUrl=/tr/panel/teklifler/gonderilen"
+        : "/en/login?returnUrl=/en/dashboard/offers/sent"
+    );
+  }
 
-  let initialOffers: SentOfferItem[] = [];
+  let initialOffers: SentOfferItem[];
 
-  if (session?.userId) {
-    try {
-      const rows = await OfferService.getSentOffers(session.userId);
-      initialOffers = rows.map((r) => ({
-        id: r.offer.id,
-        listingId: r.listing.id,
-        listingSlug: r.listing.slug,
-        listingTitle: r.listing.title,
-        status: r.offer.status,
-        message: r.offer.message,
-        budgetCurrency: r.offer.budgetCurrency,
-        budgetMin: r.offer.budgetMin,
-        budgetMax: r.offer.budgetMax,
-        estimatedDurationValue: r.offer.estimatedDurationValue,
-        estimatedDurationUnit: r.offer.estimatedDurationUnit,
-        createdAt: r.offer.createdAt,
-        updatedAt: r.offer.updatedAt,
-      }));
-    } catch {
-      initialOffers = [];
-    }
+  try {
+    const rows = await OfferService.getSentOffers(session.userId);
+    initialOffers = rows.map((r) => ({
+      id: r.offer.id,
+      listingId: r.listing.id,
+      listingSlug: r.listing.slug,
+      listingTitle: r.listing.title,
+      status: r.offer.status,
+      message: r.offer.message,
+      budgetCurrency: r.offer.budgetCurrency,
+      budgetMin: r.offer.budgetMin,
+      budgetMax: r.offer.budgetMax,
+      estimatedDurationValue: r.offer.estimatedDurationValue,
+      estimatedDurationUnit: r.offer.estimatedDurationUnit,
+      createdAt: r.offer.createdAt,
+      updatedAt: r.offer.updatedAt,
+    }));
+  } catch {
+    initialOffers = [];
   }
 
   const sentOffersUrl = isTr
@@ -171,40 +176,6 @@ export default async function SentOffersPage({
         </div>
       </section>
 
-      {/* Auth Prompt if Guest */}
-      {!session && (
-        <section
-          aria-label={isTr ? "Giriş Hatırlatması" : "Sign In Reminder"}
-          className="relative overflow-hidden rounded-3xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/70 p-8 sm:p-12 text-center space-y-5 backdrop-blur-xl shadow-xl"
-        >
-          <div className="pointer-events-none absolute -top-12 -right-12 h-44 w-44 rounded-full bg-blue-500/10 blur-3xl" />
-          <div className="pointer-events-none absolute -bottom-12 -left-12 h-44 w-44 rounded-full bg-cyan-500/10 blur-3xl" />
-
-          <div className="relative z-10 mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-500 border border-blue-500/20 shadow-sm">
-            <LogIn className="h-7 w-7" aria-hidden="true" />
-          </div>
-
-          <div className="relative z-10 max-w-md mx-auto space-y-2">
-            <h2 className="text-lg font-bold text-[var(--color-text-primary)]">
-              {isTr ? "Tekliflerinizi İzlemek İçin Giriş Yapın" : "Sign In to Track Your Proposals"}
-            </h2>
-            <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed">
-              {isTr
-                ? "Daha önce projelere ilettiğiniz tekliflerin durumunu görmek için lütfen oturum açın."
-                : "Please log in to your account to review the status of your submitted proposals."}
-            </p>
-          </div>
-          <div className="relative z-10 pt-1">
-            <Link href={isTr ? "/tr/giris" : "/en/login"}>
-              <Button variant="primary" size="md" className="gap-2 shadow-lg shadow-blue-500/20">
-                <LogIn className="h-4 w-4" aria-hidden="true" />
-                <span>{isTr ? "Giriş Yap" : "Log In"}</span>
-              </Button>
-            </Link>
-          </div>
-        </section>
-      )}
-
       {/* Sent Offers Dashboard */}
       <section aria-label={isTr ? "Gönderilen Teklif Listesi" : "Sent Offer List"}>
         <SentOffersDashboard initialOffers={initialOffers} locale={locale} />
@@ -212,4 +183,3 @@ export default async function SentOffersPage({
     </main>
   );
 }
-

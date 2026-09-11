@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { setRequestLocale } from "next-intl/server";
 import { RegisterForm } from "@/src/components/auth/register-form";
 import { AuthValueHero } from "@/src/components/onboarding/auth-value-hero";
+import { getSession } from "@/src/modules/auth/session";
+import { getLocalizedRoute } from "@/src/lib/i18n/routes";
 
 export async function generateMetadata({
   params,
@@ -50,11 +53,23 @@ export async function generateMetadata({
 
 export default async function RegisterPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ locale: string }>;
+  searchParams?: Promise<{ returnUrl?: string }>;
 }) {
   const { locale } = await params;
+  const sp = searchParams ? await searchParams : {};
   setRequestLocale(locale);
+
+  // Authenticated users must not access register page; redirect to returnUrl or workspace
+  const session = await getSession();
+  if (session) {
+    if (sp.returnUrl && /^\/(tr|en)(\/|$)/.test(sp.returnUrl) && !sp.returnUrl.startsWith("//")) {
+      redirect(sp.returnUrl);
+    }
+    redirect(getLocalizedRoute("dashboardListings", locale));
+  }
 
   const isTr = locale === "tr";
   const registerUrl = isTr ? "https://operis.pro/tr/kayit" : "https://operis.pro/en/register";
@@ -116,7 +131,7 @@ export default async function RegisterPage({
             </header>
 
             <section aria-label={isTr ? "Kayıt Sihirbazı" : "Registration Wizard"}>
-              <RegisterForm locale={locale} />
+              <RegisterForm locale={locale} returnUrl={sp.returnUrl} />
             </section>
           </div>
         </div>
@@ -124,4 +139,3 @@ export default async function RegisterPage({
     </main>
   );
 }
-

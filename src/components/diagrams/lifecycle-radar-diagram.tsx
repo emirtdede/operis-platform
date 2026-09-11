@@ -68,21 +68,9 @@ export function LifecycleRadarDiagram() {
               strokeDasharray="4 6"
             />
             {/* Middle Ring */}
-            <circle
-              cx="100"
-              cy="100"
-              r="60"
-              stroke="var(--color-border-subtle)"
-              strokeWidth="1"
-            />
+            <circle cx="100" cy="100" r="60" stroke="var(--color-border-subtle)" strokeWidth="1" />
             {/* Inner Ring */}
-            <circle
-              cx="100"
-              cy="100"
-              r="34"
-              stroke="var(--color-border-subtle)"
-              strokeWidth="1"
-            />
+            <circle cx="100" cy="100" r="34" stroke="var(--color-border-subtle)" strokeWidth="1" />
 
             {/* Radar Crosshairs */}
             <line
@@ -175,13 +163,7 @@ export function LifecycleRadarDiagram() {
                         />
                       </circle>
                       {/* Luminous beacon core glow */}
-                      <circle
-                        cx={cx}
-                        cy={cy}
-                        r="9"
-                        fill="#06b6d4"
-                        opacity="0.3"
-                      >
+                      <circle cx={cx} cy={cy} r="9" fill="#06b6d4" opacity="0.3">
                         <animate
                           attributeName="r"
                           values="8;11;8"
@@ -202,7 +184,13 @@ export function LifecycleRadarDiagram() {
                     cy={cy}
                     r={item.current ? "6" : item.passed ? "5.5" : "4"}
                     fill={item.passed ? "#06b6d4" : "var(--color-surface-elevated)"}
-                    stroke={item.current ? "#ffffff" : item.passed ? "#22d3ee" : "var(--color-border-strong)"}
+                    stroke={
+                      item.current
+                        ? "#ffffff"
+                        : item.passed
+                          ? "#22d3ee"
+                          : "var(--color-border-strong)"
+                    }
                     strokeWidth={item.current ? "2" : "1.5"}
                   />
                 </g>
@@ -236,7 +224,8 @@ export function LifecycleRadarDiagram() {
                 1 Hafta Boyunca Akışta En Üstte
               </div>
               <div className="text-[11px] text-[var(--color-text-secondary)] mt-0.5 leading-relaxed">
-                Yayınlanan ilanınız 1 hafta boyunca canlı kalır, ilgili kategorideki uzman geliştiricilere anında önerilir.
+                Yayınlanan ilanınız 1 hafta boyunca canlı kalır, ilgili kategorideki uzman
+                geliştiricilere anında önerilir.
               </div>
             </div>
           </div>
@@ -250,7 +239,8 @@ export function LifecycleRadarDiagram() {
                 Tek Tıkla Ücretsiz Süre Uzatma
               </div>
               <div className="text-[11px] text-[var(--color-text-secondary)] mt-0.5 leading-relaxed">
-                1 hafta bittiğinde ilanınız asla silinmez; panelinizden tek bir tıkla süresini 1 hafta daha ücretsiz uzatabilirsiniz.
+                1 hafta bittiğinde ilanınız asla silinmez; panelinizden tek bir tıkla süresini 1
+                hafta daha ücretsiz uzatabilirsiniz.
               </div>
             </div>
           </div>
@@ -264,7 +254,8 @@ export function LifecycleRadarDiagram() {
                 Terk Edilmiş veya Bayat İlan Yok
               </div>
               <div className="text-[11px] text-[var(--color-text-secondary)] mt-0.5 leading-relaxed">
-                Yanıt verilmeyen ve atıl kalan eski projeler otomatik arşivlenir; sitede yalnızca gerçekten aktif işler listelenir.
+                Yanıt verilmeyen ve atıl kalan eski projeler otomatik arşivlenir; sitede yalnızca
+                gerçekten aktif işler listelenir.
               </div>
             </div>
           </div>

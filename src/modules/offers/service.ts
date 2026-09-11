@@ -1,9 +1,17 @@
+import crypto from "crypto";
 import { and, desc, eq, or } from "drizzle-orm";
 import { getDb, schema } from "@/src/lib/db";
+import { NotificationService } from "@/src/modules/notifications/service";
+import { inMemoryListings } from "@/src/modules/listings/service";
+import { DEFAULT_USER } from "@/src/modules/auth/demo-user";
 import {
+  BatchSubmitOffersInput,
+  OfferTemplateInput,
   RejectOfferInput,
   SubmitOfferInput,
   UpdateOfferInput,
+  batchSubmitOffersSchema,
+  offerTemplateSchema,
   rejectOfferSchema,
   submitOfferSchema,
   updateOfferSchema,
@@ -33,12 +41,80 @@ export interface ReceivedOfferDto {
     title: string;
     status: string;
     activeUntil: Date | null;
+    ownerUserId?: string;
   };
+  engagementId?: string | null;
+}
+
+export interface BatchOfferResultItem {
+  listingId: string;
+  status: "SUCCESS" | "FAILED";
+  offerId?: string;
+  code?: string;
+  message?: string;
+  offer?: typeof schema.offers.$inferSelect;
+}
+
+export interface BatchOfferResponse {
+  batchId: string;
+  total: number;
+  succeededCount: number;
+  failedCount: number;
+  results: BatchOfferResultItem[];
+}
+
+export interface OfferTemplateDto {
+  id: string;
+  userId: string;
+  name: string;
+  message: string;
+  budgetCurrency?: "TRY" | "USD" | "EUR" | "GBP" | null;
+  budgetMin?: string | null;
+  budgetMax?: string | null;
+  estimatedDurationValue?: number | null;
+  estimatedDurationUnit?: "DAYS" | "WEEKS" | "MONTHS" | null;
+  createdAt: Date;
 }
 
 // In-memory runtime store for offers created during session (empty by default)
 export const inMemorySentOffers: SentOfferDto[] = [];
 export const inMemoryReceivedOffers: ReceivedOfferDto[] = [];
+export const inMemoryBatchIdempotencyStore = new Map<string, BatchOfferResponse>();
+export const inMemoryOfferTemplates = new Map<string, OfferTemplateDto[]>();
+
+const DEFAULT_STARTER_TEMPLATES = (userId: string, locale?: string): OfferTemplateDto[] => {
+  const isEn = locale === "en";
+  return [
+    {
+      id: "default-1",
+      userId,
+      name: isEn ? "Standard Project Offer" : "Standart Proje Teklifi",
+      message: isEn
+        ? "Hello {{owner_name}}, I have carefully reviewed the technical requirements for '{{project_title}}'. With my experience in {{category}} and relevant reference work, I can ensure high-quality delivery within your target timeline."
+        : "Merhaba {{ilan_sahibi}}, '{{proje_basligi}}' başlıklı projenizin teknik gereksinimlerini detaylıca inceledim. {{kategori}} alanındaki deneyimim ve benzer referans projelerimle hedeflenen takvim içerisinde yüksek kaliteli teslimat sağlayabilirim.",
+      budgetCurrency: isEn ? "USD" : "TRY",
+      budgetMin: isEn ? "500" : "15000",
+      budgetMax: isEn ? "1500" : "35000",
+      estimatedDurationValue: 2,
+      estimatedDurationUnit: "WEEKS",
+      createdAt: new Date(),
+    },
+    {
+      id: "default-2",
+      userId,
+      name: isEn ? "Fast Advisory & Solution" : "Hızlı Danışmanlık & Çözüm",
+      message: isEn
+        ? "Hello, I can provide direct architectural guidance and development support for '{{project_title}}'. We can quickly clarify the requirements and begin immediately."
+        : "Merhaba, '{{proje_basligi}}' projeniz için teknik mimari ve uygulama sürecinde doğrudan danışmanlık ve geliştirme desteği sunabilirim. Gereksinimleri hızla netleştirip başlayabiliriz.",
+      budgetCurrency: isEn ? "USD" : "TRY",
+      budgetMin: isEn ? "250" : "5000",
+      budgetMax: isEn ? "600" : "15000",
+      estimatedDurationValue: 1,
+      estimatedDurationUnit: "WEEKS",
+      createdAt: new Date(),
+    },
+  ];
+};
 
 export class OfferService {
   /**
@@ -50,13 +126,49 @@ export class OfferService {
     const db = getDb();
 
     // 1. Fetch listing and verify active status
-    const listingRows = await db
-      .select()
-      .from(schema.listings)
-      .where(eq(schema.listings.id, input.listingId))
-      .limit(1);
+    const isListingUuid =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(input.listingId);
 
-    const listing = listingRows[0];
+    let listing: {
+      id: string;
+      ownerUserId: string;
+      title: string;
+      slug?: string;
+      status: string;
+      activeUntil: Date | null;
+      activationSeq: number;
+    } | null = null;
+
+    if (isListingUuid) {
+      try {
+        const listingRows = await db
+          .select()
+          .from(schema.listings)
+          .where(eq(schema.listings.id, input.listingId))
+          .limit(1);
+        if (listingRows[0]) {
+          listing = listingRows[0];
+        }
+      } catch (err) {
+        if (process.env.NODE_ENV === "production") throw err;
+      }
+    }
+
+    if (!listing && process.env.NODE_ENV !== "production") {
+      const memListing = inMemoryListings.find((l) => l.id === input.listingId);
+      if (memListing) {
+        listing = {
+          id: memListing.id,
+          ownerUserId: memListing.ownerUserId,
+          title: memListing.title,
+          slug: memListing.slug,
+          status: memListing.status,
+          activeUntil: memListing.activeUntil,
+          activationSeq: memListing.activationSeq,
+        };
+      }
+    }
+
     if (!listing) {
       throw new Error("Listing not found");
     }
@@ -68,102 +180,245 @@ export class OfferService {
 
     // Listing must be ACTIVE and not expired
     const now = new Date();
-    if (
-      listing.status !== "ACTIVE" ||
-      !listing.activeUntil ||
-      listing.activeUntil <= now
-    ) {
+    if (listing.status !== "ACTIVE" || !listing.activeUntil || listing.activeUntil <= now) {
       throw new Error("Listing is not currently active for offers");
     }
 
-    // 2. Check blocks
-    const blockExists = await db
-      .select({ id: schema.blocks.blockerUserId })
-      .from(schema.blocks)
-      .where(
-        or(
-          and(
-            eq(schema.blocks.blockerUserId, offerorUserId),
-            eq(schema.blocks.blockedUserId, listing.ownerUserId)
-          ),
-          and(
-            eq(schema.blocks.blockerUserId, listing.ownerUserId),
-            eq(schema.blocks.blockedUserId, offerorUserId)
+    // Verify offeror email verification in production
+    if (process.env.NODE_ENV === "production") {
+      const userRows = await db
+        .select({ emailVerified: schema.users.emailVerified })
+        .from(schema.users)
+        .where(eq(schema.users.id, offerorUserId))
+        .limit(1);
+
+      if (userRows[0] && !userRows[0].emailVerified) {
+        throw new Error(
+          "Teklif verebilmek için önce e-posta adresinizi doğrulamanız gerekmektedir."
+        );
+      }
+    }
+
+    // 2. Check blocks and existing offers
+    if (isListingUuid) {
+      try {
+        const blockExists = await db
+          .select({ id: schema.blocks.blockerUserId })
+          .from(schema.blocks)
+          .where(
+            or(
+              and(
+                eq(schema.blocks.blockerUserId, offerorUserId),
+                eq(schema.blocks.blockedUserId, listing.ownerUserId)
+              ),
+              and(
+                eq(schema.blocks.blockerUserId, listing.ownerUserId),
+                eq(schema.blocks.blockedUserId, offerorUserId)
+              )
+            )
           )
-        )
-      )
-      .limit(1);
+          .limit(1);
 
-    if (blockExists.length > 0) {
-      throw new Error("Cannot submit an offer to this listing");
-    }
+        if (blockExists.length > 0) {
+          throw new Error("Cannot submit an offer to this listing");
+        }
 
-    // 3. Invariant checks for this offeror on this listing
-    const existingOffers = await db
-      .select()
-      .from(schema.offers)
-      .where(
-        and(
-          eq(schema.offers.listingId, listing.id),
-          eq(schema.offers.offerorUserId, offerorUserId)
-        )
+        const existingOffers = await db
+          .select()
+          .from(schema.offers)
+          .where(
+            and(eq(schema.offers.listingId, listing.id), eq(schema.offers.offerorUserId, offerorUserId))
+          );
+
+        // Rule A: Max 1 PENDING offer
+        const pendingOffer = existingOffers.find((o) => o.status === "PENDING");
+        if (pendingOffer) {
+          throw new Error("You already have an active pending offer on this listing");
+        }
+
+        // Rule B: If withdrawn during this same activation cycle, anti-spam rule prevents resubmission
+        const withdrawnInCycle = existingOffers.find(
+          (o) => o.status === "WITHDRAWN" && o.listingActivationSeq === listing.activationSeq
+        );
+        if (withdrawnInCycle) {
+          throw new Error(
+            "You cannot submit another offer after withdrawing during this activation cycle"
+          );
+        }
+      } catch (err) {
+        if (process.env.NODE_ENV === "production") throw err;
+        if (
+          err instanceof Error &&
+          (err.message.includes("Cannot submit an offer") ||
+            err.message.includes("already have an active") ||
+            err.message.includes("withdrawing during this activation"))
+        ) {
+          throw err;
+        }
+      }
+    } else {
+      const pendingMem = inMemorySentOffers.find(
+        (o) =>
+          o.offer.listingId === listing.id &&
+          o.offer.offerorUserId === offerorUserId &&
+          o.offer.status === "PENDING"
       );
-
-    // Rule A: Max 1 PENDING offer
-    const pendingOffer = existingOffers.find((o) => o.status === "PENDING");
-    if (pendingOffer) {
-      throw new Error("You already have an active pending offer on this listing");
-    }
-
-    // Rule B: If withdrawn during this same activation cycle, anti-spam rule prevents resubmission
-    const withdrawnInCycle = existingOffers.find(
-      (o) =>
-        o.status === "WITHDRAWN" &&
-        o.listingActivationSeq === listing.activationSeq
-    );
-    if (withdrawnInCycle) {
-      throw new Error(
-        "You cannot submit another offer after withdrawing during this activation cycle"
-      );
+      if (pendingMem) {
+        throw new Error("You already have an active pending offer on this listing");
+      }
     }
 
     // 4. Create offer and initial revision in a transaction
-    const newOffer = await db.transaction(async (tx) => {
-      const [insertedOffer] = await tx
-        .insert(schema.offers)
-        .values({
-          listingId: listing.id,
-          offerorUserId,
-          listingActivationSeq: listing.activationSeq,
-          status: "PENDING",
-          message: input.message,
-          budgetCurrency: input.budgetCurrency ?? null,
-          budgetMin: input.budgetMin ?? null,
-          budgetMax: input.budgetMax ?? null,
-          estimatedDurationValue: input.estimatedDurationValue ?? null,
-          estimatedDurationUnit: input.estimatedDurationUnit ?? null,
-        })
-        .returning();
+    let newOffer: typeof schema.offers.$inferSelect | null = null;
+    if (isListingUuid) {
+      try {
+        newOffer = await db.transaction(async (tx) => {
+          const [insertedOffer] = await tx
+            .insert(schema.offers)
+            .values({
+              listingId: listing.id,
+              offerorUserId,
+              listingActivationSeq: listing.activationSeq,
+              status: "PENDING",
+              message: input.message,
+              budgetCurrency: input.budgetCurrency ?? null,
+              budgetMin: input.budgetMin ?? null,
+              budgetMax: input.budgetMax ?? null,
+              estimatedDurationValue: input.estimatedDurationValue ?? null,
+              estimatedDurationUnit: input.estimatedDurationUnit ?? null,
+            })
+            .returning();
 
-      if (!insertedOffer) {
-        throw new Error("Failed to insert offer");
+          if (!insertedOffer) {
+            throw new Error("Failed to insert offer");
+          }
+
+          await tx.insert(schema.offerRevisions).values({
+            offerId: insertedOffer.id,
+            revisionNo: 1,
+            snapshotJson: {
+              message: input.message,
+              budgetCurrency: input.budgetCurrency ?? null,
+              budgetMin: input.budgetMin ?? null,
+              budgetMax: input.budgetMax ?? null,
+              estimatedDurationValue: input.estimatedDurationValue ?? null,
+              estimatedDurationUnit: input.estimatedDurationUnit ?? null,
+            },
+          });
+
+          return insertedOffer;
+        });
+      } catch (err: unknown) {
+        const errObj = err as { code?: string; message?: string };
+        if (
+          errObj?.code === "23505" ||
+          errObj?.message?.includes("offers_pending_unique_idx") ||
+          errObj?.message?.includes("unique constraint")
+        ) {
+          throw new Error("You already have an active pending offer on this listing", { cause: err });
+        }
+        if (process.env.NODE_ENV === "production") throw err;
       }
+    }
 
-      await tx.insert(schema.offerRevisions).values({
-        offerId: insertedOffer.id,
-        revisionNo: 1,
-        snapshotJson: {
-          message: input.message,
-          budgetCurrency: input.budgetCurrency ?? null,
-          budgetMin: input.budgetMin ?? null,
-          budgetMax: input.budgetMax ?? null,
-          estimatedDurationValue: input.estimatedDurationValue ?? null,
-          estimatedDurationUnit: input.estimatedDurationUnit ?? null,
+    if (!newOffer && process.env.NODE_ENV !== "production") {
+      newOffer = {
+        id: `offer-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        listingId: listing.id,
+        offerorUserId,
+        listingActivationSeq: listing.activationSeq,
+        status: "PENDING",
+        message: input.message,
+        budgetCurrency: input.budgetCurrency ?? null,
+        budgetMin: input.budgetMin ?? null,
+        budgetMax: input.budgetMax ?? null,
+        estimatedDurationValue: input.estimatedDurationValue ?? null,
+        estimatedDurationUnit: input.estimatedDurationUnit ?? null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        resolvedAt: null,
+        rejectionCode: null,
+        rejectionNote: null,
+      };
+    }
+
+    if (!newOffer) {
+      throw new Error("Failed to insert offer");
+    }
+
+    // Notify listing owner about the new proposal
+    if (newOffer) {
+      (async () => {
+        try {
+          const [ownerProfile] = await db
+            .select({ locale: schema.profiles.locale })
+            .from(schema.profiles)
+            .where(eq(schema.profiles.userId, listing.ownerUserId))
+            .limit(1);
+
+          const isEn = ownerProfile?.locale === "en";
+          await NotificationService.createNotification(
+            listing.ownerUserId,
+            "OFFER_RECEIVED",
+            "offer",
+            newOffer.id,
+            {
+              title: isEn ? "New Proposal Received" : "Yeni Teklif Alındı",
+              message: isEn
+                ? `A new proposal has been submitted for your project "${listing.title}".`
+                : `"${listing.title}" projeniz için yeni bir teklif iletildi.`,
+              actionUrl: isEn ? "/en/dashboard/offers/received" : "/tr/panel/teklifler/gelen",
+            }
+          );
+        } catch {
+          if (listing.ownerUserId === DEFAULT_USER.id) {
+            const isEn = DEFAULT_USER.profile.locale === "en";
+            NotificationService.createNotification(
+              DEFAULT_USER.id,
+              "OFFER_RECEIVED",
+              "offer",
+              newOffer.id,
+              {
+                title: isEn ? "New Proposal Received" : "Yeni Teklif Alındı",
+                message: isEn
+                  ? `A new proposal has been submitted for your project "${listing.title}".`
+                  : `"${listing.title}" projeniz için yeni bir teklif iletildi.`,
+                actionUrl: isEn ? "/en/dashboard/offers/received" : "/tr/panel/teklifler/gelen",
+              }
+            ).catch(() => {});
+          }
+        }
+      })().catch(() => {});
+    }
+
+    if (newOffer && process.env.NODE_ENV !== "production") {
+      inMemorySentOffers.unshift({
+        offer: newOffer,
+        listing: {
+          id: listing.id,
+          slug: listing.slug || `listing-${listing.id.slice(0, 8)}`,
+          title: listing.title || "Project Listing",
+          status: listing.status,
+          activeUntil: listing.activeUntil,
         },
       });
-
-      return insertedOffer;
-    });
+      inMemoryReceivedOffers.unshift({
+        offer: newOffer,
+        offerorProfile: {
+          userId: offerorUserId,
+          handle: "developer",
+          displayName: "Freelance Developer",
+        },
+        listing: {
+          id: listing.id,
+          slug: listing.slug || `listing-${listing.id.slice(0, 8)}`,
+          title: listing.title || "Project Listing",
+          status: listing.status,
+          activeUntil: listing.activeUntil,
+          ownerUserId: listing.ownerUserId,
+        },
+      });
+    }
 
     return newOffer;
   }
@@ -173,137 +428,266 @@ export class OfferService {
    */
   static async updateOffer(offerorUserId: string, rawInput: UpdateOfferInput) {
     const input = updateOfferSchema.parse(rawInput);
-    const db = getDb();
+    const isOfferUuid =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(input.offerId);
 
-    const offerRows = await db
-      .select()
-      .from(schema.offers)
-      .where(eq(schema.offers.id, input.offerId))
-      .limit(1);
+    if (isOfferUuid) {
+      try {
+        const db = getDb();
 
-    const offer = offerRows[0];
-    if (!offer) {
-      throw new Error("Offer not found");
-    }
+        const offerRows = await db
+          .select()
+          .from(schema.offers)
+          .where(eq(schema.offers.id, input.offerId))
+          .limit(1);
 
-    // Authorization
-    if (offer.offerorUserId !== offerorUserId) {
-      throw new Error("Unauthorized to edit this offer");
-    }
+        const offer = offerRows[0];
+      if (!offer) {
+        throw new Error("Offer not found");
+      }
 
-    if (offer.status !== "PENDING") {
-      throw new Error("Only pending offers can be edited");
-    }
+      // Authorization
+      if (offer.offerorUserId !== offerorUserId) {
+        throw new Error("Unauthorized to edit this offer");
+      }
 
-    // Check listing still active
-    const listingRows = await db
-      .select()
-      .from(schema.listings)
-      .where(eq(schema.listings.id, offer.listingId))
-      .limit(1);
+      if (offer.status !== "PENDING") {
+        throw new Error("Only pending offers can be edited");
+      }
 
-    const listing = listingRows[0];
-    if (!listing) {
-      throw new Error("Associated listing not found");
-    }
-
-    const now = new Date();
-    if (
-      listing.status !== "ACTIVE" ||
-      !listing.activeUntil ||
-      listing.activeUntil <= now
-    ) {
-      throw new Error("Associated listing is no longer active");
-    }
-
-    return await db.transaction(async (tx) => {
-      // Get highest revision number
-      const existingRevisions = await tx
-        .select({ revisionNo: schema.offerRevisions.revisionNo })
-        .from(schema.offerRevisions)
-        .where(eq(schema.offerRevisions.offerId, offer.id))
-        .orderBy(desc(schema.offerRevisions.revisionNo))
+      // Check listing still active
+      const listingRows = await db
+        .select()
+        .from(schema.listings)
+        .where(eq(schema.listings.id, offer.listingId))
         .limit(1);
 
-      const firstRev = existingRevisions[0];
-      const nextRevNo = firstRev ? firstRev.revisionNo + 1 : 1;
+      const listing = listingRows[0];
+      if (!listing) {
+        throw new Error("Associated listing not found");
+      }
 
-      await tx.insert(schema.offerRevisions).values({
-        offerId: offer.id,
-        revisionNo: nextRevNo,
-        snapshotJson: {
-          message: input.message,
-          budgetCurrency: input.budgetCurrency ?? null,
-          budgetMin: input.budgetMin ?? null,
-          budgetMax: input.budgetMax ?? null,
-          estimatedDurationValue: input.estimatedDurationValue ?? null,
-          estimatedDurationUnit: input.estimatedDurationUnit ?? null,
-        },
+      const now = new Date();
+      if (listing.status !== "ACTIVE" || !listing.activeUntil || listing.activeUntil <= now) {
+        throw new Error("Associated listing is no longer active");
+      }
+
+      return await db.transaction(async (tx) => {
+        // Get highest revision number
+        const existingRevisions = await tx
+          .select({ revisionNo: schema.offerRevisions.revisionNo })
+          .from(schema.offerRevisions)
+          .where(eq(schema.offerRevisions.offerId, offer.id))
+          .orderBy(desc(schema.offerRevisions.revisionNo))
+          .limit(1);
+
+        const firstRev = existingRevisions[0];
+        const nextRevNo = firstRev ? firstRev.revisionNo + 1 : 1;
+
+        await tx.insert(schema.offerRevisions).values({
+          offerId: offer.id,
+          revisionNo: nextRevNo,
+          snapshotJson: {
+            message: input.message,
+            budgetCurrency: input.budgetCurrency ?? null,
+            budgetMin: input.budgetMin ?? null,
+            budgetMax: input.budgetMax ?? null,
+            estimatedDurationValue: input.estimatedDurationValue ?? null,
+            estimatedDurationUnit: input.estimatedDurationUnit ?? null,
+          },
+        });
+
+        const [updatedOffer] = await tx
+          .update(schema.offers)
+          .set({
+            message: input.message,
+            budgetCurrency: input.budgetCurrency ?? null,
+            budgetMin: input.budgetMin ?? null,
+            budgetMax: input.budgetMax ?? null,
+            estimatedDurationValue: input.estimatedDurationValue ?? null,
+            estimatedDurationUnit: input.estimatedDurationUnit ?? null,
+            updatedAt: new Date(),
+          })
+          .where(eq(schema.offers.id, offer.id))
+          .returning();
+
+        return updatedOffer;
       });
+    } catch (err) {
+      if (process.env.NODE_ENV === "production") {
+        throw err;
+      }
+      if (
+        err instanceof Error &&
+        (err.message.includes("Offer not found") ||
+          err.message.includes("Unauthorized") ||
+          err.message.includes("Only pending") ||
+          err.message.includes("Associated listing"))
+      ) {
+        throw err;
+      }
+    }
+  }
 
-      const [updatedOffer] = await tx
-        .update(schema.offers)
-        .set({
-          message: input.message,
-          budgetCurrency: input.budgetCurrency ?? null,
-          budgetMin: input.budgetMin ?? null,
-          budgetMax: input.budgetMax ?? null,
-          estimatedDurationValue: input.estimatedDurationValue ?? null,
-          estimatedDurationUnit: input.estimatedDurationUnit ?? null,
-          updatedAt: new Date(),
-        })
-        .where(eq(schema.offers.id, offer.id))
-        .returning();
+    const item = inMemorySentOffers.find((o) => o.offer.id === input.offerId);
+    if (item) {
+      if (item.offer.offerorUserId !== offerorUserId) {
+        throw new Error("Unauthorized to edit this offer");
+      }
+      if (item.offer.status !== "PENDING") {
+        throw new Error("Only pending offers can be edited");
+      }
+      item.offer.message = input.message;
+      if (input.budgetCurrency !== undefined) item.offer.budgetCurrency = input.budgetCurrency;
+      if (input.budgetMin !== undefined) item.offer.budgetMin = input.budgetMin;
+      if (input.budgetMax !== undefined) item.offer.budgetMax = input.budgetMax;
+      if (input.estimatedDurationValue !== undefined)
+        item.offer.estimatedDurationValue = input.estimatedDurationValue;
+      if (input.estimatedDurationUnit !== undefined)
+        item.offer.estimatedDurationUnit = input.estimatedDurationUnit;
+      item.offer.updatedAt = new Date();
 
-      return updatedOffer;
-    });
+      const receivedItem = inMemoryReceivedOffers.find((r) => r.offer.id === input.offerId);
+      if (receivedItem) {
+        receivedItem.offer.message = input.message;
+        if (input.budgetCurrency !== undefined) receivedItem.offer.budgetCurrency = input.budgetCurrency;
+        if (input.budgetMin !== undefined) receivedItem.offer.budgetMin = input.budgetMin;
+        if (input.budgetMax !== undefined) receivedItem.offer.budgetMax = input.budgetMax;
+        if (input.estimatedDurationValue !== undefined)
+          receivedItem.offer.estimatedDurationValue = input.estimatedDurationValue;
+        if (input.estimatedDurationUnit !== undefined)
+          receivedItem.offer.estimatedDurationUnit = input.estimatedDurationUnit;
+        receivedItem.offer.updatedAt = new Date();
+      }
+
+      return item.offer;
+    }
+
+    throw new Error("Offer not found");
   }
 
   /**
    * Withdraws a pending offer by the offeror.
    */
   static async withdrawOffer(offerorUserId: string, offerId: string) {
-    try {
-      const db = getDb();
+    const isOfferUuid =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(offerId);
 
-      const offerRows = await db
-        .select()
-        .from(schema.offers)
-        .where(eq(schema.offers.id, offerId))
-        .limit(1);
+    if (isOfferUuid) {
+      try {
+        const db = getDb();
 
-      if (offerRows.length > 0) {
-        const offer = offerRows[0]!;
-
-        if (offer.offerorUserId !== offerorUserId) {
-          throw new Error("Unauthorized to withdraw this offer");
-        }
-
-        if (offer.status !== "PENDING") {
-          throw new Error("Only pending offers can be withdrawn");
-        }
-
-        const [withdrawn] = await db
-          .update(schema.offers)
-          .set({
-            status: "WITHDRAWN",
-            resolvedAt: new Date(),
-            updatedAt: new Date(),
-          })
+        const offerRows = await db
+          .select()
+          .from(schema.offers)
           .where(eq(schema.offers.id, offerId))
-          .returning();
+          .limit(1);
 
-        return withdrawn;
+        if (offerRows.length > 0) {
+          const offer = offerRows[0]!;
+
+          if (offer.offerorUserId !== offerorUserId) {
+            throw new Error("Unauthorized to withdraw this offer");
+          }
+
+          if (offer.status !== "PENDING") {
+            throw new Error("Only pending offers can be withdrawn");
+          }
+
+          const [withdrawn] = await db
+            .update(schema.offers)
+            .set({
+              status: "WITHDRAWN",
+              resolvedAt: new Date(),
+              updatedAt: new Date(),
+            })
+            .where(eq(schema.offers.id, offerId))
+            .returning();
+
+          if (withdrawn) {
+            try {
+              const [listingData] = await db
+                .select({
+                  ownerUserId: schema.listings.ownerUserId,
+                  title: schema.listings.title,
+                  locale: schema.profiles.locale,
+                })
+                .from(schema.listings)
+                .leftJoin(schema.profiles, eq(schema.listings.ownerUserId, schema.profiles.userId))
+                .where(eq(schema.listings.id, offer.listingId))
+                .limit(1);
+
+              if (listingData) {
+                const isEn = listingData.locale === "en";
+                await NotificationService.createNotification(
+                  listingData.ownerUserId,
+                  "OFFER_WITHDRAWN",
+                  "offer",
+                  offer.id,
+                  {
+                    title: isEn ? "Proposal Withdrawn" : "Teklif Geri Çekildi",
+                    message: isEn
+                      ? `A proposal on your project "${listingData.title}" was withdrawn.`
+                      : `"${listingData.title}" projenizdeki bir teklif geri çekildi.`,
+                    actionUrl: isEn ? "/en/dashboard/offers/received" : "/tr/panel/teklifler/gelen",
+                  }
+                );
+              }
+            } catch {
+              // non-blocking
+            }
+          }
+
+          return withdrawn;
+        }
+      } catch (err) {
+        if (process.env.NODE_ENV === "production") {
+          throw err;
+        }
+        if (
+          err instanceof Error &&
+          (err.message.includes("Unauthorized") || err.message.includes("Only pending"))
+        ) {
+          throw err;
+        }
+        // In-memory fallback
       }
-    } catch {
-      // In-memory fallback
     }
 
     const item = inMemorySentOffers.find((o) => o.offer.id === offerId);
     if (item) {
+      if (item.offer.offerorUserId !== offerorUserId) {
+        throw new Error("Unauthorized to withdraw this offer");
+      }
+      if (item.offer.status !== "PENDING") {
+        throw new Error("Only pending offers can be withdrawn");
+      }
       item.offer.status = "WITHDRAWN";
       item.offer.resolvedAt = new Date();
       item.offer.updatedAt = new Date();
+
+      const receivedItem = inMemoryReceivedOffers.find((r) => r.offer.id === offerId);
+      if (receivedItem) {
+        receivedItem.offer.status = "WITHDRAWN";
+        receivedItem.offer.resolvedAt = new Date();
+        receivedItem.offer.updatedAt = new Date();
+      }
+
+      const ownerUserId = (item.listing as { ownerUserId?: string })?.ownerUserId;
+      if (ownerUserId) {
+        NotificationService.createNotification(
+          ownerUserId,
+          "OFFER_WITHDRAWN",
+          "offer",
+          item.offer.id,
+          {
+            title: "Teklif Geri Çekildi",
+            message: `"${item.listing.title}" projenizdeki bir teklif geri çekildi.`,
+            actionUrl: "/tr/panel/teklifler/gelen",
+          }
+        ).catch(() => {});
+      }
+
       return item.offer;
     }
 
@@ -315,49 +699,120 @@ export class OfferService {
    */
   static async rejectOffer(listingOwnerUserId: string, rawInput: RejectOfferInput) {
     const input = rejectOfferSchema.parse(rawInput);
-    const db = getDb();
+    const isOfferUuid =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(input.offerId);
 
-    const offerRows = await db
-      .select({
-        offer: schema.offers,
-        listing: schema.listings,
-      })
-      .from(schema.offers)
-      .innerJoin(
-        schema.listings,
-        eq(schema.offers.listingId, schema.listings.id)
-      )
-      .where(eq(schema.offers.id, input.offerId))
-      .limit(1);
+    if (isOfferUuid) {
+      try {
+        const db = getDb();
 
-    const firstRow = offerRows[0];
-    if (!firstRow) {
-      throw new Error("Offer not found");
+        const offerRows = await db
+          .select({
+            offer: schema.offers,
+            listing: schema.listings,
+          })
+          .from(schema.offers)
+          .innerJoin(schema.listings, eq(schema.offers.listingId, schema.listings.id))
+          .where(eq(schema.offers.id, input.offerId))
+          .limit(1);
+
+        const firstRow = offerRows[0];
+        if (!firstRow) {
+          throw new Error("Offer not found");
+        }
+
+        const { offer, listing } = firstRow;
+
+        if (listing.ownerUserId !== listingOwnerUserId) {
+          throw new Error("Unauthorized to reject offers for this listing");
+        }
+
+        if (offer.status !== "PENDING") {
+          throw new Error("Only pending offers can be rejected");
+        }
+
+        const [rejected] = await db
+          .update(schema.offers)
+          .set({
+            status: "REJECTED",
+            rejectionCode: input.rejectionCode ?? null,
+            rejectionNote: input.rejectionNote ?? null,
+            resolvedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(schema.offers.id, input.offerId))
+          .returning();
+
+        if (rejected) {
+          try {
+            const [offerorProfile] = await db
+              .select({ locale: schema.profiles.locale })
+              .from(schema.profiles)
+              .where(eq(schema.profiles.userId, offer.offerorUserId))
+              .limit(1);
+
+            const isEn = offerorProfile?.locale === "en";
+            await NotificationService.createNotification(
+              offer.offerorUserId,
+              "OFFER_REJECTED",
+              "offer",
+              rejected.id,
+              {
+                title: isEn ? "Proposal Concluded" : "Teklifiniz Değerlendirildi",
+                message: isEn
+                  ? `Your proposal for "${listing.title}" has been concluded.`
+                  : `"${listing.title}" projesine sunduğunuz teklif sonuçlandırıldı.`,
+                actionUrl: isEn ? "/en/dashboard/offers/sent" : "/tr/panel/teklifler/gonderilen",
+              }
+            );
+          } catch {
+            // non-blocking
+          }
+        }
+
+        return rejected;
+      } catch (err) {
+        if (process.env.NODE_ENV === "production") {
+          throw err;
+        }
+        if (
+          err instanceof Error &&
+          (err.message.includes("Offer not found") ||
+            err.message.includes("Unauthorized") ||
+            err.message.includes("Only pending"))
+        ) {
+          throw err;
+        }
+      }
     }
 
-    const { offer, listing } = firstRow;
+    const item = inMemoryReceivedOffers.find((o) => o.offer.id === input.offerId);
+    if (item) {
+      if (item.listing.ownerUserId && item.listing.ownerUserId !== listingOwnerUserId) {
+        throw new Error("Unauthorized to reject offers for this listing");
+      }
+      if (item.offer.status !== "PENDING") {
+        throw new Error("Only pending offers can be rejected");
+      }
+      item.offer.status = "REJECTED";
+      item.offer.rejectionCode = input.rejectionCode ?? null;
+      item.offer.rejectionNote = input.rejectionNote ?? null;
+      item.offer.resolvedAt = new Date();
+      item.offer.updatedAt = new Date();
 
-    if (listing.ownerUserId !== listingOwnerUserId) {
-      throw new Error("Unauthorized to reject offers for this listing");
+      const sentItem = inMemorySentOffers.find((s) => s.offer.id === input.offerId);
+      if (sentItem) {
+        sentItem.offer.status = "REJECTED";
+        sentItem.offer.rejectionCode = input.rejectionCode ?? null;
+        sentItem.offer.rejectionNote = input.rejectionNote ?? null;
+        sentItem.offer.resolvedAt = new Date();
+        sentItem.offer.updatedAt = new Date();
+      }
+
+      return item.offer;
     }
 
-    if (offer.status !== "PENDING") {
-      throw new Error("Only pending offers can be rejected");
-    }
-
-    const [rejected] = await db
-      .update(schema.offers)
-      .set({
-        status: "REJECTED",
-        rejectionCode: input.rejectionCode ?? null,
-        rejectionNote: input.rejectionNote ?? null,
-        resolvedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(schema.offers.id, input.offerId))
-      .returning();
-
-    return rejected;
+    throw new Error("Offer not found");
   }
 
   /**
@@ -382,20 +837,20 @@ export class OfferService {
           },
         })
         .from(schema.offers)
-        .innerJoin(
-          schema.listings,
-          eq(schema.offers.listingId, schema.listings.id)
-        )
+        .innerJoin(schema.listings, eq(schema.offers.listingId, schema.listings.id))
         .where(eq(schema.offers.offerorUserId, offerorUserId))
         .orderBy(desc(schema.offers.createdAt));
 
       const rows = await query;
 
-      if (rows && rows.length > 0) {
-        if (!statusFilter || statusFilter === "all") return rows as SentOfferDto[];
-        return rows.filter((r) => r.offer.status.toLowerCase() === statusFilter.toLowerCase()) as SentOfferDto[];
-      }
+      if (!statusFilter || statusFilter === "all") return rows as SentOfferDto[];
+      return rows.filter(
+        (r) => r.offer.status.toLowerCase() === statusFilter.toLowerCase()
+      ) as SentOfferDto[];
     } catch {
+      if (process.env.NODE_ENV === "production") {
+        return [];
+      }
       // Fall through to in-memory fallback
     }
 
@@ -437,30 +892,30 @@ export class OfferService {
             status: schema.listings.status,
             activeUntil: schema.listings.activeUntil,
           },
+          engagementId: schema.engagements.id,
         })
         .from(schema.offers)
-        .innerJoin(
-          schema.listings,
-          eq(schema.offers.listingId, schema.listings.id)
-        )
-        .innerJoin(
-          schema.profiles,
-          eq(schema.offers.offerorUserId, schema.profiles.userId)
-        )
+        .innerJoin(schema.listings, eq(schema.offers.listingId, schema.listings.id))
+        .innerJoin(schema.profiles, eq(schema.offers.offerorUserId, schema.profiles.userId))
+        .leftJoin(schema.engagements, eq(schema.offers.id, schema.engagements.acceptedOfferId))
         .where(and(...conditions))
         .orderBy(desc(schema.offers.createdAt));
 
-      if (rows && rows.length > 0) {
-        return rows as ReceivedOfferDto[];
-      }
+      return rows as ReceivedOfferDto[];
     } catch {
+      if (process.env.NODE_ENV === "production") {
+        return [];
+      }
       // Fall through to in-memory fallback
     }
 
+    const filtered = inMemoryReceivedOffers.filter(
+      (r) => !r.listing.ownerUserId || r.listing.ownerUserId === listingOwnerUserId
+    );
     if (listingId) {
-      return inMemoryReceivedOffers.filter((r) => r.listing.id === listingId);
+      return filtered.filter((r) => r.listing.id === listingId);
     }
-    return inMemoryReceivedOffers;
+    return filtered;
   }
 
   /**
@@ -468,6 +923,29 @@ export class OfferService {
    * the offeror or the listing owner (preventing IDOR).
    */
   static async getOfferById(viewerUserId: string, offerId: string) {
+    const isOfferUuid =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(offerId);
+
+    if (!isOfferUuid) {
+      const sent = inMemorySentOffers.find((s) => s.offer.id === offerId);
+      if (sent) {
+        const ownerId = (sent.listing as { ownerUserId?: string }).ownerUserId;
+        if (sent.offer.offerorUserId !== viewerUserId && ownerId && ownerId !== viewerUserId) {
+          return null;
+        }
+        return {
+          offer: sent.offer,
+          listing: sent.listing as unknown as typeof schema.listings.$inferSelect,
+          offerorProfile: {
+            userId: sent.offer.offerorUserId,
+            handle: "demokullanici",
+            displayName: "Demir Yıldız",
+          } as unknown as typeof schema.profiles.$inferSelect,
+        };
+      }
+      return null;
+    }
+
     const db = getDb();
 
     const rows = await db
@@ -477,14 +955,8 @@ export class OfferService {
         offerorProfile: schema.profiles,
       })
       .from(schema.offers)
-      .innerJoin(
-        schema.listings,
-        eq(schema.offers.listingId, schema.listings.id)
-      )
-      .innerJoin(
-        schema.profiles,
-        eq(schema.offers.offerorUserId, schema.profiles.userId)
-      )
+      .innerJoin(schema.listings, eq(schema.offers.listingId, schema.listings.id))
+      .innerJoin(schema.profiles, eq(schema.offers.offerorUserId, schema.profiles.userId))
       .where(eq(schema.offers.id, offerId))
       .limit(1);
 
@@ -492,13 +964,299 @@ export class OfferService {
     if (!row) return null;
 
     // Access control: only offeror or listing owner
-    if (
-      row.offer.offerorUserId !== viewerUserId &&
-      row.listing.ownerUserId !== viewerUserId
-    ) {
+    if (row.offer.offerorUserId !== viewerUserId && row.listing.ownerUserId !== viewerUserId) {
       return null;
     }
 
     return row;
+  }
+
+  /**
+   * Submits batch proposals across multiple listings (max 5) with RFC 7807 / Envelope Multi-Status
+   * response format, individual isolated sub-transactions, and idempotency protection.
+   */
+  static async batchSubmitOffers(
+    offerorUserId: string,
+    rawInput: BatchSubmitOffersInput,
+    locale?: string
+  ) {
+    const input = batchSubmitOffersSchema.parse(rawInput);
+    const isEn = locale === "en";
+
+    if (input.items.length > 1 && input.capacityConfirmed === false) {
+      throw new Error(
+        isEn
+          ? "You must confirm your delivery capacity when submitting multiple proposals simultaneously."
+          : "Birden fazla projeye aynı anda teklif verirken teslimat kapasitenizi onaylamanız gerekmektedir."
+      );
+    }
+
+    if (input.idempotencyKey) {
+      const cached = inMemoryBatchIdempotencyStore.get(`${offerorUserId}:${input.idempotencyKey}`);
+      if (cached) {
+        return cached;
+      }
+    }
+
+    const batchId = crypto.randomUUID();
+    const results: BatchOfferResultItem[] = [];
+
+    for (const item of input.items) {
+      try {
+        const offer = await OfferService.submitOffer(offerorUserId, item);
+        results.push({
+          listingId: item.listingId,
+          status: "SUCCESS",
+          offerId: offer.id,
+          offer,
+        });
+      } catch (err: unknown) {
+        const rawMessage = err instanceof Error ? err.message : "Teklif iletilemedi";
+        let code = "SUBMISSION_FAILED";
+        let message: string;
+
+        if (rawMessage.includes("own listing") || rawMessage.includes("Kendi ilanınıza")) {
+          code = "SELF_BIDDING_PROHIBITED";
+          message = isEn
+            ? "You cannot submit an offer on your own listing."
+            : "Kendi ilanınıza teklif veremezsiniz.";
+        } else if (
+          rawMessage.includes("active for offers") ||
+          rawMessage.includes("teklif kabul etmiyor")
+        ) {
+          code = "LISTING_NOT_ACTIVE";
+          message = isEn
+            ? "Listing is not currently active for offers."
+            : "İlan şu anda teklif kabul etmiyor veya süresi dolmuş.";
+        } else if (
+          rawMessage.includes("Cannot submit an offer to this listing") ||
+          rawMessage.includes("engelleme kısıtı")
+        ) {
+          code = "USER_BLOCKED";
+          message = isEn
+            ? "Cannot submit an offer to this listing."
+            : "Bu ilana teklif verilemez (engelleme kısıtı).";
+        } else if (
+          rawMessage.includes("already have an active pending offer") ||
+          rawMessage.includes("bekleyen bir teklifiniz")
+        ) {
+          code = "ALREADY_OFFERED";
+          message = isEn
+            ? "You already have an active pending offer on this listing."
+            : "Bu ilana yönelik zaten aktif ve bekleyen bir teklifiniz bulunmaktadır.";
+        } else if (
+          rawMessage.includes("withdrawing during this activation cycle") ||
+          rawMessage.includes("teklifinizi geri çektiğiniz")
+        ) {
+          code = "WITHDRAWN_IN_CYCLE";
+          message = isEn
+            ? "You cannot submit another offer after withdrawing during this activation cycle."
+            : "Bu yayın döngüsünde teklifinizi geri çektiğiniz için yeni bir teklif iletemezsiniz.";
+        } else if (
+          rawMessage.includes("doğrulamanız gerekmektedir") ||
+          rawMessage.includes("verify your email")
+        ) {
+          code = "EMAIL_VERIFICATION_REQUIRED";
+          message = isEn
+            ? "You must verify your email address before submitting an offer."
+            : "Teklif verebilmek için önce e-posta adresinizi doğrulamanız gerekmektedir.";
+        } else {
+          message = rawMessage;
+        }
+
+        results.push({
+          listingId: item.listingId,
+          status: "FAILED",
+          code,
+          message,
+        });
+      }
+    }
+
+    const succeededCount = results.filter((r) => r.status === "SUCCESS").length;
+    const failedCount = results.filter((r) => r.status === "FAILED").length;
+
+    const response: BatchOfferResponse = {
+      batchId,
+      total: results.length,
+      succeededCount,
+      failedCount,
+      results,
+    };
+
+    if (input.idempotencyKey) {
+      inMemoryBatchIdempotencyStore.set(`${offerorUserId}:${input.idempotencyKey}`, response);
+    }
+
+    return response;
+  }
+
+  /**
+   * Retrieves quick offer templates for a user. Provides defaults if none configured yet.
+   */
+  static getUserOfferTemplates(userId: string, locale?: string): OfferTemplateDto[] {
+    const existing = inMemoryOfferTemplates.get(userId);
+    if (existing === undefined) {
+      const defaults = DEFAULT_STARTER_TEMPLATES(userId, locale);
+      inMemoryOfferTemplates.set(userId, [...defaults]);
+      return defaults;
+    }
+
+    // If user has not created custom templates and only holds default starter templates,
+    // adapt them to the requested locale dynamically.
+    if (existing.length > 0 && existing.every((t) => t.id.startsWith("default-"))) {
+      const isEn = locale === "en";
+      const isCurrentEn = existing[0]?.budgetCurrency === "USD";
+      if (isEn !== isCurrentEn) {
+        const defaults = DEFAULT_STARTER_TEMPLATES(userId, locale);
+        inMemoryOfferTemplates.set(userId, [...defaults]);
+        return defaults;
+      }
+    }
+
+    return existing;
+  }
+
+  /**
+   * Creates or updates a quick offer template for a user.
+   */
+  static saveOfferTemplate(userId: string, rawInput: OfferTemplateInput): OfferTemplateDto {
+    const input = offerTemplateSchema.parse(rawInput);
+    const templates = OfferService.getUserOfferTemplates(userId);
+
+    const templateId = input.id || crypto.randomUUID();
+    const newTemplate: OfferTemplateDto = {
+      id: templateId,
+      userId,
+      name: input.name,
+      message: input.message,
+      budgetCurrency: input.budgetCurrency ?? null,
+      budgetMin: input.budgetMin ?? null,
+      budgetMax: input.budgetMax ?? null,
+      estimatedDurationValue: input.estimatedDurationValue ?? null,
+      estimatedDurationUnit: input.estimatedDurationUnit ?? null,
+      createdAt: new Date(),
+    };
+
+    const existingIndex = templates.findIndex((t) => t.id === templateId);
+    if (existingIndex >= 0) {
+      templates[existingIndex] = newTemplate;
+    } else {
+      templates.push(newTemplate);
+    }
+    inMemoryOfferTemplates.set(userId, templates);
+    return newTemplate;
+  }
+
+  /**
+   * Deletes a quick offer template for a user.
+   */
+  static deleteOfferTemplate(userId: string, templateId: string): boolean {
+    const templates = OfferService.getUserOfferTemplates(userId);
+    const exists = templates.some((t) => t.id === templateId);
+    if (!exists) {
+      return false;
+    }
+    const filtered = templates.filter((t) => t.id !== templateId);
+    inMemoryOfferTemplates.set(userId, filtered);
+    return true;
+  }
+
+  /**
+   * Retrieves quick offer templates with database persistence and starter fallback.
+   */
+  static async getUserOfferTemplatesAsync(userId: string, locale?: string): Promise<OfferTemplateDto[]> {
+    const isUserUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
+    if (isUserUuid) {
+      try {
+        const db = getDb();
+        const rows = await db
+          .select()
+          .from(schema.offerTemplates)
+          .where(eq(schema.offerTemplates.userId, userId))
+          .orderBy(desc(schema.offerTemplates.createdAt));
+
+        if (rows.length > 0) {
+          return rows.map((r) => ({
+            id: r.id,
+            userId: r.userId,
+            name: r.name,
+            message: r.message,
+            budgetCurrency:
+              (r.budgetCurrency as "TRY" | "USD" | "EUR" | "GBP" | null) || null,
+            budgetMin: r.budgetMin,
+            budgetMax: r.budgetMax,
+            estimatedDurationValue: r.estimatedDurationValue,
+            estimatedDurationUnit:
+              (r.estimatedDurationUnit as "DAYS" | "WEEKS" | "MONTHS" | null) || null,
+            createdAt: r.createdAt,
+          }));
+        }
+      } catch {
+        // fall back to in-memory/starter
+      }
+    }
+    return OfferService.getUserOfferTemplates(userId, locale);
+  }
+
+  /**
+   * Saves or updates a quick offer template with database persistence.
+   */
+  static async saveOfferTemplateAsync(userId: string, rawInput: OfferTemplateInput): Promise<OfferTemplateDto> {
+    const template = OfferService.saveOfferTemplate(userId, rawInput);
+    const isUserUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
+    if (isUserUuid) {
+      try {
+        const db = getDb();
+        await db
+          .insert(schema.offerTemplates)
+          .values({
+            id: template.id,
+            userId,
+            name: template.name,
+            message: template.message,
+            budgetCurrency: template.budgetCurrency,
+            budgetMin: template.budgetMin,
+            budgetMax: template.budgetMax,
+            estimatedDurationValue: template.estimatedDurationValue,
+            estimatedDurationUnit: template.estimatedDurationUnit,
+          })
+          .onConflictDoUpdate({
+            target: schema.offerTemplates.id,
+            set: {
+              name: template.name,
+              message: template.message,
+              budgetCurrency: template.budgetCurrency,
+              budgetMin: template.budgetMin,
+              budgetMax: template.budgetMax,
+              estimatedDurationValue: template.estimatedDurationValue,
+              estimatedDurationUnit: template.estimatedDurationUnit,
+              updatedAt: new Date(),
+            },
+          });
+      } catch {
+        // in-memory fallback already set
+      }
+    }
+    return template;
+  }
+
+  /**
+   * Deletes a quick offer template from the database and memory.
+   */
+  static async deleteOfferTemplateAsync(userId: string, templateId: string): Promise<boolean> {
+    const deleted = OfferService.deleteOfferTemplate(userId, templateId);
+    const isUserUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
+    if (isUserUuid) {
+      try {
+        const db = getDb();
+        await db
+          .delete(schema.offerTemplates)
+          .where(and(eq(schema.offerTemplates.id, templateId), eq(schema.offerTemplates.userId, userId)));
+      } catch {
+        // in-memory fallback already set
+      }
+    }
+    return deleted;
   }
 }

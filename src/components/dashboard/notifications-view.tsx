@@ -5,11 +5,12 @@ import Link from "next/link";
 import { Bell, Inbox, Send, Handshake, CheckCheck } from "lucide-react";
 import { Button } from "../ui/button";
 import { EmptyState } from "../ui/empty-state";
+import { getAlternateLocalePath } from "@/src/lib/i18n/routes";
 
 export interface NotificationItem {
   id: string;
   type: string;
-  payloadJson: any;
+  payloadJson: Record<string, unknown>;
   readAt: string | Date | null;
   createdAt: string | Date;
 }
@@ -37,17 +38,32 @@ export function NotificationsView({ initialNotifications, locale }: Notification
     try {
       await fetch("/api/notifications", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "markAllRead" }),
+        headers: { "Content-Type": "application/json", "x-locale": locale },
+        body: JSON.stringify({ action: "markAllRead", locale }),
       });
-
-      setNotifications((prev) =>
-        prev.map((n) => ({ ...n, readAt: new Date().toISOString() }))
-      );
+      const now = new Date();
+      setNotifications((prev) => prev.map((n) => ({ ...n, readAt: n.readAt || now })));
     } catch {
-      // Fallback
+      // ignore
     } finally {
       setIsMarkingAll(false);
+    }
+  };
+
+  const handleNotificationClick = async (id: string, isUnread: boolean) => {
+    if (!isUnread) return;
+    try {
+      await fetch("/api/notifications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-locale": locale },
+        body: JSON.stringify({ notificationId: id, locale }),
+      });
+      const now = new Date().toISOString();
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, readAt: n.readAt || now } : n))
+      );
+    } catch {
+      // ignore
     }
   };
 
@@ -55,8 +71,8 @@ export function NotificationsView({ initialNotifications, locale }: Notification
     try {
       await fetch("/api/notifications", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ notificationId: id }),
+        headers: { "Content-Type": "application/json", "x-locale": locale },
+        body: JSON.stringify({ notificationId: id, locale }),
       });
 
       setNotifications((prev) =>
@@ -151,9 +167,18 @@ export function NotificationsView({ initialNotifications, locale }: Notification
               timeStyle: "short",
             });
 
-            const title = item.payloadJson?.title || (isTr ? "Operis Bildirimi" : "Operis Alert");
-            const message = item.payloadJson?.message || "";
-            const actionUrl = item.payloadJson?.actionUrl;
+            const title = String(
+              item.payloadJson?.title || (isTr ? "Operis Bildirimi" : "Operis Alert")
+            );
+            const message = item.payloadJson?.message ? String(item.payloadJson.message) : "";
+            const rawActionUrl = item.payloadJson?.actionUrl
+              ? String(item.payloadJson.actionUrl)
+              : null;
+            const actionUrl = rawActionUrl
+              ? isTr
+                ? rawActionUrl
+                : getAlternateLocalePath(rawActionUrl, "en")
+              : null;
 
             return (
               <div
@@ -176,10 +201,15 @@ export function NotificationsView({ initialNotifications, locale }: Notification
                         {title}
                       </h3>
                       {isUnread && (
-                        <span className="h-2 w-2 rounded-full bg-blue-500 shrink-0" aria-label="Yeni" />
+                        <span
+                          className="h-2 w-2 rounded-full bg-blue-500 shrink-0"
+                          aria-label="Yeni"
+                        />
                       )}
                     </div>
-                    <span className="text-[11px] text-[var(--color-text-tertiary)] shrink-0">{dateStr}</span>
+                    <span className="text-[11px] text-[var(--color-text-tertiary)] shrink-0">
+                      {dateStr}
+                    </span>
                   </div>
 
                   {message && (
@@ -190,7 +220,10 @@ export function NotificationsView({ initialNotifications, locale }: Notification
 
                   {actionUrl && (
                     <div className="pt-2">
-                      <Link href={actionUrl}>
+                      <Link
+                        href={actionUrl}
+                        onClick={() => handleNotificationClick(item.id, isUnread)}
+                      >
                         <Button variant="secondary" size="sm" className="text-xs h-7 px-3">
                           {isTr ? "Detayları Görüntüle →" : "View Details →"}
                         </Button>

@@ -20,13 +20,33 @@ export interface DatePickerProps {
 }
 
 const MONTH_NAMES_TR = [
-  "Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran",
-  "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"
+  "Ocak",
+  "Şubat",
+  "Mart",
+  "Nisan",
+  "Mayıs",
+  "Haziran",
+  "Temmuz",
+  "Ağustos",
+  "Eylül",
+  "Ekim",
+  "Kasım",
+  "Aralık",
 ];
 
 const MONTH_NAMES_EN = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December"
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
 ];
 
 const WEEKDAY_NAMES_TR = ["Pt", "Sa", "Ça", "Pe", "Cu", "Ct", "Pa"];
@@ -304,7 +324,11 @@ export function DatePicker({
                 className="h-8 px-2 rounded-lg text-xs font-semibold bg-[var(--bg-elevated)] text-[var(--text-primary)] border border-[var(--border-subtle)] hover:border-[var(--border-strong)] focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors cursor-pointer"
               >
                 {monthNames.map((m, idx) => (
-                  <option key={m} value={idx} className="bg-[var(--bg-surface)] text-[var(--text-primary)]">
+                  <option
+                    key={m}
+                    value={idx}
+                    className="bg-[var(--bg-surface)] text-[var(--text-primary)]"
+                  >
                     {m}
                   </option>
                 ))}
@@ -316,7 +340,11 @@ export function DatePicker({
                 className="h-8 px-2 rounded-lg text-xs font-semibold bg-[var(--bg-elevated)] text-[var(--text-primary)] border border-[var(--border-subtle)] hover:border-[var(--border-strong)] focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors cursor-pointer"
               >
                 {years.map((y) => (
-                  <option key={y} value={y} className="bg-[var(--bg-surface)] text-[var(--text-primary)]">
+                  <option
+                    key={y}
+                    value={y}
+                    className="bg-[var(--bg-surface)] text-[var(--text-primary)]"
+                  >
                     {y}
                   </option>
                 ))}
@@ -336,10 +364,7 @@ export function DatePicker({
           {/* Weekdays Row */}
           <div className="relative z-10 grid grid-cols-7 gap-1 text-center mb-1">
             {weekdayNames.map((wd) => (
-              <div
-                key={wd}
-                className="text-[11px] font-semibold text-[var(--text-muted)] py-1"
-              >
+              <div key={wd} className="text-[11px] font-semibold text-[var(--text-muted)] py-1">
                 {wd}
               </div>
             ))}
@@ -364,8 +389,12 @@ export function DatePicker({
                     clsx(
                       "h-8 w-8 text-xs font-medium rounded-lg flex items-center justify-center transition-all duration-150 cursor-pointer",
                       monthOffset !== 0 && "text-[var(--text-muted)] opacity-35 hover:opacity-80",
-                      monthOffset === 0 && !isSelected && "text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] hover:text-blue-500",
-                      isToday && !isSelected && "border border-blue-500/60 text-blue-500 font-semibold bg-blue-500/10",
+                      monthOffset === 0 &&
+                        !isSelected &&
+                        "text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] hover:text-blue-500",
+                      isToday &&
+                        !isSelected &&
+                        "border border-blue-500/60 text-blue-500 font-semibold bg-blue-500/10",
                       isSelected &&
                         "bg-blue-600 text-white font-bold shadow-md shadow-blue-500/30 scale-105"
                     )
@@ -397,9 +426,7 @@ export function DatePicker({
         </div>
       )}
 
-      {hint && !error && (
-        <p className="text-xs text-[var(--color-text-tertiary)]">{hint}</p>
-      )}
+      {hint && !error && <p className="text-xs text-[var(--color-text-tertiary)]">{hint}</p>}
       {error && (
         <p className="text-xs text-[var(--color-danger)] font-medium" role="alert">
           {error}

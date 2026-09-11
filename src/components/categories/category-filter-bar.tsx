@@ -120,9 +120,9 @@ export function CategoryFilterBar({
 
   // Featured categories for the primary horizontal rail
   const railCategories = useMemo(() => {
-    return FEATURED_RAIL_SLUGS.map((slug) =>
-      categories.find((c) => c.slug === slug)
-    ).filter((c): c is CategoryDto => Boolean(c));
+    return FEATURED_RAIL_SLUGS.map((slug) => categories.find((c) => c.slug === slug)).filter(
+      (c): c is CategoryDto => Boolean(c)
+    );
   }, [categories]);
 
   // Categories filtered inside the popover/modal
@@ -245,7 +245,9 @@ export function CategoryFilterBar({
             onClick={() => setModalOpen(true)}
             className="rounded-xl border border-dashed border-[var(--color-border-strong)] bg-[var(--color-surface-base)]/40 px-3 py-1.5 text-xs font-medium text-blue-400 hover:border-blue-500 hover:bg-blue-500/10 shrink-0 transition-all cursor-pointer inline-flex items-center gap-1"
           >
-            <span>+{categories.length - railCategories.length} {isTr ? "daha..." : "more..."}</span>
+            <span>
+              +{categories.length - railCategories.length} {isTr ? "daha..." : "more..."}
+            </span>
           </button>
         </div>
       </div>
@@ -401,7 +403,9 @@ export function CategoryFilterBar({
                               <div className="truncate pr-2">
                                 <span className="font-medium text-xs">{cat.name}</span>
                               </div>
-                              {isSelected && <Check className="h-3.5 w-3.5 text-blue-400 shrink-0" />}
+                              {isSelected && (
+                                <Check className="h-3.5 w-3.5 text-blue-400 shrink-0" />
+                              )}
                             </Link>
                           );
                         })}

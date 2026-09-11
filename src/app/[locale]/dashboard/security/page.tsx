@@ -4,8 +4,11 @@ import { redirect } from "next/navigation";
 import { setRequestLocale } from "next-intl/server";
 import { Shield, ArrowLeft } from "lucide-react";
 import { getSession } from "@/src/modules/auth/session";
+import { getDb, schema } from "@/src/lib/db";
+import { eq } from "drizzle-orm";
 import { SecuritySettingsView } from "@/src/components/security/security-settings-view";
 import { DashboardTabs } from "@/src/components/dashboard/dashboard-tabs";
+import { DEFAULT_USER } from "@/src/modules/auth/demo-user";
 
 export async function generateMetadata({
   params,
@@ -43,6 +46,27 @@ export default async function DashboardSecurityPage({
     redirect(isTr ? "/tr/giris" : "/en/login");
   }
 
+  let twoFactorEnabled = false;
+  try {
+    const db = getDb();
+    const [userRow] = await db
+      .select({ twoFactorEnabled: schema.users.twoFactorEnabled })
+      .from(schema.users)
+      .where(eq(schema.users.id, session.userId))
+      .limit(1);
+    if (userRow) {
+      twoFactorEnabled = Boolean(userRow.twoFactorEnabled);
+    } else if (session.userId === DEFAULT_USER.id) {
+      twoFactorEnabled = Boolean(DEFAULT_USER.twoFactorEnabled);
+    }
+  } catch {
+    if (session.userId === DEFAULT_USER.id) {
+      twoFactorEnabled = Boolean(DEFAULT_USER.twoFactorEnabled);
+    } else {
+      twoFactorEnabled = false;
+    }
+  }
+
   return (
     <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-8">
       {/* Header */}
@@ -74,7 +98,7 @@ export default async function DashboardSecurityPage({
       <DashboardTabs locale={locale} />
 
       {/* Security View */}
-      <SecuritySettingsView locale={locale} twoFactorEnabled={false} />
+      <SecuritySettingsView locale={locale} twoFactorEnabled={twoFactorEnabled} />
     </main>
   );
 }

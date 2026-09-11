@@ -63,7 +63,11 @@ describe("AdminService Enterprise Operations", () => {
     const threats = await AdminService.getSecurityThreats({ status: "ALL" });
     expect(threats.length).toBeGreaterThan(0);
 
-    const blocked = await AdminService.blockIp("admin_123", "203.0.113.19", "Brute-force saldırısı");
+    const blocked = await AdminService.blockIp(
+      "admin_123",
+      "203.0.113.19",
+      "Brute-force saldırısı"
+    );
     expect(blocked).toBe(true);
 
     const unblocked = await AdminService.unblockIp("admin_123", "203.0.113.19");

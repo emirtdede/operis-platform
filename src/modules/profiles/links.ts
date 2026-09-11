@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { EMOJI_REGEX } from "@/scripts/check-emojis";
+import { EMOJI_REGEX } from "@/src/lib/security/content-moderator";
 
 export const ALLOWED_LINK_TYPES = [
   "website",
@@ -9,6 +9,10 @@ export const ALLOWED_LINK_TYPES = [
   "stackoverflow",
   "behance",
   "dribbble",
+  "figma",
+  "medium",
+  "twitter",
+  "portfolio",
   "x",
   "youtube",
   "other",

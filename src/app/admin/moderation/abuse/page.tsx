@@ -5,7 +5,8 @@ import { AlertTriangle } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "Kullanıcı İhlalleri & Şikayet Yönetimi | Operis Admin",
-  description: "Kullanıcıların uygunsuz davranışları, küfür/hakaret filtre bildirimleri ve şikayet denetim motoru.",
+  description:
+    "Kullanıcıların uygunsuz davranışları, küfür/hakaret filtre bildirimleri ve şikayet denetim motoru.",
 };
 
 export const dynamic = "force-dynamic";
@@ -25,7 +26,8 @@ export default async function AdminAbuseModerationPage() {
             </span>
           </h1>
           <p className="text-xs text-slate-400 mt-1">
-            Kullanıcıların küfür/hakaret, spam ve uygunsuz davranış ihlallerini anlık inceleyin, uyarın veya hesapları tek tıkla askıya alın.
+            Kullanıcıların küfür/hakaret, spam ve uygunsuz davranış ihlallerini anlık inceleyin,
+            uyarın veya hesapları tek tıkla askıya alın.
           </p>
         </div>
       </div>

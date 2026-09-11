@@ -7,6 +7,8 @@ import { Locale } from "@/src/lib/i18n/config";
 import { getLocalizedRoute, getLocalizedLegalPath } from "@/src/lib/i18n/routes";
 import { BrandLogo } from "./brand-logo";
 import { FooterQuickSettings } from "./footer-quick-settings";
+import { openCookiePreferences } from "@/src/components/legal/cookie-consent-modal";
+import { VelliumLogo } from "./vellium-logo";
 
 export function Footer() {
   const t = useTranslations("footer");
@@ -52,24 +54,32 @@ export function Footer() {
       label: isTr ? "İletişim & Destek" : "Contact & Support",
     },
     {
-      href: isTr ? "/tr/akis?category=fullstack-development" : "/en/feed?category=fullstack-development",
+      href: `${getLocalizedRoute("about", locale)}#zero-commission`,
       label: isTr ? "%0 Komisyon Modeli" : "0% Escrow Cut Model",
     },
     {
-      href: isTr ? "/tr/akis" : "/en/feed",
+      href: `${getLocalizedRoute("about", locale)}#encrypted-offers`,
       label: isTr ? "AES-256 Şifreli Teklifler" : "AES-256 Blind Offers",
     },
     {
-      href: isTr ? "/tr/akis" : "/en/feed",
+      href: `${getLocalizedRoute("about", locale)}#freshness-radar`,
       label: isTr ? "1 Haftalık Canlılık Radarı" : "1-Week Freshness Radar",
     },
     {
       href: getLocalizedRoute("report", locale),
       label: isTr ? "Kötüye Kullanım Bildir" : "Report Abuse",
     },
+    {
+      href: getLocalizedRoute("brand", locale),
+      label: isTr ? "Marka & Medya Kiti" : "Brand & Media Kit",
+    },
   ];
 
   const legalLinks = [
+    {
+      href: getLocalizedRoute("legalCenter", locale),
+      label: isTr ? "Yasal & Güven Merkezi" : "Legal & Trust Center",
+    },
     { href: getLocalizedLegalPath("terms", locale), label: legal("terms.title") },
     { href: getLocalizedLegalPath("privacy", locale), label: legal("privacy.title") },
     { href: getLocalizedLegalPath("matching-disclaimer", locale), label: legal("matching.title") },
@@ -86,9 +96,12 @@ export function Footer() {
     >
       {/* Top Ambient Glow Line */}
       <div className="absolute top-0 left-1/4 right-1/4 h-[1px] bg-gradient-to-r from-transparent via-blue-500/35 to-transparent" />
-      
+
       {/* Subtle Background Radial Glow */}
-      <div className="pointer-events-none absolute bottom-0 left-1/2 -translate-x-1/2 w-[700px] h-[260px] bg-gradient-to-t from-blue-500/10 via-indigo-500/5 to-transparent blur-3xl rounded-full" aria-hidden="true" />
+      <div
+        className="pointer-events-none absolute bottom-0 left-1/2 -translate-x-1/2 w-[700px] h-[260px] bg-gradient-to-t from-blue-500/10 via-indigo-500/5 to-transparent blur-3xl rounded-full"
+        aria-hidden="true"
+      />
 
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 w-full py-10 sm:py-14 space-y-10 sm:space-y-12 relative z-10">
         {/* Balanced 4 Equal Columns Grid */}
@@ -160,41 +173,77 @@ export function Footer() {
                   </Link>
                 </li>
               ))}
+              <li>
+                <button
+                  type="button"
+                  onClick={openCookiePreferences}
+                  className="hover:text-[var(--color-text-primary)] hover:translate-x-0.5 transition-all inline-block text-[var(--color-text-secondary)] text-left cursor-pointer"
+                >
+                  {isTr ? "Çerez Tercihleri" : "Cookie Preferences"}
+                </button>
+              </li>
             </ul>
           </div>
         </div>
 
         {/* Clean Sub-Footer Bar Without Duplicated Legal Links */}
-        <div className="border-t border-[var(--color-border-subtle)] pt-6 flex items-center justify-between gap-4 text-xs text-[var(--color-text-tertiary)]">
-          <p>
+        <div className="border-t border-[var(--color-border-subtle)] pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[var(--color-text-tertiary)]">
+          <p className="order-1 text-center sm:text-left">
             © {currentYear} {common("appName")}. {t("rights")}
           </p>
 
-          {/* Frameless Icon-Only Quick Settings */}
-          <FooterQuickSettings />
+          <div className="order-2 flex flex-wrap items-center justify-center sm:justify-end gap-3 sm:gap-5">
+            {/* Frameless Icon-Only Quick Settings */}
+            <FooterQuickSettings />
+
+            {/* Subtle Divider */}
+            <div
+              className="hidden sm:block h-3.5 w-[1px] bg-[var(--color-border-subtle)]"
+              aria-hidden="true"
+            />
+
+            {/* Designed & Developed by Vellium Signature */}
+            <a
+              href="https://vellium.dev/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] transition-colors group py-0.5"
+              title="Designed & Developed by Vellium"
+            >
+              <VelliumLogo className="h-3.5 w-auto text-[var(--color-text-secondary)] group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors shrink-0" />
+              <span>
+                Designed &amp; Developed by{" "}
+                <span className="font-semibold text-[var(--color-text-secondary)] group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors">
+                  Vellium
+                </span>
+              </span>
+            </a>
+          </div>
         </div>
       </div>
 
-      {/* Massive Modern Operis Watermark Logo at Base */}
+      {/* Massive Official Operis Watermark Logo at Base */}
       <div className="relative w-full flex justify-center items-end overflow-hidden pointer-events-none select-none -mt-6 sm:-mt-8">
         <div
           className="w-full max-w-7xl px-4 sm:px-6 lg:px-8 flex justify-center"
           style={{
-            maskImage: "linear-gradient(to bottom, rgba(0,0,0,0.85) 15%, rgba(0,0,0,0.12) 80%, transparent 100%)",
-            WebkitMaskImage: "linear-gradient(to bottom, rgba(0,0,0,0.85) 15%, rgba(0,0,0,0.12) 80%, transparent 100%)",
+            maskImage:
+              "linear-gradient(to bottom, rgba(0,0,0,0.85) 15%, rgba(0,0,0,0.12) 80%, transparent 100%)",
+            WebkitMaskImage:
+              "linear-gradient(to bottom, rgba(0,0,0,0.85) 15%, rgba(0,0,0,0.12) 80%, transparent 100%)",
           }}
         >
           <svg
-            viewBox="0 0 500 120"
+            viewBox="0 0 350 112"
             width="100%"
-            height="auto"
             fill="none"
             xmlns="http://www.w3.org/2000/svg"
             className="w-full max-h-44 sm:max-h-60 md:max-h-72 lg:max-h-84 object-contain text-[var(--color-text-primary)] opacity-15 dark:opacity-20 transition-opacity duration-300"
             aria-hidden="true"
           >
-            <g>
-              <g transform="translate(8, 22) scale(0.62)">
+            <defs>
+              <g id="operisWatermarkMark">
+                {/* 1. Dış Akış Şeridi */}
                 <path
                   d="M 25.50 124.50 A 70 70 0 0 1 124.50 25.50"
                   stroke="currentColor"
@@ -202,6 +251,7 @@ export function Footer() {
                   strokeLinecap="round"
                   fill="none"
                 />
+                {/* 2. Merkez Akış Şeridi */}
                 <path
                   d="M 36.11 113.89 A 55 55 0 0 1 113.89 36.11"
                   stroke="currentColor"
@@ -209,6 +259,7 @@ export function Footer() {
                   strokeLinecap="round"
                   fill="none"
                 />
+                {/* 3. İç Akış Şeridi */}
                 <path
                   d="M 46.72 103.28 A 40 40 0 0 1 103.28 46.72"
                   stroke="currentColor"
@@ -216,6 +267,7 @@ export function Footer() {
                   strokeLinecap="round"
                   fill="none"
                 />
+                {/* 4. Birleşik Monolitik Gövde */}
                 <path
                   d="M 113.89 36.11 A 55 55 0 0 1 36.11 113.89"
                   stroke="currentColor"
@@ -224,18 +276,26 @@ export function Footer() {
                   fill="none"
                 />
               </g>
+            </defs>
+            <g id="operisWordmarkWatermark">
+              {/* 'O' HARFİ LOGO SEMBOLÜ (Resmi kalibre: scale 0.54, translate 15, 6) */}
+              <g transform="translate(15, 6) scale(0.54)">
+                <use href="#operisWatermarkMark" />
+              </g>
+              {/* 'peris' KÜÇÜK HARFLER (Resmi kalibre: Inter Bold, 100px, y 85, letterSpacing 0.01em) */}
               <text
                 x="100"
-                y="100"
+                y="85"
                 fill="currentColor"
                 style={{
-                  fontFamily: "'Plus Jakarta Sans', 'Inter', sans-serif",
-                  fontWeight: 800,
-                  fontSize: "104px",
-                  letterSpacing: "0.08em",
+                  fontFamily:
+                    "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+                  fontWeight: 700,
+                  fontSize: "100px",
+                  letterSpacing: "0.01em",
                 }}
               >
-                PERIS
+                peris
               </text>
             </g>
           </svg>

@@ -8,10 +8,7 @@ import { LegalService } from "@/src/modules/legal/service";
 import { Locale } from "@/src/lib/i18n/config";
 import { Badge } from "@/src/components/ui/badge";
 
-import {
-  TR_TO_INTERNAL_LEGAL_SLUG,
-  getLocalizedLegalPath,
-} from "@/src/lib/i18n/routes";
+import { TR_TO_INTERNAL_LEGAL_SLUG, getLocalizedLegalPath } from "@/src/lib/i18n/routes";
 
 const VALID_LEGAL_SLUGS = [
   "terms",
@@ -20,12 +17,18 @@ const VALID_LEGAL_SLUGS = [
   "acceptable-use",
   "cookies",
   "contact",
+  "intellectual-property",
+  "consent",
+  "dispute-resolution",
   "kullanim-kosullari",
   "gizlilik-ve-kvkk",
   "eslestirme-ve-sorumluluk-reddi",
   "kabul-edilebilir-kullanim",
   "cerez-politikasi",
   "iletisim",
+  "fikri-mulkiyet-ve-telif",
+  "acik-riza-metni",
+  "uyusmazlik-cozumu",
 ];
 
 export function generateStaticParams() {
@@ -48,9 +51,24 @@ const TITLES: Record<string, { tr: string; en: string }> = {
     tr: "Kurumsal Bilgiler ve İletişim",
     en: "Corporate & Legal Contact",
   },
+  "intellectual-property": {
+    tr: "Fikri Mülkiyet ve Telif Hakları Politikası",
+    en: "Intellectual Property & Copyright Policy",
+  },
+  consent: {
+    tr: "Açık Rıza ve İletişim İzinleri Politikası",
+    en: "Explicit Consent & Communications Notice",
+  },
+  "dispute-resolution": {
+    tr: "Uyuşmazlık Çözümü ve Doğrudan Arabuluculuk",
+    en: "Dispute Resolution & Direct Mediation",
+  },
 };
 
-const PLAIN_SUMMARIES: Record<string, { tr: { title: string; bullets: string[] }; en: { title: string; bullets: string[] } }> = {
+const PLAIN_SUMMARIES: Record<
+  string,
+  { tr: { title: string; bullets: string[] }; en: { title: string; bullets: string[] } }
+> = {
   terms: {
     tr: {
       title: "Özetle: Kullanım Koşulları Sizin İçin Ne Anlama Geliyor?",
@@ -159,6 +177,60 @@ const PLAIN_SUMMARIES: Record<string, { tr: { title: string; bullets: string[] }
       ],
     },
   },
+  "intellectual-property": {
+    tr: {
+      title: "Özetle: Fikri Mülkiyet ve Eser Hakları",
+      bullets: [
+        "Eser Sahiplerine Saygı: Platform telif haklarına ve açık kaynak lisanslarına tam riayet eder.",
+        "Uyar-Kaldır Mekanizması: FSEK ve DMCA kapsamında usulüne uygun ihlal bildirimleri 48 saatte işleme alınır.",
+        "Bağımsız Kod Mülkiyeti: Geliştirilen yazılımların hak devri iki tarafın kendi özel sözleşmesine tabidir.",
+      ],
+    },
+    en: {
+      title: "In Brief: Intellectual Property & Copyrights",
+      bullets: [
+        "Respect for Authorship: Full compliance with author copyrights and open source license terms.",
+        "Notice & Takedown: Valid FSEK and DMCA infringement notices are acted upon within 48 hours.",
+        "Code Ownership: IP rights transfer remains strictly governed by the parties' bilateral contract.",
+      ],
+    },
+  },
+  consent: {
+    tr: {
+      title: "Özetle: Açık Rıza ve İletişim İzinleri",
+      bullets: [
+        "Ayrılmış Açık Rıza: Zorunlu aydınlatma metninden bağımsız, özgür iradeye dayalı onay mekanizması.",
+        "Eşleşme Halinde İletişim: Telefon ve e-posta yalnızca iki taraf karşılıklı anlaştığında karşı tarafa açılır.",
+        "Dilediğiniz An İptal: Verdiğiniz açık rızayı ayarlar menüsünden tek tıkla geri alabilirsiniz.",
+      ],
+    },
+    en: {
+      title: "In Brief: Explicit Consent & Communications",
+      bullets: [
+        "Independent Consent: Clearly separated from mandatory notices, based on uncoerced choice.",
+        "Bilateral Reveal: Contact info is unmasked exclusively between counterparties upon mutual match.",
+        "Revocable Anytime: You can withdraw discretionary consent anytime via account settings.",
+      ],
+    },
+  },
+  "dispute-resolution": {
+    tr: {
+      title: "Özetle: Uyuşmazlık Çözümü ve Arabuluculuk",
+      bullets: [
+        "Platform Hakem Değildir: Operis para tutmaz ve ticari/teknik uyuşmazlıklarda taraf veya hakem değildir.",
+        "Kademeli Çözüm Yolu: Önce 14 günlük doğrudan müzakere, ardından 6325 sayılı kanunla arabuluculuk önerilir.",
+        "Kesin Dava Muafiyeti: Taraflar arasındaki mağduriyetlerde platforma dava açılamaz; muhatap doğrudan diğer taraftır.",
+      ],
+    },
+    en: {
+      title: "In Brief: Dispute Resolution & Direct Mediation",
+      bullets: [
+        "Platform is Not an Arbitrator: Operis holds no escrow and does not adjudicate quality or payments.",
+        "Graduated Workflow: 14 days direct negotiation, followed by independent professional mediation.",
+        "Platform Lawsuit Immunity: No lawsuit may be brought against Operis for counterparty defaults.",
+      ],
+    },
+  },
 };
 
 export async function generateMetadata({
@@ -173,9 +245,7 @@ export async function generateMetadata({
   const titleObj = TITLES[internalKey] ?? { tr: "Yasal Belge", en: "Legal Document" };
   const docTitle = isTr ? titleObj.tr : titleObj.en;
 
-  const title = isTr
-    ? `${docTitle} — Yasal Şeffaflık & Uyum`
-    : `${docTitle} — Legal & Compliance`;
+  const title = isTr ? `${docTitle} — Yasal Şeffaflık & Uyum` : `${docTitle} — Legal & Compliance`;
   const description = isTr
     ? `Operis ${docTitle} mevzuat ve uyum dokümanı.`
     : `Operis ${docTitle} legal and regulatory compliance document.`;
@@ -300,7 +370,9 @@ export default async function LegalDocumentPage({
       {/* Header */}
       <header className="border-b border-[var(--color-border-subtle)] pb-6 space-y-4">
         <div className="flex flex-wrap items-center gap-3">
-          <Badge variant="secondary" size="md">{doc.version}</Badge>
+          <Badge variant="secondary" size="md">
+            {doc.version}
+          </Badge>
           <span className="text-xs font-mono text-[var(--color-text-tertiary)] flex items-center gap-1">
             <Hash className="h-3 w-3" aria-hidden="true" />
             <span>SHA-256: {doc.hash.slice(0, 16)}...</span>
@@ -311,7 +383,10 @@ export default async function LegalDocumentPage({
         </h1>
 
         {/* Quick Document Navigation Pills */}
-        <nav aria-label={isTr ? "Yasal Dokümanlar" : "Legal Documents"} className="flex flex-wrap gap-2 pt-2">
+        <nav
+          aria-label={isTr ? "Yasal Dokümanlar" : "Legal Documents"}
+          className="flex flex-wrap gap-2 pt-2"
+        >
           {navDocKeys.map((key) => {
             const active = key === internalKey;
             const label = isTr ? TITLES[key]?.tr : TITLES[key]?.en;
@@ -345,17 +420,21 @@ export default async function LegalDocumentPage({
             </h2>
           </div>
           <div className="grid grid-cols-1 gap-2.5">
-            {(isTr ? PLAIN_SUMMARIES[internalKey].tr.bullets : PLAIN_SUMMARIES[internalKey].en.bullets).map(
-              (bullet, idx) => (
-                <div
-                  key={idx}
-                  className="flex items-start gap-2.5 text-xs sm:text-sm text-[var(--color-text-secondary)] leading-relaxed"
-                >
-                  <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" aria-hidden="true" />
-                  <span>{bullet}</span>
-                </div>
-              )
-            )}
+            {(isTr
+              ? PLAIN_SUMMARIES[internalKey].tr.bullets
+              : PLAIN_SUMMARIES[internalKey].en.bullets
+            ).map((bullet, idx) => (
+              <div
+                key={idx}
+                className="flex items-start gap-2.5 text-xs sm:text-sm text-[var(--color-text-secondary)] leading-relaxed"
+              >
+                <CheckCircle2
+                  className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5"
+                  aria-hidden="true"
+                />
+                <span>{bullet}</span>
+              </div>
+            ))}
           </div>
         </section>
       )}

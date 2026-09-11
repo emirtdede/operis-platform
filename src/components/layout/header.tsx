@@ -15,23 +15,27 @@ import {
   Sun,
   Moon,
   ShieldCheck,
-  ChevronDown,
   Briefcase,
+  Contrast,
+  Search,
 } from "lucide-react";
 import { Locale } from "@/src/lib/i18n/config";
 import {
   getLocalizedRoute,
   getAlternateLocalePath,
   getLocalizedLegalPath,
+  getLocalizedProfilePath,
 } from "@/src/lib/i18n/routes";
 import { BrandLogo } from "./brand-logo";
 import { Button } from "../ui/button";
 import { useTheme } from "./theme-provider";
+import { NotificationPopover } from "./notification-popover";
+import { CommandPalette } from "./command-palette";
 import type { SessionPayload } from "@/src/modules/auth/session";
 
 export interface HeaderProps {
   initialSession?: SessionPayload | null;
-  initialProfile?: { displayName: string; handle: string } | null;
+  initialProfile?: { displayName: string; handle: string; avatarUrl?: string | null } | null;
 }
 
 /**
@@ -69,10 +73,19 @@ export function Header({ initialSession, initialProfile }: HeaderProps) {
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
+  const notificationMenuRef = useRef<HTMLDivElement>(null);
 
   const isTr = locale === "tr";
   const session = initialSession;
+  const [avatarError, setAvatarError] = useState(false);
+  const avatarUrl = initialProfile?.avatarUrl;
+
+  useEffect(() => {
+    setAvatarError(false);
+  }, [avatarUrl]);
 
   // Resolve clean display name & handle
   const displayName =
@@ -83,8 +96,7 @@ export function Header({ initialSession, initialProfile }: HeaderProps) {
         ? session.email.split("@")[0]
         : "");
   const handle =
-    initialProfile?.handle ||
-    (session?.email === "kullanici@operis.pro" ? "demokullanici" : "");
+    initialProfile?.handle || (session?.email === "kullanici@operis.pro" ? "demokullanici" : "");
   const initials = getInitials(displayName, session?.email);
 
   // Close dropdown on outside click or Escape key
@@ -93,11 +105,23 @@ export function Header({ initialSession, initialProfile }: HeaderProps) {
       if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
         setUserMenuOpen(false);
       }
+      if (
+        notificationMenuRef.current &&
+        !notificationMenuRef.current.contains(event.target as Node)
+      ) {
+        setNotificationsOpen(false);
+      }
     }
     function handleKeyDown(event: KeyboardEvent) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setCommandPaletteOpen((prev) => !prev);
+      }
       if (event.key === "Escape") {
         setUserMenuOpen(false);
+        setNotificationsOpen(false);
         setMobileMenuOpen(false);
+        setCommandPaletteOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -175,10 +199,11 @@ export function Header({ initialSession, initialProfile }: HeaderProps) {
               <Link
                 key={link.href}
                 href={link.href}
-                className={`min-w-[104px] whitespace-nowrap justify-center text-center rounded-xl px-4 py-1.5 text-sm font-medium transition-all flex items-center ${isActive
+                className={`min-w-[104px] whitespace-nowrap justify-center text-center rounded-xl px-4 py-1.5 text-sm font-medium transition-all flex items-center ${
+                  isActive
                     ? "bg-[var(--color-surface-hover)] text-[var(--color-text-primary)] shadow-sm font-semibold"
                     : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
-                  }`}
+                }`}
               >
                 {link.label}
               </Link>
@@ -187,39 +212,57 @@ export function Header({ initialSession, initialProfile }: HeaderProps) {
         </nav>
 
         {/* Right: Premium Auth / User Area */}
-        <div className="hidden lg:flex lg:flex-1 items-center justify-end gap-2.5 shrink-0">
+        <div className="hidden lg:flex lg:flex-1 items-center justify-end gap-2 shrink-0">
+          {/* Command Palette / Quick Search Trigger Button */}
+          <button
+            type="button"
+            onClick={() => setCommandPaletteOpen(true)}
+            className="relative p-2 rounded-xl text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)] border border-transparent hover:border-[var(--color-border-subtle)] transition-all cursor-pointer focus:outline-none flex items-center justify-center"
+            title={isTr ? "Hızlı Arama (⌘K / Ctrl+K)" : "Quick Search (⌘K / Ctrl+K)"}
+            aria-label={isTr ? "Hızlı Arama" : "Quick Search"}
+          >
+            <Search className="h-4 w-4" aria-hidden="true" />
+          </button>
+
           {session ? (
             <div className="flex items-center gap-2">
-              {/* Quick Notification Bell */}
-              <Link
-                href={getLocalizedRoute("dashboardNotifications", locale)}
-                className="p-2 rounded-xl text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)] border border-transparent hover:border-[var(--color-border-subtle)] transition-all"
-                title={isTr ? "Bildirim Merkezi" : "Notifications"}
-              >
-                <Bell className="h-4 w-4" aria-hidden="true" />
-              </Link>
+              {/* Quick Notification Bell Dropdown */}
+              <div className="relative" ref={notificationMenuRef}>
+                <NotificationPopover
+                  locale={locale}
+                  isOpen={notificationsOpen}
+                  onToggle={() => {
+                    setNotificationsOpen((prev) => !prev);
+                    setUserMenuOpen(false);
+                  }}
+                  onClose={() => setNotificationsOpen(false)}
+                />
+              </div>
 
-              {/* User Pill Button & Dropdown Container */}
+              {/* User Avatar Circle Button & Dropdown Container */}
               <div className="relative" ref={userMenuRef}>
                 <button
                   type="button"
-                  onClick={() => setUserMenuOpen((prev) => !prev)}
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-hover)] text-xs font-medium text-[var(--color-text-primary)] hover:border-blue-500/40 hover:shadow-sm transition-all cursor-pointer"
+                  onClick={() => {
+                    setUserMenuOpen((prev) => !prev);
+                    setNotificationsOpen(false);
+                  }}
+                  className="h-9 w-9 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold text-xs sm:text-sm tracking-tight overflow-hidden hover:opacity-90 hover:ring-2 hover:ring-blue-500/40 focus:ring-2 focus:ring-blue-500/50 focus:outline-none transition-all cursor-pointer select-none"
                   aria-expanded={userMenuOpen}
                   aria-haspopup="true"
                   aria-label={isTr ? "Kullanıcı Menüsü" : "User Menu"}
                 >
-                  <div className="h-6 w-6 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold text-[10px] tracking-tight">
-                    {initials}
-                  </div>
-                  <span className="max-w-[130px] truncate font-semibold">
-                    {displayName}
-                  </span>
-                  <ChevronDown
-                    className={`h-3.5 w-3.5 text-[var(--color-text-tertiary)] transition-transform duration-200 ${userMenuOpen ? "rotate-180 text-blue-400" : ""
-                      }`}
-                    aria-hidden="true"
-                  />
+                  {avatarUrl && !avatarError ? (
+                    <img
+                      src={avatarUrl}
+                      alt={displayName}
+                      className="w-full h-full object-cover rounded-full"
+                      onError={() => setAvatarError(true)}
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    initials
+                  )}
                 </button>
 
                 {/* Dropdown Menu Modal */}
@@ -229,7 +272,8 @@ export function Header({ initialSession, initialProfile }: HeaderProps) {
                     style={{
                       backgroundColor: "var(--color-surface-base)",
                       borderColor: "var(--color-border-subtle)",
-                      boxShadow: "0 20px 40px -15px rgba(0, 0, 0, 0.25), 0 0 0 1px var(--color-border-subtle)",
+                      boxShadow:
+                        "0 20px 40px -15px rgba(0, 0, 0, 0.25), 0 0 0 1px var(--color-border-subtle)",
                     }}
                     role="menu"
                     aria-orientation="vertical"
@@ -241,8 +285,18 @@ export function Header({ initialSession, initialProfile }: HeaderProps) {
                         backgroundColor: "var(--color-surface-hover)",
                       }}
                     >
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 font-bold text-sm text-white shadow-md shadow-blue-500/25">
-                        {initials}
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-500/20 text-blue-400 font-bold text-sm tracking-tight overflow-hidden">
+                        {avatarUrl && !avatarError ? (
+                          <img
+                            src={avatarUrl}
+                            alt={displayName}
+                            className="w-full h-full object-cover rounded-full"
+                            onError={() => setAvatarError(true)}
+                            referrerPolicy="no-referrer"
+                          />
+                        ) : (
+                          initials
+                        )}
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="font-bold text-sm text-[var(--color-text-primary)] truncate">
@@ -269,13 +323,15 @@ export function Header({ initialSession, initialProfile }: HeaderProps) {
 
                       {/* Profil */}
                       <Link
-                        href={`/${locale}/u/${handle || "demokullanici"}`}
+                        href={getLocalizedProfilePath(handle || "demokullanici", locale)}
                         onClick={() => setUserMenuOpen(false)}
                         className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)] transition-colors"
                         role="menuitem"
                       >
                         <User className="h-4 w-4 text-blue-400" aria-hidden="true" />
-                        <span className="font-medium">{isTr ? "Profilimi Gör" : "View Profile"}</span>
+                        <span className="font-medium">
+                          {isTr ? "Profilimi Gör" : "View Profile"}
+                        </span>
                       </Link>
 
                       {/* Bildirimler */}
@@ -286,7 +342,9 @@ export function Header({ initialSession, initialProfile }: HeaderProps) {
                         role="menuitem"
                       >
                         <Bell className="h-4 w-4 text-amber-400" aria-hidden="true" />
-                        <span className="font-medium">{isTr ? "Bildirimler" : "Notifications"}</span>
+                        <span className="font-medium">
+                          {isTr ? "Bildirimler" : "Notifications"}
+                        </span>
                       </Link>
 
                       {/* Ayarlar */}
@@ -297,18 +355,22 @@ export function Header({ initialSession, initialProfile }: HeaderProps) {
                         role="menuitem"
                       >
                         <Settings className="h-4 w-4 text-purple-400" aria-hidden="true" />
-                        <span className="font-medium">{isTr ? "Hesap Ayarları" : "Account Settings"}</span>
+                        <span className="font-medium">
+                          {isTr ? "Hesap Ayarları" : "Account Settings"}
+                        </span>
                       </Link>
 
                       {/* Yasal ve Güven Merkezi */}
                       <Link
-                        href={getLocalizedLegalPath("terms", locale)}
+                        href={getLocalizedRoute("legalCenter", locale)}
                         onClick={() => setUserMenuOpen(false)}
                         className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)] transition-colors"
                         role="menuitem"
                       >
                         <ShieldCheck className="h-4 w-4 text-emerald-400" aria-hidden="true" />
-                        <span className="font-medium">{isTr ? "Yasal & Güven Merkezi" : "Legal & Trust Center"}</span>
+                        <span className="font-medium">
+                          {isTr ? "Yasal & Güven Merkezi" : "Legal & Trust Center"}
+                        </span>
                       </Link>
                     </div>
 
@@ -329,20 +391,22 @@ export function Header({ initialSession, initialProfile }: HeaderProps) {
                           <button
                             type="button"
                             onClick={() => handleLanguageSelect("tr")}
-                            className={`px-2 py-0.5 rounded-md font-semibold text-[10px] transition-all cursor-pointer ${locale === "tr"
+                            className={`px-2 py-0.5 rounded-md font-semibold text-[10px] transition-all cursor-pointer ${
+                              locale === "tr"
                                 ? "bg-blue-600 text-white shadow-sm"
                                 : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
-                              }`}
+                            }`}
                           >
                             TR
                           </button>
                           <button
                             type="button"
                             onClick={() => handleLanguageSelect("en")}
-                            className={`px-2 py-0.5 rounded-md font-semibold text-[10px] transition-all cursor-pointer ${locale === "en"
+                            className={`px-2 py-0.5 rounded-md font-semibold text-[10px] transition-all cursor-pointer ${
+                              locale === "en"
                                 ? "bg-blue-600 text-white shadow-sm"
                                 : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
-                              }`}
+                            }`}
                           >
                             EN
                           </button>
@@ -352,15 +416,17 @@ export function Header({ initialSession, initialProfile }: HeaderProps) {
                       {/* Tema Seçimi */}
                       <div className="flex items-center justify-between px-2 text-[11px] text-[var(--color-text-tertiary)]">
                         <div className="flex items-center gap-1.5 font-medium">
-                          {theme === "dark" || theme === "black" ? (
-                            <Moon className="h-3.5 w-3.5 text-indigo-400" aria-hidden="true" />
-                          ) : (
+                          {theme === "light" ? (
                             <Sun className="h-3.5 w-3.5 text-amber-400" aria-hidden="true" />
+                          ) : theme === "black" ? (
+                            <Contrast className="h-3.5 w-3.5 text-blue-400" aria-hidden="true" />
+                          ) : (
+                            <Moon className="h-3.5 w-3.5 text-indigo-400" aria-hidden="true" />
                           )}
                           <span>{isTr ? "Tema" : "Theme"}</span>
                         </div>
                         <div
-                          className="flex items-center gap-1 p-0.5 rounded-lg border border-[var(--color-border-subtle)]"
+                          className="flex items-center gap-0.5 p-0.5 rounded-lg border border-[var(--color-border-subtle)]"
                           style={{
                             backgroundColor: "var(--color-surface-hover)",
                           }}
@@ -368,22 +434,35 @@ export function Header({ initialSession, initialProfile }: HeaderProps) {
                           <button
                             type="button"
                             onClick={() => setTheme("dark")}
-                            className={`px-2 py-0.5 rounded-md font-semibold text-[10px] transition-all cursor-pointer ${theme === "dark" || theme === "black"
+                            className={`px-2 py-0.5 rounded-md font-semibold text-[10px] transition-all cursor-pointer ${
+                              theme === "dark"
                                 ? "bg-blue-600 text-white shadow-sm"
                                 : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
-                              }`}
+                            }`}
                           >
                             {isTr ? "Koyu" : "Dark"}
                           </button>
                           <button
                             type="button"
                             onClick={() => setTheme("light")}
-                            className={`px-2 py-0.5 rounded-md font-semibold text-[10px] transition-all cursor-pointer ${theme === "light"
+                            className={`px-2 py-0.5 rounded-md font-semibold text-[10px] transition-all cursor-pointer ${
+                              theme === "light"
                                 ? "bg-blue-600 text-white shadow-sm"
                                 : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
-                              }`}
+                            }`}
                           >
                             {isTr ? "Açık" : "Light"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setTheme("black")}
+                            className={`px-2 py-0.5 rounded-md font-semibold text-[10px] transition-all cursor-pointer ${
+                              theme === "black"
+                                ? "bg-blue-600 text-white shadow-sm"
+                                : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+                            }`}
+                          >
+                            {isTr ? "Siyah" : "Black"}
                           </button>
                         </div>
                       </div>
@@ -451,17 +530,9 @@ export function Header({ initialSession, initialProfile }: HeaderProps) {
               aria-hidden="true"
             >
               {mobileMenuOpen ? (
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M6 18L18 6M6 6l12 12"
-                />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
               ) : (
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M4 6h16M4 12h16M4 18h16"
-                />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
               )}
             </svg>
           </button>
@@ -496,8 +567,18 @@ export function Header({ initialSession, initialProfile }: HeaderProps) {
                       backgroundColor: "var(--color-surface-hover)",
                     }}
                   >
-                    <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center font-bold text-xs shadow-sm">
-                      {initials}
+                    <div className="h-8 w-8 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold text-xs tracking-tight overflow-hidden">
+                      {avatarUrl && !avatarError ? (
+                        <img
+                          src={avatarUrl}
+                          alt={displayName}
+                          className="w-full h-full object-cover rounded-full"
+                          onError={() => setAvatarError(true)}
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        initials
+                      )}
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="font-bold text-xs text-[var(--color-text-primary)] truncate">
@@ -511,7 +592,7 @@ export function Header({ initialSession, initialProfile }: HeaderProps) {
 
                   <div className="grid grid-cols-2 gap-2">
                     <Link
-                      href={`/${locale}/u/${handle || "demokullanici"}`}
+                      href={getLocalizedProfilePath(handle || "demokullanici", locale)}
                       onClick={() => setMobileMenuOpen(false)}
                       className="flex items-center justify-center gap-1.5 p-2 rounded-xl border border-[var(--color-border-subtle)] text-xs text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]"
                     >
@@ -554,16 +635,22 @@ export function Header({ initialSession, initialProfile }: HeaderProps) {
                       <button
                         type="button"
                         onClick={() => handleLanguageSelect("tr")}
-                        className={`px-2 py-0.5 rounded font-semibold text-[10px] ${locale === "tr" ? "bg-blue-600 text-white" : "text-[var(--color-text-secondary)]"
-                          }`}
+                        className={`px-2 py-0.5 rounded font-semibold text-[10px] ${
+                          locale === "tr"
+                            ? "bg-blue-600 text-white"
+                            : "text-[var(--color-text-secondary)]"
+                        }`}
                       >
                         TR
                       </button>
                       <button
                         type="button"
                         onClick={() => handleLanguageSelect("en")}
-                        className={`px-2 py-0.5 rounded font-semibold text-[10px] ${locale === "en" ? "bg-blue-600 text-white" : "text-[var(--color-text-secondary)]"
-                          }`}
+                        className={`px-2 py-0.5 rounded font-semibold text-[10px] ${
+                          locale === "en"
+                            ? "bg-blue-600 text-white"
+                            : "text-[var(--color-text-secondary)]"
+                        }`}
                       >
                         EN
                       </button>
@@ -573,18 +660,35 @@ export function Header({ initialSession, initialProfile }: HeaderProps) {
                       <button
                         type="button"
                         onClick={() => setTheme("dark")}
-                        className={`px-2 py-0.5 rounded font-semibold text-[10px] ${theme === "dark" || theme === "black" ? "bg-blue-600 text-white" : "text-[var(--color-text-secondary)]"
-                          }`}
+                        className={`px-2 py-0.5 rounded font-semibold text-[10px] ${
+                          theme === "dark"
+                            ? "bg-blue-600 text-white"
+                            : "text-[var(--color-text-secondary)]"
+                        }`}
                       >
-                        Koyu
+                        {isTr ? "Koyu" : "Dark"}
                       </button>
                       <button
                         type="button"
                         onClick={() => setTheme("light")}
-                        className={`px-2 py-0.5 rounded font-semibold text-[10px] ${theme === "light" ? "bg-blue-600 text-white" : "text-[var(--color-text-secondary)]"
-                          }`}
+                        className={`px-2 py-0.5 rounded font-semibold text-[10px] ${
+                          theme === "light"
+                            ? "bg-blue-600 text-white"
+                            : "text-[var(--color-text-secondary)]"
+                        }`}
                       >
-                        Açık
+                        {isTr ? "Açık" : "Light"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTheme("black")}
+                        className={`px-2 py-0.5 rounded font-semibold text-[10px] ${
+                          theme === "black"
+                            ? "bg-blue-600 text-white"
+                            : "text-[var(--color-text-secondary)]"
+                        }`}
+                      >
+                        {isTr ? "Siyah" : "Black"}
                       </button>
                     </div>
                   </div>
@@ -627,6 +731,14 @@ export function Header({ initialSession, initialProfile }: HeaderProps) {
           </nav>
         </div>
       )}
+
+      {/* Command Palette Modal */}
+      <CommandPalette
+        locale={locale}
+        isOpen={commandPaletteOpen}
+        onClose={() => setCommandPaletteOpen(false)}
+        userHandle={initialProfile?.handle}
+      />
     </header>
   );
 }

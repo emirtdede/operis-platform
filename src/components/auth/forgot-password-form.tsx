@@ -24,13 +24,16 @@ export function ForgotPasswordForm({ locale }: ForgotPasswordFormProps) {
     try {
       const res = await fetch("/api/auth/forgot-password", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim() }),
+        headers: {
+          "Content-Type": "application/json",
+          "x-locale": locale,
+        },
+        body: JSON.stringify({ email: email.trim(), locale }),
       });
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || "İşlem gerçekleştirilemedi");
+        throw new Error(data.error || (isTr ? "İşlem gerçekleştirilemedi." : "Request could not be processed."));
       }
 
       setIsSuccess(true);
@@ -39,8 +42,8 @@ export function ForgotPasswordForm({ locale }: ForgotPasswordFormProps) {
         err instanceof Error
           ? err.message
           : isTr
-          ? "Talep iletilemedi. Lütfen tekrar deneyiniz."
-          : "Could not send reset instructions."
+            ? "Talep iletilemedi. Lütfen tekrar deneyiniz."
+            : "Could not send reset instructions."
       );
     } finally {
       setIsLoading(false);

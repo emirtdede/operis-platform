@@ -10,8 +10,11 @@ import {
   Lock,
   CheckCircle2,
   ShieldCheck,
+  Eye,
+  MousePointerClick,
 } from "lucide-react";
 import { FeedService } from "@/src/modules/listings/feed/service";
+import { ListingService } from "@/src/modules/listings/service";
 import { getSession } from "@/src/modules/auth/session";
 import { AvatarInitials } from "@/src/components/ui/avatar-initials";
 import { Badge } from "@/src/components/ui/badge";
@@ -38,9 +41,22 @@ export async function generateMetadata({
   }
 
   const { listing } = data;
-  const title = isTr
-    ? `${listing.title} — Proje Detayı`
-    : `${listing.title} — Project Overview`;
+  const now = new Date();
+  const until = listing.activeUntil ? new Date(listing.activeUntil) : null;
+  const isCurrentlyActive =
+    listing.status === "ACTIVE" && until !== null && until.getTime() > now.getTime();
+
+  if (!isCurrentlyActive) {
+    return {
+      title: isTr ? "İlan Bulunamadı" : "Listing Not Found",
+      robots: {
+        index: false,
+        follow: false,
+      },
+    };
+  }
+
+  const title = isTr ? `${listing.title} — Proje Detayı` : `${listing.title} — Project Overview`;
   const description = listing.summary;
 
   return {
@@ -86,14 +102,14 @@ export default async function ListingDetailPage({
   setRequestLocale(locale);
 
   const isTr = locale === "tr";
-  const data = await FeedService.getListingBySlug(slug);
+  const session = await getSession();
+  const data = await FeedService.getListingBySlug(slug, session?.userId);
 
   if (!data) {
     notFound();
   }
 
   const { listing, category, ownerProfile } = data;
-  const session = await getSession();
   const isOwner = Boolean(session?.userId && session.userId === listing.ownerUserId);
 
   // Calculate remaining days
@@ -101,6 +117,19 @@ export default async function ListingDetailPage({
   const until = listing.activeUntil ? new Date(listing.activeUntil) : null;
   const isCurrentlyActive =
     listing.status === "ACTIVE" && until !== null && until.getTime() > now.getTime();
+
+  // Deleted listings must never be rendered; non-owners cannot view non-active or expired listings
+  if (listing.status === "DELETED" || (!isOwner && !isCurrentlyActive)) {
+    notFound();
+  }
+
+  // Increment view count asynchronously only for valid active views by non-owners
+  if (isCurrentlyActive && !isOwner) {
+    ListingService.incrementListingViews(listing.id).catch(() => {});
+  }
+
+  const viewCount = (listing.viewCount ?? 0) + (isCurrentlyActive && !isOwner ? 1 : 0);
+  const clickCount = listing.clickCount ?? 0;
   const diffDays = until
     ? Math.max(0, Math.ceil((until.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)))
     : 0;
@@ -130,10 +159,16 @@ export default async function ListingDetailPage({
   if (listing.timelineValue && listing.timelineUnit) {
     const unitLabel =
       listing.timelineUnit === "DAYS"
-        ? isTr ? "gün" : "days"
+        ? isTr
+          ? "gün"
+          : "days"
         : listing.timelineUnit === "WEEKS"
-        ? isTr ? "hafta" : "weeks"
-        : isTr ? "ay" : "months";
+          ? isTr
+            ? "hafta"
+            : "weeks"
+          : isTr
+            ? "ay"
+            : "months";
     timelineLabel = `~${listing.timelineValue} ${unitLabel}`;
   }
 
@@ -147,7 +182,8 @@ export default async function ListingDetailPage({
         "@type": "JobPosting",
         title: listing.title,
         description: listing.scope || listing.summary,
-        datePosted: listing.firstPublishedAt?.toISOString() || new Date(listing.createdAt).toISOString(),
+        datePosted:
+          listing.firstPublishedAt?.toISOString() || new Date(listing.createdAt).toISOString(),
         validThrough: listing.activeUntil?.toISOString(),
         employmentType: "CONTRACTOR",
         hiringOrganization: {
@@ -196,7 +232,6 @@ export default async function ListingDetailPage({
   };
 
   return (
-
     <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-6">
       {/* Schema.org Structured Data */}
       <script
@@ -205,7 +240,10 @@ export default async function ListingDetailPage({
       />
 
       {/* Navigation Breadcrumb */}
-      <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-xs text-[var(--color-text-tertiary)]">
+      <nav
+        aria-label="Breadcrumb"
+        className="flex items-center gap-2 text-xs text-[var(--color-text-tertiary)]"
+      >
         <Link
           href={getLocalizedRoute("listings", locale)}
           className="inline-flex items-center gap-1 hover:text-[var(--color-text-primary)] transition-colors"
@@ -224,30 +262,64 @@ export default async function ListingDetailPage({
           {/* Header Card: Title, Status, Summary */}
           <article className="relative overflow-hidden rounded-3xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/80 p-6 sm:p-8 backdrop-blur-xl shadow-xl space-y-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <Badge variant="secondary" size="md" className="font-medium bg-blue-500/10 text-blue-400 border-blue-500/20">
+              <Badge
+                variant="secondary"
+                size="md"
+                className="font-medium bg-blue-500/10 text-blue-400 border-blue-500/20"
+              >
                 {category.key}
               </Badge>
 
               <div className="flex items-center gap-3 text-xs">
                 <div className="inline-flex items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3.5 py-1 text-cyan-400 font-medium">
-                  <span className={`h-2 w-2 rounded-full ${isCurrentlyActive ? "bg-cyan-400 animate-pulse" : "bg-red-500"}`} />
+                  <span
+                    className={`h-2 w-2 rounded-full ${isCurrentlyActive ? "bg-cyan-400 animate-pulse" : "bg-red-500"}`}
+                  />
                   <span>
                     {isCurrentlyActive
                       ? isTr
                         ? `${diffDays} gün aktif`
                         : `Active for ${diffDays} days`
                       : isTr
-                      ? "Süresi doldu"
-                      : "Expired"}
+                        ? "Süresi doldu"
+                        : "Expired"}
                   </span>
                 </div>
 
                 {listing.activationSeq > 1 && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-indigo-500/10 px-3 py-1 text-xs font-medium text-indigo-400 border border-indigo-500/20">
                     <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
-                    <span>{isTr ? `${listing.activationSeq}. Yayım Döngüsü` : `Cycle #${listing.activationSeq}`}</span>
+                    <span>
+                      {isTr
+                        ? `${listing.activationSeq}. Yayım Döngüsü`
+                        : `Cycle #${listing.activationSeq}`}
+                    </span>
                   </span>
                 )}
+
+                {/* View and Click Count Badges */}
+                <div className="inline-flex items-center gap-2 rounded-full border border-[var(--color-border-subtle)] bg-[var(--color-surface-hover)] px-3 py-1 text-xs text-[var(--color-text-secondary)] font-medium">
+                  <span
+                    className="flex items-center gap-1"
+                    title={isTr ? `${viewCount} Görüntülenme` : `${viewCount} Views`}
+                  >
+                    <Eye className="h-3.5 w-3.5 text-blue-400" aria-hidden="true" />
+                    <span>{viewCount}</span>
+                  </span>
+                  <span className="text-[var(--color-border-strong)] opacity-60" aria-hidden="true">
+                    |
+                  </span>
+                  <span
+                    className="flex items-center gap-1"
+                    title={isTr ? `${clickCount} Tıklanma` : `${clickCount} Clicks`}
+                  >
+                    <MousePointerClick
+                      className="h-3.5 w-3.5 text-emerald-400"
+                      aria-hidden="true"
+                    />
+                    <span>{clickCount}</span>
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -265,7 +337,11 @@ export default async function ListingDetailPage({
           <section className="rounded-3xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/70 p-6 sm:p-8 backdrop-blur-xl space-y-4 shadow-sm">
             <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">
               <Layers className="h-4 w-4 text-blue-500" aria-hidden="true" />
-              <span>{isTr ? "Proje Kapsamı ve Teknik Gereksinimler" : "Project Scope & Technical Requirements"}</span>
+              <span>
+                {isTr
+                  ? "Proje Kapsamı ve Teknik Gereksinimler"
+                  : "Project Scope & Technical Requirements"}
+              </span>
             </div>
             <div className="prose prose-sm max-w-none text-[var(--color-text-secondary)] whitespace-pre-wrap leading-relaxed">
               {listing.scope}
@@ -304,10 +380,14 @@ export default async function ListingDetailPage({
               </div>
               <div>
                 <h2 className="text-base font-bold text-[var(--color-text-primary)]">
-                  {isTr ? "Bu Projeye Teklif Verirken Nelere Dikkat Edilmeli?" : "Guidelines for Submitting a Winning Proposal"}
+                  {isTr
+                    ? "Bu Projeye Teklif Verirken Nelere Dikkat Edilmeli?"
+                    : "Guidelines for Submitting a Winning Proposal"}
                 </h2>
                 <p className="text-xs text-[var(--color-text-secondary)]">
-                  {isTr ? "Başarılı ve kesintisiz iş birlikleri için önerilen adımlar" : "Best practices for high-impact proposals"}
+                  {isTr
+                    ? "Başarılı ve kesintisiz iş birlikleri için önerilen adımlar"
+                    : "Best practices for high-impact proposals"}
                 </p>
               </div>
             </div>
@@ -315,7 +395,9 @@ export default async function ListingDetailPage({
             <div className="relative z-10 grid grid-cols-1 sm:grid-cols-3 gap-3.5 text-xs text-[var(--color-text-secondary)] leading-relaxed">
               <div className="p-4 rounded-2xl bg-[var(--color-surface-base)]/80 border border-[var(--color-border-subtle)] backdrop-blur-md space-y-2">
                 <div className="flex items-center gap-2 font-bold text-[var(--color-text-primary)]">
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-500/10 text-blue-400 text-[10px] font-bold">1</span>
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-500/10 text-blue-400 text-[10px] font-bold">
+                    1
+                  </span>
                   <span>{isTr ? "Birebir Gizlilik" : "Confidentiality"}</span>
                 </div>
                 <p>
@@ -327,7 +409,9 @@ export default async function ListingDetailPage({
 
               <div className="p-4 rounded-2xl bg-[var(--color-surface-base)]/80 border border-[var(--color-border-subtle)] backdrop-blur-md space-y-2">
                 <div className="flex items-center gap-2 font-bold text-[var(--color-text-primary)]">
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-cyan-500/10 text-cyan-400 text-[10px] font-bold">2</span>
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-cyan-500/10 text-cyan-400 text-[10px] font-bold">
+                    2
+                  </span>
                   <span>{isTr ? "Net Zaman & Bütçe" : "Milestones"}</span>
                 </div>
                 <p>
@@ -339,7 +423,9 @@ export default async function ListingDetailPage({
 
               <div className="p-4 rounded-2xl bg-[var(--color-surface-base)]/80 border border-[var(--color-border-subtle)] backdrop-blur-md space-y-2">
                 <div className="flex items-center gap-2 font-bold text-[var(--color-text-primary)]">
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-bold">3</span>
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-bold">
+                    3
+                  </span>
                   <span>{isTr ? "%0 Komisyon" : "0% Fee"}</span>
                 </div>
                 <p>
@@ -398,6 +484,28 @@ export default async function ListingDetailPage({
                   </span>
                 </div>
               </div>
+
+              {/* Engagement Stats: Views & Clicks */}
+              <div className="grid grid-cols-2 gap-3 pt-3 text-xs border-t border-[var(--color-border-subtle)]/60">
+                <div>
+                  <span className="text-[var(--color-text-tertiary)] block text-[11px]">
+                    {isTr ? "Görüntülenme" : "Views"}
+                  </span>
+                  <span className="font-semibold text-[var(--color-text-primary)] flex items-center gap-1 mt-0.5">
+                    <Eye className="h-3.5 w-3.5 text-blue-400" />
+                    <span>{viewCount.toLocaleString(isTr ? "tr-TR" : "en-US")}</span>
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[var(--color-text-tertiary)] block text-[11px]">
+                    {isTr ? "Tıklanma" : "Clicks"}
+                  </span>
+                  <span className="font-semibold text-[var(--color-text-primary)] flex items-center gap-1 mt-0.5">
+                    <MousePointerClick className="h-3.5 w-3.5 text-emerald-400" />
+                    <span>{clickCount.toLocaleString(isTr ? "tr-TR" : "en-US")}</span>
+                  </span>
+                </div>
+              </div>
             </div>
 
             {/* Action Buttons (Teklif Ver / Düzenle) */}
@@ -406,7 +514,13 @@ export default async function ListingDetailPage({
                 listingId={listing.id}
                 listingSlug={slug}
                 listingTitle={listing.title}
+                categoryName={category.key}
+                budgetMin={listing.budgetMin}
+                budgetMax={listing.budgetMax}
+                budgetCurrency={listing.budgetCurrency}
+                ownerDisplayName={ownerProfile.displayName}
                 ownerUserId={listing.ownerUserId}
+                currentUserId={session?.userId}
                 isOwner={isOwner}
                 isActive={isCurrentlyActive}
                 locale={locale}
@@ -438,9 +552,7 @@ export default async function ListingDetailPage({
                 <div className="font-bold text-sm text-[var(--color-text-primary)] group-hover:text-blue-400 transition-colors truncate">
                   {ownerProfile.displayName}
                 </div>
-                <div className="font-mono text-xs text-blue-400">
-                  @{ownerProfile.handle}
-                </div>
+                <div className="font-mono text-xs text-blue-400">@{ownerProfile.handle}</div>
               </div>
             </Link>
           </div>
@@ -449,4 +561,3 @@ export default async function ListingDetailPage({
     </main>
   );
 }
-

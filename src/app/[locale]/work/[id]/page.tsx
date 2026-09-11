@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { setRequestLocale } from "next-intl/server";
 import { Handshake, MessageSquare, CheckCircle2, ShieldCheck } from "lucide-react";
 import { getSession } from "@/src/modules/auth/session";
+import { ProfileService } from "@/src/modules/profiles/service";
 import { EngagementService } from "@/src/modules/engagements/service";
 import { MatchDetailsView } from "@/src/components/engagements/match-details-view";
 
@@ -15,9 +16,7 @@ export async function generateMetadata({
   const isTr = locale === "tr";
 
   return {
-    title: isTr
-      ? "Ortak Çalışma Alanı & Doğrudan İletişim"
-      : "Collaboration Workspace & Contact",
+    title: isTr ? "Ortak Çalışma Alanı & Doğrudan İletişim" : "Collaboration Workspace & Contact",
     description: isTr
       ? "Kabul edilen teklif detayları, doğrulanmış iletişim bilgileri ve karşılıklı tamamlama çalışma alanı."
       : "Accepted offer details, verified contact channels, and bilateral mutual completion workspace.",
@@ -52,6 +51,12 @@ export default async function MatchPage({
     redirect(isTr ? "/tr/giris" : "/en/login");
   }
 
+  const currentProfile = await ProfileService.getProfileByUserId(session.userId);
+  const currentUser = {
+    displayName: currentProfile?.displayName || session.email.split("@")[0],
+    email: session.email,
+  };
+
   let workspace;
   try {
     workspace = await EngagementService.getEngagementDetails(session.userId, id);
@@ -66,7 +71,9 @@ export default async function MatchPage({
   const { engagement, listing, acceptedOffer, counterpartyContact, completionMarks } = workspace;
 
   const userMark = completionMarks.find((m: { userId: string }) => m.userId === session.userId);
-  const counterpartyMark = completionMarks.find((m: { userId: string }) => m.userId !== session.userId);
+  const counterpartyMark = completionMarks.find(
+    (m: { userId: string }) => m.userId !== session.userId
+  );
 
   // Format budget label
   let budgetLabel: string | null = null;
@@ -81,10 +88,16 @@ export default async function MatchPage({
   if (acceptedOffer.estimatedDurationValue && acceptedOffer.estimatedDurationUnit) {
     const unitLabel =
       acceptedOffer.estimatedDurationUnit === "DAYS"
-        ? isTr ? "gün" : "days"
+        ? isTr
+          ? "gün"
+          : "days"
         : acceptedOffer.estimatedDurationUnit === "WEEKS"
-        ? isTr ? "hafta" : "weeks"
-        : isTr ? "ay" : "months";
+          ? isTr
+            ? "hafta"
+            : "weeks"
+          : isTr
+            ? "ay"
+            : "months";
     timelineLabel = `~${acceptedOffer.estimatedDurationValue} ${unitLabel}`;
   }
 
@@ -208,11 +221,13 @@ export default async function MatchPage({
         budgetLabel={budgetLabel}
         timelineLabel={timelineLabel}
         counterparty={counterparty}
+        currentUser={currentUser}
         currentUserId={session.userId}
         ownerUserId={engagement.ownerUserId}
         isCompleted={engagement.status === "COMPLETED"}
         userCompletionStatus={userMark?.status ?? null}
         counterpartyCompletionStatus={counterpartyMark?.status ?? null}
+        initialEndorsements={workspace.endorsements ?? []}
         locale={locale}
       />
     </main>

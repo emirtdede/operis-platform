@@ -60,7 +60,8 @@ export function DirectNetworkDiagram() {
           </div>
 
           <div className="text-[11px] text-[var(--color-text-secondary)] leading-relaxed">
-            Yüksek komisyon kesintileri, haftalarca süren fon blokeleri ve aracı kurum bürokrasisiyle hem iş verenin bütçesi hem de yazılımcının kazancı eritilir.
+            Yüksek komisyon kesintileri, haftalarca süren fon blokeleri ve aracı kurum
+            bürokrasisiyle hem iş verenin bütçesi hem de yazılımcının kazancı eritilir.
           </div>
         </div>
 
@@ -92,7 +93,8 @@ export function DirectNetworkDiagram() {
           </div>
 
           <div className="text-[11px] text-[var(--color-text-secondary)] leading-relaxed">
-            Platform yalnızca iki tarafı doğrudan buluşturur. Ödeme ve sözleşme aracıya takılmadan gerçekleşir; bütçenin ve hakedişin tamamı yazılımcıda kalır.
+            Platform yalnızca iki tarafı doğrudan buluşturur. Ödeme ve sözleşme aracıya takılmadan
+            gerçekleşir; bütçenin ve hakedişin tamamı yazılımcıda kalır.
           </div>
         </div>
       </div>
@@ -101,7 +103,11 @@ export function DirectNetworkDiagram() {
       <div className="relative z-10 mt-4 flex items-center gap-3 rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-hover)]/70 backdrop-blur-md p-3.5 text-xs text-[var(--color-text-secondary)]">
         <Handshake className="h-4 w-4 shrink-0 text-emerald-400" aria-hidden="true" />
         <span>
-          <strong className="text-[var(--color-text-primary)] font-semibold">Özgür ve Güvenli Ticaret:</strong> Ödemelerinizi dilediğiniz yöntemle (banka transferi, şirket faturası, sözleşmeli hakediş) doğrudan birbirinize gerçekleştirirsiniz.
+          <strong className="text-[var(--color-text-primary)] font-semibold">
+            Özgür ve Güvenli Ticaret:
+          </strong>{" "}
+          Ödemelerinizi dilediğiniz yöntemle (banka transferi, şirket faturası, sözleşmeli hakediş)
+          doğrudan birbirinize gerçekleştirirsiniz.
         </span>
       </div>
     </div>

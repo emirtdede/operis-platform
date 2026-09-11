@@ -27,11 +27,7 @@ export async function generateMetadata({
   };
 }
 
-export default async function ContactPage({
-  params,
-}: {
-  params: Promise<{ locale: string }>;
-}) {
+export default async function ContactPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
   setRequestLocale(locale);
   const isTr = locale === "tr";
@@ -68,8 +64,12 @@ export default async function ContactPage({
                   <Mail className="h-4 w-4" aria-hidden="true" />
                 </div>
                 <div>
-                  <span className="font-semibold text-[var(--color-text-primary)] block">E-Posta</span>
-                  <span className="text-[var(--color-text-secondary)] font-mono">destek@operis.pro</span>
+                  <span className="font-semibold text-[var(--color-text-primary)] block">
+                    E-Posta
+                  </span>
+                  <span className="text-[var(--color-text-secondary)] font-mono">
+                    destek@operis.pro
+                  </span>
                 </div>
               </div>
 
@@ -81,7 +81,9 @@ export default async function ContactPage({
                   <span className="font-semibold text-[var(--color-text-primary)] block">
                     {isTr ? "Kurumsal Merkez" : "Headquarters"}
                   </span>
-                  <span className="text-[var(--color-text-secondary)]">Levent, Beşiktaş / İstanbul</span>
+                  <span className="text-[var(--color-text-secondary)]">
+                    Levent, Beşiktaş / İstanbul
+                  </span>
                 </div>
               </div>
 
@@ -94,7 +96,9 @@ export default async function ContactPage({
                     {isTr ? "Yanıt Taahhüdü" : "Response SLA"}
                   </span>
                   <span className="text-[var(--color-text-secondary)]">
-                    {isTr ? "En geç 24 iş saati içerisinde yanıt verilir." : "Within 24 business hours."}
+                    {isTr
+                      ? "En geç 24 iş saati içerisinde yanıt verilir."
+                      : "Within 24 business hours."}
                   </span>
                 </div>
               </div>

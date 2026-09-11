@@ -35,7 +35,10 @@ vi.mock("@/src/lib/db", () => {
               if (tbl === "listings" || (typeof tbl === "object" && tbl?.id === "listings")) {
                 return Promise.resolve(mockListingsRows);
               }
-              if (tbl === "blocks" || (typeof tbl === "object" && tbl?.blockerUserId === "blocks")) {
+              if (
+                tbl === "blocks" ||
+                (typeof tbl === "object" && tbl?.blockerUserId === "blocks")
+              ) {
                 return Promise.resolve(mockBlocksRows);
               }
               return Promise.resolve(mockOffersRows);
@@ -170,8 +173,7 @@ describe("Offers Module — Validation & Business Invariants", () => {
     await expect(
       OfferService.submitOffer(ownerId, {
         listingId: validListingId,
-        message:
-          "Trying to bid on my own listing. This should fail immediately and cleanly.",
+        message: "Trying to bid on my own listing. This should fail immediately and cleanly.",
       })
     ).rejects.toThrow("You cannot submit an offer on your own listing");
   });
@@ -190,8 +192,7 @@ describe("Offers Module — Validation & Business Invariants", () => {
     await expect(
       OfferService.submitOffer(offerorId, {
         listingId: validListingId,
-        message:
-          "Trying to bid on an expired listing. This should fail immediately and cleanly.",
+        message: "Trying to bid on an expired listing. This should fail immediately and cleanly.",
       })
     ).rejects.toThrow("Listing is not currently active for offers");
   });
@@ -199,8 +200,7 @@ describe("Offers Module — Validation & Business Invariants", () => {
   it("validates updateOfferSchema correctly", () => {
     const validUpdate = updateOfferSchema.safeParse({
       offerId: validOfferId,
-      message:
-        "Updated offer with revised scope and deliverable timeline for the client.",
+      message: "Updated offer with revised scope and deliverable timeline for the client.",
       budgetCurrency: "TRY",
       budgetMin: "12000",
       budgetMax: "15000",

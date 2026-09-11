@@ -1,11 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import {
-  Search,
-  X,
-  ArrowUpDown,
-} from "lucide-react";
+import { Search, X, ArrowUpDown } from "lucide-react";
 import { AdminUserItem } from "@/src/modules/admin/service";
 
 interface UsersTableClientProps {
@@ -83,7 +79,10 @@ export function UsersTableClient({ initialUsers, total }: UsersTableClientProps)
       {actionSuccess && (
         <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs flex items-center justify-between animate-in fade-in-0 duration-200">
           <span>{actionSuccess}</span>
-          <button onClick={() => setActionSuccess(null)} className="text-emerald-300 hover:text-white">
+          <button
+            onClick={() => setActionSuccess(null)}
+            className="text-emerald-300 hover:text-white"
+          >
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -196,9 +195,7 @@ export function UsersTableClient({ initialUsers, total }: UsersTableClientProps)
                           <div className="font-semibold text-white group-hover:text-blue-400 transition-colors">
                             {user.displayName}
                           </div>
-                          <div className="text-[10px] text-slate-500 font-mono">
-                            @{user.handle}
-                          </div>
+                          <div className="text-[10px] text-slate-500 font-mono">@{user.handle}</div>
                         </div>
                       </div>
                     </td>
@@ -207,7 +204,10 @@ export function UsersTableClient({ initialUsers, total }: UsersTableClientProps)
                       <div className="flex items-center gap-2">
                         <span className="font-mono text-slate-300">{user.email}</span>
                         {user.emailVerified ? (
-                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" title="E-Posta Doğrulandı" />
+                          <span
+                            className="h-1.5 w-1.5 rounded-full bg-emerald-400"
+                            title="E-Posta Doğrulandı"
+                          />
                         ) : (
                           <span className="h-1.5 w-1.5 rounded-full bg-amber-400" title="Onaysız" />
                         )}
@@ -216,14 +216,15 @@ export function UsersTableClient({ initialUsers, total }: UsersTableClientProps)
 
                     <td className="py-3 px-4">
                       <span
-                        className={`px-2 py-0.5 rounded text-[10px] font-mono font-medium border ${user.role === "SECURITY_ADMIN"
+                        className={`px-2 py-0.5 rounded text-[10px] font-mono font-medium border ${
+                          user.role === "SECURITY_ADMIN"
                             ? "bg-red-500/10 text-red-400 border-red-500/20"
                             : user.role === "ADMIN"
                               ? "bg-purple-500/10 text-purple-400 border-purple-500/20"
                               : user.role === "MODERATOR"
                                 ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
                                 : "bg-slate-800 text-slate-400 border-slate-700"
-                          }`}
+                        }`}
                       >
                         {user.role}
                       </span>
@@ -231,10 +232,11 @@ export function UsersTableClient({ initialUsers, total }: UsersTableClientProps)
 
                     <td className="py-3 px-4">
                       <span
-                        className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${user.status === "ACTIVE"
+                        className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
+                          user.status === "ACTIVE"
                             ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
                             : "bg-red-500/10 text-red-400 border-red-500/20"
-                          }`}
+                        }`}
                       >
                         {user.status === "ACTIVE" ? "AKTİF" : "ASKIDA"}
                       </span>
@@ -265,10 +267,11 @@ export function UsersTableClient({ initialUsers, total }: UsersTableClientProps)
                         <button
                           type="button"
                           onClick={() => handleToggleSuspend(user)}
-                          className={`px-2.5 py-1 rounded-lg border text-[11px] font-semibold transition-colors ${user.status === "ACTIVE"
+                          className={`px-2.5 py-1 rounded-lg border text-[11px] font-semibold transition-colors ${
+                            user.status === "ACTIVE"
                               ? "border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20"
                               : "border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"
-                            }`}
+                          }`}
                         >
                           {user.status === "ACTIVE" ? "Askıya Al" : "Aktifleştir"}
                         </button>
@@ -292,9 +295,7 @@ export function UsersTableClient({ initialUsers, total }: UsersTableClientProps)
                   {selectedUser.displayName.slice(0, 2).toUpperCase()}
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-white">
-                    {selectedUser.displayName}
-                  </h3>
+                  <h3 className="text-base font-bold text-white">{selectedUser.displayName}</h3>
                   <div className="text-xs font-mono text-slate-400">
                     @{selectedUser.handle} • ID: {selectedUser.id}
                   </div>
@@ -341,7 +342,9 @@ export function UsersTableClient({ initialUsers, total }: UsersTableClientProps)
             <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 space-y-1 text-xs">
               <div className="text-slate-400 font-semibold">Gizlilik & Kimlik Güvencesi:</div>
               <p className="text-[11px] text-slate-500 leading-relaxed">
-                Operis kuralları uyarınca kullanıcının telefon ve kimlik PII verileri veritabanında AES-256 ile şifreli tutulmakta olup yönetici ekranına doğrudan açık metin olarak gösterilmez (Zero-Knowledge Audit).
+                Operis kuralları uyarınca kullanıcının telefon ve kimlik PII verileri veritabanında
+                AES-256 ile şifreli tutulmakta olup yönetici ekranına doğrudan açık metin olarak
+                gösterilmez (Zero-Knowledge Audit).
               </p>
             </div>
 
@@ -357,12 +360,15 @@ export function UsersTableClient({ initialUsers, total }: UsersTableClientProps)
               <button
                 type="button"
                 onClick={() => handleToggleSuspend(selectedUser)}
-                className={`px-4 py-2 rounded-xl font-bold transition-all ${selectedUser.status === "ACTIVE"
+                className={`px-4 py-2 rounded-xl font-bold transition-all ${
+                  selectedUser.status === "ACTIVE"
                     ? "bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-600/20"
                     : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/20"
-                  }`}
+                }`}
               >
-                {selectedUser.status === "ACTIVE" ? "Kullanıcıyı Askıya Al" : "Kullanıcıyı Aktifleştir"}
+                {selectedUser.status === "ACTIVE"
+                  ? "Kullanıcıyı Askıya Al"
+                  : "Kullanıcıyı Aktifleştir"}
               </button>
             </div>
           </div>

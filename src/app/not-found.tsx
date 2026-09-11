@@ -44,7 +44,14 @@ export default function RootNotFound() {
           <Link href="/tr/akis">
             <Button type="button" variant="secondary" size="sm" className="gap-2">
               <Compass className="h-4 w-4" aria-hidden="true" />
-              <span>Projeleri Keşfet</span>
+              <span>Projeleri Keşfet (TR)</span>
+            </Button>
+          </Link>
+
+          <Link href="/en/feed">
+            <Button type="button" variant="secondary" size="sm" className="gap-2">
+              <Compass className="h-4 w-4" aria-hidden="true" />
+              <span>Browse Projects (EN)</span>
             </Button>
           </Link>
         </div>

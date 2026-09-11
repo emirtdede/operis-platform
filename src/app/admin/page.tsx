@@ -89,7 +89,8 @@ export default async function AdminDashboardPage() {
             </span>
           </h1>
           <p className="text-sm text-slate-400 mt-1">
-            +10.000 kullanıcı, 21 teknoloji disiplini, canlı tazelik radarı ve çift kanallı tehdit izleme merkezi.
+            +10.000 kullanıcı, 21 teknoloji disiplini, canlı tazelik radarı ve çift kanallı tehdit
+            izleme merkezi.
           </p>
         </div>
 
@@ -176,7 +177,10 @@ export default async function AdminDashboardPage() {
                     </span>
                   </div>
                   <span className="text-[10px] text-slate-500 font-mono">
-                    {new Date(item.createdAt).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}
+                    {new Date(item.createdAt).toLocaleTimeString("tr-TR", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
                   </span>
                 </div>
                 <p className="text-slate-400 text-[11px] leading-relaxed line-clamp-2">
@@ -184,7 +188,9 @@ export default async function AdminDashboardPage() {
                 </p>
                 {item.flaggedTerms && item.flaggedTerms.length > 0 && (
                   <div className="flex items-center gap-1.5 pt-1">
-                    <span className="text-[10px] text-red-400 font-medium">Tespit Edilen Kelimeler:</span>
+                    <span className="text-[10px] text-red-400 font-medium">
+                      Tespit Edilen Kelimeler:
+                    </span>
                     {item.flaggedTerms.map((term) => (
                       <span
                         key={term}
@@ -226,16 +232,14 @@ export default async function AdminDashboardPage() {
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="font-mono font-bold text-red-400">
-                      {threat.sourceIp}
-                    </span>
+                    <span className="font-mono font-bold text-red-400">{threat.sourceIp}</span>
                     <span
                       className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold border ${
                         threat.severity === "CRITICAL"
                           ? "bg-red-500/20 text-red-400 border-red-500/40"
                           : threat.severity === "HIGH"
-                          ? "bg-orange-500/20 text-orange-400 border-orange-500/40"
-                          : "bg-blue-500/20 text-blue-400 border-blue-500/40"
+                            ? "bg-orange-500/20 text-orange-400 border-orange-500/40"
+                            : "bg-blue-500/20 text-blue-400 border-blue-500/40"
                       }`}
                     >
                       {threat.severity}
@@ -256,9 +260,7 @@ export default async function AdminDashboardPage() {
                     <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
                     Savunma Durumu: {threat.status}
                   </span>
-                  <span className="text-slate-500">
-                    Risk Skoru: %{threat.riskScore}
-                  </span>
+                  <span className="text-slate-500">Risk Skoru: %{threat.riskScore}</span>
                 </div>
               </div>
             ))}
@@ -285,19 +287,26 @@ export default async function AdminDashboardPage() {
         </div>
 
         <div className="divide-y divide-slate-800/60">
-          {auditLogs.map((log: any) => (
-            <div key={log.id} className="py-2.5 flex items-center justify-between text-xs gap-4">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <span className="px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 font-mono text-[10px] border border-blue-500/20 shrink-0">
-                  {log.action}
+          {auditLogs.map(
+            (log: {
+              id: string;
+              action: string;
+              safeSummary: string | null;
+              createdAt: Date | string;
+            }) => (
+              <div key={log.id} className="py-2.5 flex items-center justify-between text-xs gap-4">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span className="px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 font-mono text-[10px] border border-blue-500/20 shrink-0">
+                    {log.action}
+                  </span>
+                  <span className="text-slate-300 truncate">{log.safeSummary}</span>
+                </div>
+                <span className="text-slate-500 font-mono text-[10px] shrink-0">
+                  {new Date(log.createdAt).toLocaleString("tr-TR")}
                 </span>
-                <span className="text-slate-300 truncate">{log.safeSummary}</span>
               </div>
-              <span className="text-slate-500 font-mono text-[10px] shrink-0">
-                {new Date(log.createdAt).toLocaleString("tr-TR")}
-              </span>
-            </div>
-          ))}
+            )
+          )}
         </div>
       </div>
     </div>

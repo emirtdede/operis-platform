@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { setRequestLocale } from "next-intl/server";
 import { KeyRound, ArrowLeft } from "lucide-react";
 import { ForgotPasswordForm } from "@/src/components/auth/forgot-password-form";
+import { getSession } from "@/src/modules/auth/session";
+import { getLocalizedRoute } from "@/src/lib/i18n/routes";
 
 export async function generateMetadata({
   params,
@@ -43,6 +46,13 @@ export default async function ForgotPasswordPage({
 }) {
   const { locale } = await params;
   setRequestLocale(locale);
+
+  // Authenticated users must not access forgot password page; redirect to workspace
+  const session = await getSession();
+  if (session) {
+    redirect(getLocalizedRoute("dashboardListings", locale));
+  }
+
   const isTr = locale === "tr";
 
   return (

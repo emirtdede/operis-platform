@@ -38,7 +38,7 @@ function getFallbackCategories(locale: Locale, userId?: string): CategoryDto[] {
       description: trans.description,
       sortOrder: cat.sortOrder,
       isActive: true,
-      isFollowed: userFollows ? (userFollows.has(catId) || userFollows.has(cat.key)) : false,
+      isFollowed: userFollows ? userFollows.has(catId) || userFollows.has(cat.key) : false,
     };
   });
 }
@@ -48,17 +48,11 @@ export class CategoryService {
    * Returns all active categories localized to the requested locale.
    * If userId is provided, attaches the private `isFollowed` status.
    */
-  static async getAllCategories(
-    locale: Locale,
-    userId?: string
-  ): Promise<CategoryDto[]> {
+  static async getAllCategories(locale: Locale, userId?: string): Promise<CategoryDto[]> {
     return this.getCategories(locale, userId);
   }
 
-  static async getCategories(
-    locale: Locale,
-    userId?: string
-  ): Promise<CategoryDto[]> {
+  static async getCategories(locale: Locale, userId?: string): Promise<CategoryDto[]> {
     try {
       const db = getDb();
 
@@ -124,8 +118,21 @@ export class CategoryService {
    * Toggles category follow state for a user.
    */
   static async toggleFollow(userId: string, categoryId: string): Promise<boolean> {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(categoryId);
     try {
       const db = getDb();
+
+      const categoryRows = await db
+        .select({ id: schema.categories.id })
+        .from(schema.categories)
+        .where(isUuid ? eq(schema.categories.id, categoryId) : eq(schema.categories.key, categoryId))
+        .limit(1);
+
+      if (categoryRows.length === 0) {
+        throw new Error("Category not found");
+      }
+
+      const targetId = categoryRows[0]!.id;
 
       const existing = await db
         .select()
@@ -133,7 +140,7 @@ export class CategoryService {
         .where(
           and(
             eq(schema.categoryFollows.userId, userId),
-            eq(schema.categoryFollows.categoryId, categoryId)
+            eq(schema.categoryFollows.categoryId, targetId)
           )
         )
         .limit(1);
@@ -144,29 +151,38 @@ export class CategoryService {
           .where(
             and(
               eq(schema.categoryFollows.userId, userId),
-              eq(schema.categoryFollows.categoryId, categoryId)
+              eq(schema.categoryFollows.categoryId, targetId)
             )
           );
         return false; // unfollowed
       } else {
         await db.insert(schema.categoryFollows).values({
           userId,
-          categoryId,
+          categoryId: targetId,
         });
         return true; // followed
       }
-    } catch {
+    } catch (err) {
+      if (process.env.NODE_ENV === "production") {
+        throw err;
+      }
+      if (err instanceof Error && err.message === "Category not found") {
+        throw err;
+      }
       // In-memory fallback
       let userSet = inMemoryFollows.get(userId);
       if (!userSet) {
         userSet = new Set<string>();
         inMemoryFollows.set(userId, userSet);
       }
-      if (userSet.has(categoryId)) {
+      const catUuid = isUuid ? categoryId : getDeterministicUuid(categoryId);
+      if (userSet.has(categoryId) || userSet.has(catUuid)) {
         userSet.delete(categoryId);
+        userSet.delete(catUuid);
         return false;
       } else {
         userSet.add(categoryId);
+        userSet.add(catUuid);
         return true;
       }
     }
@@ -185,35 +201,25 @@ export class CategoryService {
         .where(eq(schema.categories.isActive, true));
 
       if (activeCategories && activeCategories.length > 0) {
-        await db.transaction(async (tx) => {
-          for (const cat of activeCategories) {
-            // Upsert follow
-            const existing = await tx
-              .select({ userId: schema.categoryFollows.userId })
-              .from(schema.categoryFollows)
-              .where(
-                and(
-                  eq(schema.categoryFollows.userId, userId),
-                  eq(schema.categoryFollows.categoryId, cat.id)
-                )
-              )
-              .limit(1);
-
-            if (existing.length === 0) {
-              await tx.insert(schema.categoryFollows).values({
-                userId,
-                categoryId: cat.id,
-              });
-            }
-          }
-        });
+        await db
+          .insert(schema.categoryFollows)
+          .values(
+            activeCategories.map((cat) => ({
+              userId,
+              categoryId: cat.id,
+            }))
+          )
+          .onConflictDoNothing();
         return;
       }
-    } catch {
+    } catch (err) {
+      if (process.env.NODE_ENV === "production") {
+        throw err;
+      }
       // In-memory fallback
     }
 
-    const allIds = SEED_CATEGORIES.map((c) => getDeterministicUuid(c.key));
+    const allIds = SEED_CATEGORIES.flatMap((c) => [getDeterministicUuid(c.key), c.key]);
     inMemoryFollows.set(userId, new Set(allIds));
   }
 
@@ -223,10 +229,12 @@ export class CategoryService {
   static async unfollowAll(userId: string): Promise<void> {
     try {
       const db = getDb();
-      await db
-        .delete(schema.categoryFollows)
-        .where(eq(schema.categoryFollows.userId, userId));
-    } catch {
+      await db.delete(schema.categoryFollows).where(eq(schema.categoryFollows.userId, userId));
+      return;
+    } catch (err) {
+      if (process.env.NODE_ENV === "production") {
+        throw err;
+      }
       // In-memory fallback
     }
     inMemoryFollows.delete(userId);
@@ -244,10 +252,11 @@ export class CategoryService {
         .from(schema.categoryFollows)
         .where(eq(schema.categoryFollows.userId, userId));
 
-      if (rows && rows.length > 0) {
-        return rows.map((r) => r.categoryId);
-      }
+      return rows.map((r) => r.categoryId);
     } catch {
+      if (process.env.NODE_ENV === "production") {
+        return [];
+      }
       // In-memory fallback
     }
 

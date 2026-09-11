@@ -13,14 +13,7 @@ export interface DialogProps {
   className?: string;
 }
 
-export function Dialog({
-  isOpen,
-  onClose,
-  title,
-  description,
-  children,
-  className,
-}: DialogProps) {
+export function Dialog({ isOpen, onClose, title, description, children, className }: DialogProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const previousActiveElement = useRef<HTMLElement | null>(null);
 
@@ -99,7 +92,10 @@ export function Dialog({
               {title}
             </h2>
             {description && (
-              <p id="dialog-desc" className="text-xs sm:text-sm text-[var(--color-text-secondary)] mt-1.5 leading-relaxed">
+              <p
+                id="dialog-desc"
+                className="text-xs sm:text-sm text-[var(--color-text-secondary)] mt-1.5 leading-relaxed"
+              >
                 {description}
               </p>
             )}
@@ -117,7 +113,12 @@ export function Dialog({
               viewBox="0 0 24 24"
               aria-hidden="true"
             >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M6 18L18 6M6 6l12 12"
+              />
             </svg>
           </button>
         </div>

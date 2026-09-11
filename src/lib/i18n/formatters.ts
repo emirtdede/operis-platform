@@ -29,10 +29,7 @@ export function formatDate(
   return new Intl.DateTimeFormat(locale === "tr" ? "tr-TR" : "en-US", options).format(d);
 }
 
-export function formatShortDate(
-  date: Date | string | number,
-  locale: Locale = "tr"
-): string {
+export function formatShortDate(date: Date | string | number, locale: Locale = "tr"): string {
   const d = typeof date === "object" ? date : new Date(date);
   return new Intl.DateTimeFormat(locale === "tr" ? "tr-TR" : "en-US", {
     year: "numeric",
@@ -44,7 +41,8 @@ export function formatRelativeTime(
   targetDate: Date | string | number,
   locale: Locale = "tr"
 ): string {
-  const target = typeof targetDate === "object" ? targetDate.getTime() : new Date(targetDate).getTime();
+  const target =
+    typeof targetDate === "object" ? targetDate.getTime() : new Date(targetDate).getTime();
   const now = Date.now();
   const diffSeconds = Math.round((target - now) / 1000);
 

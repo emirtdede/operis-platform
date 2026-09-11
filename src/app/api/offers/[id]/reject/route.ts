@@ -1,15 +1,34 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/src/modules/auth/session";
 import { OfferService } from "@/src/modules/offers/service";
+import {
+  checkRateLimit,
+  getClientIp,
+  rateLimitExceededResponse,
+} from "@/src/lib/security/rate-limit";
 
-export async function POST(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const ip = getClientIp(req);
+  const limitCheck = checkRateLimit(`offer:reject:${ip}`, 30, 60 * 1000);
+  const locale = req.headers.get("x-locale") || "tr";
+  const isEn = locale === "en";
+
+  if (!limitCheck.success) {
+    return rateLimitExceededResponse(
+      limitCheck.reset,
+      isEn
+        ? "Too many requests. Please wait a moment."
+        : "Çok fazla işlem denendi. Lütfen biraz bekleyin."
+    );
+  }
+
   try {
     const session = await getSession();
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!session?.userId) {
+      return NextResponse.json(
+        { error: isEn ? "Unauthorized" : "Yetkisiz erişim" },
+        { status: 401 }
+      );
     }
 
     const { id } = await params;
@@ -22,7 +41,23 @@ export async function POST(
 
     return NextResponse.json({ success: true, offer }, { status: 200 });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Failed to reject offer";
+    let message = isEn ? "Failed to reject offer" : "Teklif reddedilemedi";
+    if (err instanceof Error) {
+      const raw = err.message;
+      if (raw.includes("Offer not found")) {
+        message = isEn ? "Offer not found." : "Teklif bulunamadı.";
+      } else if (raw.includes("Only the listing creator can reject")) {
+        message = isEn
+          ? "Unauthorized: Only the listing creator can reject this offer."
+          : "Yetkisiz işlem: Sadece ilan sahibi bu teklifi reddedebilir.";
+      } else if (raw.includes("not in PENDING status")) {
+        message = isEn
+          ? "This offer is not in pending status."
+          : "Bu teklif bekleme durumunda değil.";
+      } else {
+        message = raw;
+      }
+    }
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }

@@ -29,7 +29,19 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   });
 
   // Core static routes
-  const staticKeys: RouteKey[] = ["feed", "listings", "newListing", "categories", "login", "register"];
+  const staticKeys: RouteKey[] = [
+    "feed",
+    "listings",
+    "newListing",
+    "categories",
+    "about",
+    "contact",
+    "help",
+    "brand",
+    "legalCenter",
+    "login",
+    "register",
+  ];
   for (const key of staticKeys) {
     entries.push({
       url: `${baseUrl}${ROUTE_MAP[key].tr}`,
@@ -70,9 +82,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         lastActivatedAt: schema.listings.lastActivatedAt,
       })
       .from(schema.listings)
-      .where(
-        sql`${schema.listings.status} = 'ACTIVE' AND ${schema.listings.activeUntil} > ${now}`
-      )
+      .where(sql`${schema.listings.status} = 'ACTIVE' AND ${schema.listings.activeUntil} > ${now}`)
       .limit(1000);
 
     for (const listing of activeListings) {

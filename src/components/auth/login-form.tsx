@@ -9,9 +9,18 @@ import { TextInput } from "../ui/text-input";
 
 export interface LoginFormProps {
   locale: string;
+  returnUrl?: string;
 }
 
-export function LoginForm({ locale }: LoginFormProps) {
+function getSafeReturnUrl(url: string | undefined | null, fallback: string): string {
+  if (!url) return fallback;
+  if (/^\/(tr|en)(\/|$)/.test(url) && !url.startsWith("//")) {
+    return url;
+  }
+  return fallback;
+}
+
+export function LoginForm({ locale, returnUrl }: LoginFormProps) {
   const isTr = locale === "tr";
   const router = useRouter();
 
@@ -24,6 +33,9 @@ export function LoginForm({ locale }: LoginFormProps) {
   const [isQuickLoggingIn, setIsQuickLoggingIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const defaultRedirect = isTr ? "/tr/akis" : "/en/feed";
+  const targetRedirect = getSafeReturnUrl(returnUrl, defaultRedirect);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -32,7 +44,10 @@ export function LoginForm({ locale }: LoginFormProps) {
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-locale": locale,
+        },
         body: JSON.stringify({
           email: email.trim(),
           password,
@@ -49,15 +64,15 @@ export function LoginForm({ locale }: LoginFormProps) {
         throw new Error(data.error || "Login failed");
       }
 
-      router.push(isTr ? "/tr/akis" : "/en/feed");
+      router.push(targetRedirect);
       router.refresh();
     } catch (err: unknown) {
       setError(
         err instanceof Error
           ? err.message
           : isTr
-          ? "Giriş yapılamadı. Bilgilerinizi kontrol ediniz."
-          : "Invalid email or password."
+            ? "Giriş yapılamadı. Bilgilerinizi kontrol ediniz."
+            : "Invalid email or password."
       );
     } finally {
       setIsLoading(false);
@@ -71,22 +86,25 @@ export function LoginForm({ locale }: LoginFormProps) {
     try {
       const res = await fetch("/api/auth/quick-login", {
         method: "POST",
+        headers: {
+          "x-locale": locale,
+        },
       });
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || "Hızlı giriş başarısız oldu");
+        throw new Error(data.error || (isTr ? "Hızlı giriş başarısız oldu" : "Quick login failed"));
       }
 
-      router.push(isTr ? "/tr/akis" : "/en/feed");
+      router.push(targetRedirect);
       router.refresh();
     } catch (err: unknown) {
       setError(
         err instanceof Error
           ? err.message
           : isTr
-          ? "Hızlı giriş yapılamadı. Lütfen tekrar deneyiniz."
-          : "Quick login failed. Please try again."
+            ? "Hızlı giriş yapılamadı. Lütfen tekrar deneyiniz."
+            : "Quick login failed. Please try again."
       );
     } finally {
       setIsQuickLoggingIn(false);
@@ -137,8 +155,12 @@ export function LoginForm({ locale }: LoginFormProps) {
                 className="p-1 rounded-md text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
                 aria-label={
                   showPassword
-                    ? isTr ? "Şifreyi gizle" : "Hide password"
-                    : isTr ? "Şifreyi göster" : "Show password"
+                    ? isTr
+                      ? "Şifreyi gizle"
+                      : "Hide password"
+                    : isTr
+                      ? "Şifreyi göster"
+                      : "Show password"
                 }
               >
                 {showPassword ? (
@@ -182,8 +204,12 @@ export function LoginForm({ locale }: LoginFormProps) {
         isLoading={isLoading}
       >
         {requires2FA
-          ? isTr ? "Doğrula ve Giriş Yap" : "Verify & Sign In"
-          : isTr ? "Giriş Yap" : "Sign In"}
+          ? isTr
+            ? "Doğrula ve Giriş Yap"
+            : "Verify & Sign In"
+          : isTr
+            ? "Giriş Yap"
+            : "Sign In"}
       </Button>
 
       {/* Quick Login Section directly under Giriş Yap */}
@@ -231,7 +257,11 @@ export function LoginForm({ locale }: LoginFormProps) {
       <div className="pt-2 text-center text-xs text-[var(--color-text-secondary)]">
         {isTr ? "Henüz bir hesabınız yok mu?" : "Do not have an account?"}{" "}
         <Link
-          href={`/${locale}/register`}
+          href={
+            returnUrl
+              ? `/${locale}/register?returnUrl=${encodeURIComponent(returnUrl)}`
+              : `/${locale}/register`
+          }
           className="font-medium text-blue-400 hover:text-blue-300 transition-colors hover:underline"
         >
           {isTr ? "Hemen Kaydolun" : "Sign Up"}

@@ -22,9 +22,7 @@ export function LivingBackground() {
     if (!ctx) return;
 
     // Respect reduced motion
-    const prefersReducedMotion = window.matchMedia(
-      "(prefers-reduced-motion: reduce)"
-    ).matches;
+    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
     let animationFrameId: number;
     let width = (canvas.width = window.innerWidth);
@@ -77,14 +75,9 @@ export function LivingBackground() {
       ctx.clearRect(0, 0, width, height);
 
       // Detect theme for particle colors
-      const isDark =
-        document.documentElement.getAttribute("data-theme") !== "light";
-      const particleColor = isDark
-        ? "rgba(56, 189, 248,"
-        : "rgba(37, 99, 235,";
-      const lineColor = isDark
-        ? "rgba(129, 140, 248,"
-        : "rgba(59, 130, 246,";
+      const isDark = document.documentElement.getAttribute("data-theme") !== "light";
+      const particleColor = isDark ? "rgba(56, 189, 248," : "rgba(37, 99, 235,";
+      const lineColor = isDark ? "rgba(129, 140, 248," : "rgba(59, 130, 246,";
 
       for (let i = 0; i < particles.length; i++) {
         const p = particles[i];

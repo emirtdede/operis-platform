@@ -15,8 +15,7 @@ beforeAll(() => {
   process.env.AUTH_SECRET = "8c7b6a5e4d3c2b1a0f9e8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a2f1e0d9c8b7a";
   process.env.PII_ENCRYPTION_KEY_CURRENT =
     "9f8e7d6c5b4a3928172635445362718293a4b5c6d7e8f901a2b3c4d5e6f70819";
-  process.env.PII_HMAC_KEY =
-    "1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f809";
+  process.env.PII_HMAC_KEY = "1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f809";
   process.env.LEGAL_ENTITY_NAME = "Operis Teknoloji Anonim Sirketi";
   process.env.LEGAL_ENTITY_TYPE = "Anonim Sirket";
   process.env.LEGAL_ADDRESS = "Buyukdere Cad. No: 100 Sisli, Istanbul";

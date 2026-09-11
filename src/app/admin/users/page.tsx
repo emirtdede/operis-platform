@@ -26,7 +26,8 @@ export default async function AdminUsersPage() {
             </span>
           </h1>
           <p className="text-xs text-slate-400 mt-1">
-            Platformdaki tüm bağımsız yazılımcı ve işveren hesaplarını denetleyin, rol atayın veya askıya alın.
+            Platformdaki tüm bağımsız yazılımcı ve işveren hesaplarını denetleyin, rol atayın veya
+            askıya alın.
           </p>
         </div>
       </div>

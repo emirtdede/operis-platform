@@ -53,9 +53,7 @@ export function ThreatsConsoleClient({ initialThreats }: ThreatsConsoleClientPro
       await blockIpAction(targetIp, blockReason);
       setBlockedIps((prev) => new Set([...prev, targetIp]));
       setThreats((prev) =>
-        prev.map((t) =>
-          t.sourceIp === targetIp ? { ...t, status: "BLOCKED" } : t
-        )
+        prev.map((t) => (t.sourceIp === targetIp ? { ...t, status: "BLOCKED" } : t))
       );
       setActionSuccessMessage(`${targetIp} adresi güvenlik duvarı seviyesinde engellendi.`);
       setBlockModalIp(null);
@@ -73,9 +71,7 @@ export function ThreatsConsoleClient({ initialThreats }: ThreatsConsoleClientPro
         return next;
       });
       setThreats((prev) =>
-        prev.map((t) =>
-          t.sourceIp === ip ? { ...t, status: "MITIGATED" } : t
-        )
+        prev.map((t) => (t.sourceIp === ip ? { ...t, status: "MITIGATED" } : t))
       );
       setActionSuccessMessage(`${ip} adresinin güvenlik engeli kaldırıldı.`);
       setTimeout(() => setActionSuccessMessage(null), 4000);
@@ -174,10 +170,11 @@ export function ThreatsConsoleClient({ initialThreats }: ThreatsConsoleClientPro
               <button
                 key={sev}
                 onClick={() => setSeverityFilter(sev)}
-                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${severityFilter === sev
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                  severityFilter === sev
                     ? "bg-red-600 text-white font-semibold"
                     : "text-slate-400 hover:text-white"
-                  }`}
+                }`}
               >
                 {sev === "ALL" ? "Tümü" : sev}
               </button>
@@ -191,12 +188,21 @@ export function ThreatsConsoleClient({ initialThreats }: ThreatsConsoleClientPro
               <button
                 key={st}
                 onClick={() => setStatusFilter(st)}
-                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${statusFilter === st
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                  statusFilter === st
                     ? "bg-slate-700 text-white font-semibold"
                     : "text-slate-400 hover:text-white"
-                  }`}
+                }`}
               >
-                {st === "ALL" ? "Tümü" : st === "DETECTED" ? "Aktif" : st === "BLOCKED" ? "Engelli" : st === "MITIGATED" ? "Yatıştırıldı" : "İncelemede"}
+                {st === "ALL"
+                  ? "Tümü"
+                  : st === "DETECTED"
+                    ? "Aktif"
+                    : st === "BLOCKED"
+                      ? "Engelli"
+                      : st === "MITIGATED"
+                        ? "Yatıştırıldı"
+                        : "İncelemede"}
               </button>
             ))}
           </div>
@@ -235,12 +241,13 @@ export function ThreatsConsoleClient({ initialThreats }: ThreatsConsoleClientPro
                       <td className="px-4 py-3.5">
                         <div className="flex items-center gap-2">
                           <div
-                            className={`p-1.5 rounded-lg ${threat.severity === "CRITICAL"
+                            className={`p-1.5 rounded-lg ${
+                              threat.severity === "CRITICAL"
                                 ? "bg-red-500/20 text-red-400 border border-red-500/30"
                                 : threat.severity === "HIGH"
                                   ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
                                   : "bg-blue-500/20 text-blue-400 border border-blue-500/30"
-                              }`}
+                            }`}
                           >
                             <ShieldAlert className="h-3.5 w-3.5" />
                           </div>
@@ -255,17 +262,19 @@ export function ThreatsConsoleClient({ initialThreats }: ThreatsConsoleClientPro
                       <td className="px-4 py-3.5">
                         <div className="flex items-center gap-2">
                           <span
-                            className={`px-2 py-0.5 rounded text-[10px] font-bold border ${threat.severity === "CRITICAL"
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                              threat.severity === "CRITICAL"
                                 ? "bg-red-500/10 text-red-400 border-red-500/30"
                                 : threat.severity === "HIGH"
                                   ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
                                   : "bg-slate-700/30 text-slate-300 border-slate-700"
-                              }`}
+                            }`}
                           >
                             {threat.severity}
                           </span>
                           <span className="font-mono text-[11px] text-slate-400">
-                            Skor: <span className="font-bold text-white">{threat.riskScore}</span>/100
+                            Skor: <span className="font-bold text-white">{threat.riskScore}</span>
+                            /100
                           </span>
                         </div>
                       </td>
@@ -293,14 +302,15 @@ export function ThreatsConsoleClient({ initialThreats }: ThreatsConsoleClientPro
 
                       <td className="px-4 py-3.5">
                         <span
-                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold border ${isBlocked || threat.status === "BLOCKED"
+                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold border ${
+                            isBlocked || threat.status === "BLOCKED"
                               ? "bg-red-500/10 text-red-400 border-red-500/30"
                               : threat.status === "DETECTED"
                                 ? "bg-amber-500/10 text-amber-400 border-amber-500/30 animate-pulse"
                                 : threat.status === "INVESTIGATING"
                                   ? "bg-blue-500/10 text-blue-400 border-blue-500/30"
                                   : "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
-                            }`}
+                          }`}
                         >
                           {isBlocked || threat.status === "BLOCKED"
                             ? "ENGELLENDİ"
@@ -364,13 +374,12 @@ export function ThreatsConsoleClient({ initialThreats }: ThreatsConsoleClientPro
             </div>
 
             <div className="text-xs text-slate-400 leading-relaxed">
-              Bu IP adresinden gelen tüm API ve web istekleri WAF / Edge seviyesinde 403 Forbidden ile engellenecek ve güvenlik denetim kaydına yazılacaktır.
+              Bu IP adresinden gelen tüm API ve web istekleri WAF / Edge seviyesinde 403 Forbidden
+              ile engellenecek ve güvenlik denetim kaydına yazılacaktır.
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs text-slate-300 font-medium">
-                Engelleme Gerekçesi:
-              </label>
+              <label className="text-xs text-slate-300 font-medium">Engelleme Gerekçesi:</label>
               <textarea
                 rows={3}
                 value={blockReason}

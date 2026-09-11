@@ -20,6 +20,11 @@ const SLUG_ALIASES: Record<string, string> = {
   "kabul-edilebilir-kullanim": "acceptable-use",
   "cerez-politikasi": "cookies",
   iletisim: "contact",
+  "fikri-mulkiyet-ve-telif": "intellectual-property",
+  "fikri-mulkiyet": "intellectual-property",
+  "acik-riza-metni": "consent",
+  "acik-riza": "consent",
+  "uyusmazlik-cozumu": "dispute-resolution",
 };
 
 export class LegalService {
@@ -68,11 +73,7 @@ export class LegalService {
   /**
    * Verifies if a user has accepted a specific version of a document.
    */
-  static async hasAccepted(
-    userId: string,
-    documentKey: string,
-    version: string
-  ): Promise<boolean> {
+  static async hasAccepted(userId: string, documentKey: string, version: string): Promise<boolean> {
     const db = getDb();
     const rows = await db
       .select({ id: schema.legalAcceptances.id })

@@ -6,6 +6,7 @@ import { Layers, DollarSign, Tag, CheckCircle2, AlertCircle } from "lucide-react
 import { Button } from "../ui/button";
 import { TextInput } from "../ui/text-input";
 import { TextArea } from "../ui/text-area";
+import { EMOJI_REGEX, validateContentAppropriateness } from "@/src/lib/security/content-moderator";
 
 export interface ListingEditFormProps {
   listing: {
@@ -43,14 +44,53 @@ export function ListingEditForm({ listing, locale }: ListingEditFormProps) {
     setSuccess(false);
 
     try {
+      if (budgetMin && budgetMax && parseFloat(budgetMin) > parseFloat(budgetMax)) {
+        setError(
+          isTr
+            ? "Minimum bütçe maksimum bütçeden büyük olamaz."
+            : "Minimum budget cannot exceed maximum budget."
+        );
+        setIsLoading(false);
+        return;
+      }
+
       const parsedTags = tagsStr
         .split(",")
         .map((t) => t.trim())
         .filter(Boolean);
 
+      if (
+        EMOJI_REGEX.test(title) ||
+        EMOJI_REGEX.test(summary) ||
+        EMOJI_REGEX.test(scope) ||
+        parsedTags.some((t) => EMOJI_REGEX.test(t))
+      ) {
+        setError(
+          isTr
+            ? "İlan başlığı, özeti, kapsamı ve etiketleri emoji içeremez."
+            : "Listing title, summary, scope, and tags cannot contain emojis."
+        );
+        setIsLoading(false);
+        return;
+      }
+
+      if (
+        !validateContentAppropriateness(title).isValid ||
+        !validateContentAppropriateness(summary).isValid ||
+        !validateContentAppropriateness(scope).isValid
+      ) {
+        setError(
+          isTr
+            ? "İlan içeriğinde topluluk kurallarına aykırı veya uygunsuz ifadeler bulunmaktadır."
+            : "Listing content contains inappropriate or prohibited expressions."
+        );
+        setIsLoading(false);
+        return;
+      }
+
       const res = await fetch(`/api/listings/${listing.id}/update`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-locale": locale },
         body: JSON.stringify({
           title: title.trim(),
           summary: summary.trim(),
@@ -62,7 +102,7 @@ export function ListingEditForm({ listing, locale }: ListingEditFormProps) {
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "İlan güncellenemedi");
+      if (!res.ok) throw new Error(data.error || (isTr ? "İlan güncellenemedi" : "Failed to update listing"));
 
       setSuccess(true);
       setTimeout(() => {
@@ -70,7 +110,9 @@ export function ListingEditForm({ listing, locale }: ListingEditFormProps) {
         router.refresh();
       }, 1500);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : (isTr ? "Güncelleme başarısız oldu." : "Update failed."));
+      setError(
+        err instanceof Error ? err.message : isTr ? "Güncelleme başarısız oldu." : "Update failed."
+      );
     } finally {
       setIsLoading(false);
     }
@@ -88,7 +130,11 @@ export function ListingEditForm({ listing, locale }: ListingEditFormProps) {
       {success && (
         <div className="flex items-center gap-2.5 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-xs text-emerald-400">
           <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
-          <span>{isTr ? "İlan başarıyla güncellendi! Yönlendiriliyorsunuz..." : "Listing successfully updated! Redirecting..."}</span>
+          <span>
+            {isTr
+              ? "İlan başarıyla güncellendi! Yönlendiriliyorsunuz..."
+              : "Listing successfully updated! Redirecting..."}
+          </span>
         </div>
       )}
 
@@ -140,7 +186,9 @@ export function ListingEditForm({ listing, locale }: ListingEditFormProps) {
         </div>
 
         <TextInput
-          label={isTr ? "Teknoloji Etiketleri (Virgülle ayırın)" : "Tech Stack Tags (Comma separated)"}
+          label={
+            isTr ? "Teknoloji Etiketleri (Virgülle ayırın)" : "Tech Stack Tags (Comma separated)"
+          }
           value={tagsStr}
           onChange={(e) => setTagsStr(e.target.value)}
           placeholder="Next.js, TypeScript, PostgreSQL, Docker"

@@ -1,6 +1,6 @@
 import pg from "pg";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import * as schema from "@/db/schema";
 import { SEED_CATEGORIES } from "@/db/seeds/categories";
 import { getEnv } from "@/src/config/env";
@@ -55,9 +55,7 @@ async function runSeed() {
         const existingTrans = await db
           .select()
           .from(schema.categoryTranslations)
-          .where(
-            eq(schema.categoryTranslations.categoryId, categoryId)
-          );
+          .where(eq(schema.categoryTranslations.categoryId, categoryId));
 
         const hasLocale = existingTrans.some((t) => t.locale === locale);
 
@@ -73,7 +71,10 @@ async function runSeed() {
             .update(schema.categoryTranslations)
             .set({ name: trans.name, description: trans.description })
             .where(
-              eq(schema.categoryTranslations.categoryId, categoryId)
+              and(
+                eq(schema.categoryTranslations.categoryId, categoryId),
+                eq(schema.categoryTranslations.locale, locale)
+              )
             );
         }
       }

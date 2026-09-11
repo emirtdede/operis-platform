@@ -35,13 +35,17 @@ function main() {
   let hasError = false;
 
   if (missingInEn.length > 0) {
-    console.error(`FAIL: ${missingInEn.length} keys in Turkish catalog are missing from English catalog:`);
+    console.error(
+      `FAIL: ${missingInEn.length} keys in Turkish catalog are missing from English catalog:`
+    );
     missingInEn.forEach((k) => console.error(`  - ${k}`));
     hasError = true;
   }
 
   if (missingInTr.length > 0) {
-    console.error(`FAIL: ${missingInTr.length} keys in English catalog are missing from Turkish catalog:`);
+    console.error(
+      `FAIL: ${missingInTr.length} keys in English catalog are missing from Turkish catalog:`
+    );
     missingInTr.forEach((k) => console.error(`  - ${k}`));
     hasError = true;
   }

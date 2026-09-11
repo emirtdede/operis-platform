@@ -55,6 +55,14 @@ export default async function EditListingPage({
 
   const { listing } = data;
 
+  if (listing.status === "DELETED") {
+    notFound();
+  }
+
+  if (listing.status === "MATCHED" || listing.status === "COMPLETED") {
+    redirect(isTr ? `/tr/ilanlar/${listing.slug}` : `/en/listings/${listing.slug}`);
+  }
+
   return (
     <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8 space-y-8">
       {/* Header */}

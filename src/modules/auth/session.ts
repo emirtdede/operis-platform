@@ -37,10 +37,7 @@ export function createSessionToken(user: {
   };
 
   const payloadB64 = Buffer.from(JSON.stringify(payload)).toString("base64url");
-  const signature = crypto
-    .createHmac("sha256", env.AUTH_SECRET)
-    .update(payloadB64)
-    .digest("hex");
+  const signature = crypto.createHmac("sha256", env.AUTH_SECRET).update(payloadB64).digest("hex");
 
   return `${payloadB64}.${signature}`;
 }
@@ -61,12 +58,9 @@ export function verifySessionToken(token: string): SessionPayload | null {
       .update(payloadB64!)
       .digest("hex");
 
-    if (
-      !crypto.timingSafeEqual(
-        Buffer.from(signature!, "hex"),
-        Buffer.from(expectedSignature, "hex")
-      )
-    ) {
+    const sigBuf = Buffer.from(signature!, "hex");
+    const expectedBuf = Buffer.from(expectedSignature, "hex");
+    if (sigBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(sigBuf, expectedBuf)) {
       return null;
     }
 
@@ -84,12 +78,74 @@ export function verifySessionToken(token: string): SessionPayload | null {
   }
 }
 
+export const SESSION_MAX_AGE_SECONDS = SESSION_EXPIRY_DAYS * 24 * 60 * 60;
+
 /**
- * Helper to get the current authenticated session from server request cookies.
+ * Validates session token and re-verifies user status against database (suspension/revocation/deletion check).
  */
-export async function getSession(): Promise<SessionPayload | null> {
+export async function getVerifiedSession(): Promise<SessionPayload | null> {
   const cookieStore = await cookies();
   const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME);
   if (!sessionCookie?.value) return null;
-  return verifySessionToken(sessionCookie.value);
+
+  const session = verifySessionToken(sessionCookie.value);
+  if (!session) return null;
+
+  try {
+    const { getDb, schema } = await import("@/src/lib/db");
+    const { eq } = await import("drizzle-orm");
+    const db = getDb();
+    const userRows = await db
+      .select({ status: schema.users.status, role: schema.users.role })
+      .from(schema.users)
+      .where(eq(schema.users.id, session.userId))
+      .limit(1);
+
+    if (userRows.length === 0) {
+      // If user row not in DB, check if it's a known active demo user in non-production
+      if (process.env.NODE_ENV !== "production") {
+        const { DEFAULT_USER } = await import("@/src/modules/auth/demo-user");
+        if (session.userId === DEFAULT_USER.id) {
+          if (DEFAULT_USER.status !== "ACTIVE") return null;
+          return {
+            ...session,
+            role: DEFAULT_USER.role,
+            status: DEFAULT_USER.status,
+          };
+        }
+      }
+      return null;
+    }
+
+    const dbUser = userRows[0]!;
+    if (dbUser.status !== "ACTIVE") return null;
+
+    return {
+      ...session,
+      role: dbUser.role,
+      status: dbUser.status,
+    };
+  } catch {
+    // If DB check fails in non-production or test environments, check demo user status or return signed session
+    if (process.env.NODE_ENV !== "production" || process.env.VITEST) {
+      try {
+        const { DEFAULT_USER } = await import("@/src/modules/auth/demo-user");
+        if (session.userId === DEFAULT_USER.id && DEFAULT_USER.status !== "ACTIVE") {
+          return null;
+        }
+      } catch {
+        // Ignore demo user lookup error
+      }
+      if (session.status !== "ACTIVE") return null;
+      return session;
+    }
+    return null;
+  }
+}
+
+/**
+ * Gets the current authenticated session with active database status and role verification.
+ */
+export async function getSession(): Promise<SessionPayload | null> {
+  return getVerifiedSession();
 }

@@ -16,13 +16,14 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="tr" dir="ltr" className="scroll-smooth md:snap-y md:snap-proximity" suppressHydrationWarning>
+    <html
+      lang="tr"
+      dir="ltr"
+      className="scroll-smooth md:snap-y md:snap-proximity"
+      suppressHydrationWarning
+    >
       <head>
         <script
           dangerouslySetInnerHTML={{
@@ -32,9 +33,7 @@ export default function RootLayout({
       </head>
       <body className="relative min-h-screen bg-[var(--bg-canvas)] text-[var(--text-primary)] antialiased transition-colors selection:bg-blue-500/20 selection:text-blue-500 overflow-x-hidden">
         <LivingBackground />
-        <div className="relative z-10 flex min-h-screen flex-col">
-          {children}
-        </div>
+        <div className="relative z-10 flex min-h-screen flex-col">{children}</div>
       </body>
     </html>
   );

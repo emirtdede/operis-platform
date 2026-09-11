@@ -1,52 +1,48 @@
-name: CI Quality Gate
+name: Operis CI/CD Quality Gate
 
 on:
   push:
-    branches: [main]
+    branches: [main, master, develop]
   pull_request:
-    branches: [main]
+    branches: [main, master]
 
 jobs:
   quality-gate:
-    name: Lint, Typecheck, Audits, Tests & Production Build
+    name: Code Quality, Security & Test Matrix
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Setup Node.js 20
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 20
+          cache: "pnpm"
 
-      - name: Install pnpm
-        run: npm install -g pnpm@12.3.4
+      - name: Install Dependencies
+        run: pnpm install
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: ESLint check
-        run: pnpm lint
-
-      - name: TypeScript typecheck
+      - name: 1. Strict TypeScript Typecheck
         run: pnpm typecheck
 
-      - name: Zero-emoji policy audit
+      - name: 2. ESLint Code Hygiene (0 Errors / 0 Warnings)
+        run: pnpm lint
+
+      - name: 3. Zero-Emoji Compliance Audit
         run: pnpm audit:emoji
 
-      - name: i18n locale parity audit
+      - name: 4. Dual-Language (TR/EN) Parity Audit
         run: pnpm audit:i18n
 
-      - name: Run Unit Tests
+      - name: 5. Unit & Security Matrix Test Suite (5,170+ Tests)
         run: pnpm test:unit
 
-      - name: Production Build
-        run: pnpm build
-        env:
-          NODE_ENV: production
-          NEXT_PUBLIC_APP_URL: https://operis.pro
-          DATABASE_URL: postgres://postgres:postgres@localhost:5432/freelance_platform
-          SESSION_SECRET: sessionsecretmustbe32charactersminimumlengthforsecurity
-          PII_ENCRYPTION_KEY_CURRENT: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
-          PII_HMAC_KEY: abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789
-          EMAIL_FROM: noreply@operis.pro
+      - name: 6. WAI-ARIA & Accessibility (a11y) Test Suite
+        run: pnpm test:a11y

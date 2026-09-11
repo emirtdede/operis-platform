@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { setRequestLocale } from "next-intl/server";
 import { LockKeyhole, ArrowLeft } from "lucide-react";
 import { ResetPasswordForm } from "@/src/components/auth/reset-password-form";
+import { getSession } from "@/src/modules/auth/session";
+import { getLocalizedRoute } from "@/src/lib/i18n/routes";
 
 export async function generateMetadata({
   params,
@@ -13,9 +16,7 @@ export async function generateMetadata({
   const { locale } = await params;
   const isTr = locale === "tr";
 
-  const title = isTr
-    ? "Yeni Şifre Belirleyin — Operis"
-    : "Set New Password — Operis";
+  const title = isTr ? "Yeni Şifre Belirleyin — Operis" : "Set New Password — Operis";
   const description = isTr
     ? "Hesabınız için yeni ve güvenli bir şifre belirleyin."
     : "Set a new and secure password for your Operis account.";
@@ -37,6 +38,12 @@ export default async function ResetPasswordPage({
 }) {
   const { locale } = await params;
   setRequestLocale(locale);
+
+  // Authenticated users must not access password reset page; redirect to workspace
+  const session = await getSession();
+  if (session) {
+    redirect(getLocalizedRoute("dashboardListings", locale));
+  }
   const isTr = locale === "tr";
 
   return (
@@ -56,7 +63,13 @@ export default async function ResetPasswordPage({
           </p>
         </header>
 
-        <Suspense fallback={<div className="h-40 flex items-center justify-center text-xs text-[var(--color-text-tertiary)]">Yükleniyor...</div>}>
+        <Suspense
+          fallback={
+            <div className="h-40 flex items-center justify-center text-xs text-[var(--color-text-tertiary)]">
+              Yükleniyor...
+            </div>
+          }
+        >
           <ResetPasswordForm locale={locale} />
         </Suspense>
 

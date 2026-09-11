@@ -1,15 +1,17 @@
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, or, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/src/lib/db";
-import { EMOJI_REGEX } from "@/scripts/check-emojis";
-import { ProfileLinkInput, profileLinkSchema } from "./links";
+import { EMOJI_REGEX, validateContentAppropriateness } from "@/src/lib/security/content-moderator";
+import { ProfileLinkInput, profileLinkSchema, isValidExternalUrl } from "./links";
 import { RESERVED_HANDLES } from "../auth/validation";
 import { DEFAULT_USER } from "../auth/demo-user";
+import { EndorsementService, EndorsementDto } from "../endorsements/service";
 
 export interface PublicProfileDto {
   userId: string;
   handle: string;
   displayName: string;
   about: string | null;
+  avatarUrl?: string | null;
   showLocation: boolean;
   location?: { countryCode: string; city: string } | null;
   links: Array<{
@@ -29,17 +31,48 @@ export interface PublicProfileDto {
       isDeleted: boolean;
     };
   }>;
+  trackedSkills?: string[];
+  endorsements?: EndorsementDto[];
 }
 
 export interface UpdateProfileInput {
   displayName?: string;
   handle?: string;
   about?: string | null;
+  avatarUrl?: string | null;
   showLocation?: boolean;
   revealPhoneAfterMatch?: boolean;
   locale?: string;
   theme?: string;
+  trackedSkills?: string[];
 }
+
+let demoUserLinks: Array<{
+  id: string;
+  type: string;
+  label: string;
+  url: string;
+  sortOrder: number;
+}> = [
+  {
+    id: "link-1",
+    type: "github",
+    label: "GitHub",
+    url: "https://github.com/operis",
+    sortOrder: 0,
+  },
+];
+
+const inMemoryUserLinks = new Map<
+  string,
+  Array<{
+    id: string;
+    type: string;
+    label: string;
+    url: string;
+    sortOrder: number;
+  }>
+>();
 
 export class ProfileService {
   /**
@@ -47,138 +80,220 @@ export class ProfileService {
    * Never exposes private identity or incomplete projects.
    */
   static async getPublicProfileByHandle(handle: string): Promise<PublicProfileDto | null> {
-    if (handle.toLowerCase() === DEFAULT_USER.profile.handle.toLowerCase()) {
+    const lower = handle.toLowerCase();
+    if (
+      process.env.NODE_ENV !== "production" &&
+      lower === DEFAULT_USER.profile.handle.toLowerCase()
+    ) {
+      if (DEFAULT_USER.status !== "ACTIVE") {
+        return null;
+      }
       return {
         userId: DEFAULT_USER.id,
         handle: DEFAULT_USER.profile.handle,
         displayName: DEFAULT_USER.profile.displayName,
         about: DEFAULT_USER.profile.about,
+        avatarUrl: DEFAULT_USER.profile.avatarUrl || null,
         showLocation: DEFAULT_USER.profile.showLocation,
         location: { countryCode: "TR", city: "İstanbul" },
-        links: [
-          {
-            id: "link-1",
-            type: "github",
-            label: "GitHub",
-            url: "https://github.com/operis",
-          },
-        ],
+        links: (inMemoryUserLinks.get(DEFAULT_USER.id) || demoUserLinks).map((l) => ({
+          id: l.id,
+          type: l.type,
+          label: l.label,
+          url: l.url,
+        })),
         completedWork: [],
+        trackedSkills: DEFAULT_USER.profile.trackedSkills || [
+          "Next.js",
+          "TypeScript",
+          "Tailwind CSS",
+          "PostgreSQL",
+          "React",
+        ],
+        endorsements: await EndorsementService.getEndorsementsForUser(DEFAULT_USER.id),
       };
+    }
+
+    if (process.env.NODE_ENV !== "production") {
+      if (lower === "mehmetkaan" || lower === "usr_mock_mehmet_kaan") {
+        return {
+          userId: "usr_mock_mehmet_kaan",
+          handle: "mehmetkaan",
+          displayName: "Mehmet Kaan",
+          about: "Cross-platform mobil geliştirici ve Flutter uzmanı.",
+          avatarUrl: null,
+          showLocation: true,
+          location: { countryCode: "TR", city: "Ankara" },
+          links: inMemoryUserLinks.get("usr_mock_mehmet_kaan") || [
+            { id: "mk-1", type: "github", label: "GitHub", url: "https://github.com/mehmetkaan" },
+          ],
+          completedWork: [],
+          trackedSkills: ["Flutter", "Dart", "iOS", "Android"],
+          endorsements: await EndorsementService.getEndorsementsForUser("usr_mock_mehmet_kaan"),
+        };
+      }
+      if (lower === "selinyilmaz" || lower === "usr_mock_selin_yilmaz") {
+        return {
+          userId: "usr_mock_selin_yilmaz",
+          handle: "selinyilmaz",
+          displayName: "Selin Yılmaz",
+          about: "Go ve PostgreSQL ile yüksek trafikli mikroservis mimarı.",
+          avatarUrl: null,
+          showLocation: true,
+          location: { countryCode: "TR", city: "İzmir" },
+          links: inMemoryUserLinks.get("usr_mock_selin_yilmaz") || [
+            { id: "sy-1", type: "github", label: "GitHub", url: "https://github.com/selinyilmaz" },
+          ],
+          completedWork: [],
+          trackedSkills: ["Go", "PostgreSQL", "Docker", "Redis"],
+          endorsements: await EndorsementService.getEndorsementsForUser("usr_mock_selin_yilmaz"),
+        };
+      }
     }
 
     try {
       const db = getDb();
 
-      // 1. Fetch profile
+      // 1. Fetch profile and verify user is ACTIVE
       const profileRows = await db
-        .select()
+        .select({
+          profile: schema.profiles,
+        })
         .from(schema.profiles)
-        .where(eq(schema.profiles.handle, handle.toLowerCase()))
+        .innerJoin(schema.users, eq(schema.profiles.userId, schema.users.id))
+        .where(
+          and(
+            eq(schema.profiles.handle, handle.toLowerCase()),
+            eq(schema.users.status, "ACTIVE")
+          )
+        )
         .limit(1);
 
       if (profileRows.length === 0) return null;
-      const profile = profileRows[0]!;
+      const profile = profileRows[0]!.profile;
 
-    // 2. Fetch public links
-    const links = await db
-      .select({
-        id: schema.profileLinks.id,
-        type: schema.profileLinks.type,
-        label: schema.profileLinks.label,
-        url: schema.profileLinks.url,
-      })
-      .from(schema.profileLinks)
-      .where(eq(schema.profileLinks.userId, profile.userId))
-      .orderBy(schema.profileLinks.sortOrder);
-
-    // 3. Location if enabled
-    let location = null;
-    if (profile.showLocation) {
-      const identityRows = await db
+      // 2. Fetch public links
+      const links = await db
         .select({
-          countryCode: schema.userPrivateIdentity.countryCode,
-          city: schema.userPrivateIdentity.city,
+          id: schema.profileLinks.id,
+          type: schema.profileLinks.type,
+          label: schema.profileLinks.label,
+          url: schema.profileLinks.url,
         })
-        .from(schema.userPrivateIdentity)
-        .where(eq(schema.userPrivateIdentity.userId, profile.userId))
-        .limit(1);
+        .from(schema.profileLinks)
+        .where(eq(schema.profileLinks.userId, profile.userId))
+        .orderBy(schema.profileLinks.sortOrder);
 
-      if (identityRows.length > 0) {
-        location = identityRows[0];
+      // 3. Location if enabled
+      let location = null;
+      if (profile.showLocation) {
+        const identityRows = await db
+          .select({
+            countryCode: schema.userPrivateIdentity.countryCode,
+            city: schema.userPrivateIdentity.city,
+          })
+          .from(schema.userPrivateIdentity)
+          .where(eq(schema.userPrivateIdentity.userId, profile.userId))
+          .limit(1);
+
+        if (identityRows.length > 0) {
+          location = identityRows[0];
+        }
       }
-    }
 
-    // 4. Fetch ONLY mutually completed engagements
-    // Either the user was the owner, or the freelancer
-    const completedEngagements = await db
-      .select()
-      .from(schema.engagements)
-      .where(
-        and(
-          eq(schema.engagements.status, "COMPLETED")
-          // Must involve this user
+      // 4. Fetch ONLY mutually completed engagements for this user
+      const userCompleted = await db
+        .select()
+        .from(schema.engagements)
+        .where(
+          and(
+            eq(schema.engagements.status, "COMPLETED"),
+            or(
+              eq(schema.engagements.ownerUserId, profile.userId),
+              eq(schema.engagements.freelancerUserId, profile.userId)
+            )
+          )
         )
-      )
-      .orderBy(desc(schema.engagements.completedAt));
+        .orderBy(desc(schema.engagements.completedAt))
+        .limit(20);
 
-    const userCompleted = completedEngagements.filter(
-      (eng) => eng.ownerUserId === profile.userId || eng.freelancerUserId === profile.userId
-    );
+      // Batch counterparty details safely
+      const completedWork = [];
+      const cpUserIds = [
+        ...new Set(
+          userCompleted.map((eng) =>
+            eng.ownerUserId === profile.userId ? eng.freelancerUserId : eng.ownerUserId
+          )
+        ),
+      ];
 
-    // Build counterparty details safely
-    const completedWork = [];
-    for (const eng of userCompleted) {
-      const counterpartyUserId =
-        eng.ownerUserId === profile.userId ? eng.freelancerUserId : eng.ownerUserId;
+      let cpUserMap = new Map<string, string>();
+      let cpProfileMap = new Map<string, { displayName: string; handle: string }>();
 
-      const cpUserRows = await db
-        .select({ status: schema.users.status })
-        .from(schema.users)
-        .where(eq(schema.users.id, counterpartyUserId))
-        .limit(1);
+      if (cpUserIds.length > 0) {
+        const cpUsers = await db
+          .select({ id: schema.users.id, status: schema.users.status })
+          .from(schema.users)
+          .where(inArray(schema.users.id, cpUserIds));
+        cpUserMap = new Map(cpUsers.map((u) => [u.id, u.status]));
 
-      const cpProfileRows = await db
-        .select({ displayName: schema.profiles.displayName, handle: schema.profiles.handle })
-        .from(schema.profiles)
-        .where(eq(schema.profiles.userId, counterpartyUserId))
-        .limit(1);
+        const cpProfiles = await db
+          .select({
+            userId: schema.profiles.userId,
+            displayName: schema.profiles.displayName,
+            handle: schema.profiles.handle,
+          })
+          .from(schema.profiles)
+          .where(inArray(schema.profiles.userId, cpUserIds));
+        cpProfileMap = new Map(
+          cpProfiles.map((p) => [p.userId, { displayName: p.displayName, handle: p.handle }])
+        );
+      }
 
-      const isDeleted = cpUserRows[0]?.status === "DELETED";
+      for (const eng of userCompleted) {
+        const counterpartyUserId =
+          eng.ownerUserId === profile.userId ? eng.freelancerUserId : eng.ownerUserId;
 
-      completedWork.push({
-        engagementId: eng.id,
-        title: eng.listingTitleSnapshot,
-        category: eng.listingCategorySnapshot,
-        completedAt: eng.completedAt || eng.matchedAt,
-        counterparty: {
-          displayName: isDeleted ? "Former User" : cpProfileRows[0]?.displayName || "User",
-          handle: isDeleted ? "former-user" : cpProfileRows[0]?.handle || "user",
-          isDeleted,
-        },
-      });
+        const isDeleted = cpUserMap.get(counterpartyUserId) === "DELETED";
+        const cpProfile = cpProfileMap.get(counterpartyUserId);
+
+        completedWork.push({
+          engagementId: eng.id,
+          title: eng.listingTitleSnapshot,
+          category: eng.listingCategorySnapshot,
+          completedAt: eng.completedAt || eng.matchedAt,
+          counterparty: {
+            displayName: isDeleted ? "Former User" : cpProfile?.displayName || "User",
+            handle: isDeleted ? "former-user" : cpProfile?.handle || "user",
+            isDeleted,
+          },
+        });
+      }
+
+      const endorsements = await EndorsementService.getEndorsementsForUser(profile.userId);
+
+      return {
+        userId: profile.userId,
+        handle: profile.handle,
+        displayName: profile.displayName,
+        about: profile.about,
+        avatarUrl: profile.avatarUrl || null,
+        showLocation: profile.showLocation,
+        location,
+        links,
+        completedWork,
+        trackedSkills: (profile as { trackedSkills?: string[] }).trackedSkills || [],
+        endorsements,
+      };
+    } catch {
+      return null;
     }
-
-    return {
-      userId: profile.userId,
-      handle: profile.handle,
-      displayName: profile.displayName,
-      about: profile.about,
-      showLocation: profile.showLocation,
-      location,
-      links,
-      completedWork,
-    };
-  } catch {
-    return null;
-  }
   }
 
   /**
    * Updates profile fields with validation and reserved handles protection.
    */
   static async updateProfile(userId: string, input: UpdateProfileInput): Promise<void> {
-    const db = getDb();
     const updateData: Partial<typeof schema.profiles.$inferInsert> = {
       updatedAt: new Date(),
     };
@@ -187,6 +302,9 @@ export class ProfileService {
       const trimmed = input.displayName.trim();
       if (trimmed.length < 2 || trimmed.length > 80 || EMOJI_REGEX.test(trimmed)) {
         throw new Error("Display name must be 2-80 characters and contain no emojis.");
+      }
+      if (!validateContentAppropriateness(trimmed).isValid) {
+        throw new Error("Display name contains inappropriate or prohibited content.");
       }
       updateData.displayName = trimmed;
     }
@@ -203,14 +321,24 @@ export class ProfileService {
       }
 
       // Check unique
-      const existing = await db
-        .select({ userId: schema.profiles.userId })
-        .from(schema.profiles)
-        .where(eq(schema.profiles.handle, handle))
-        .limit(1);
+      try {
+        const db = getDb();
+        const existing = await db
+          .select({ userId: schema.profiles.userId })
+          .from(schema.profiles)
+          .where(eq(schema.profiles.handle, handle))
+          .limit(1);
 
-      if (existing.length > 0 && existing[0]?.userId !== userId) {
-        throw new Error("This handle is already taken.");
+        if (existing.length > 0 && existing[0]?.userId !== userId) {
+          throw new Error("This handle is already taken.");
+        }
+      } catch (err) {
+        if (err instanceof Error && err.message === "This handle is already taken.") {
+          throw err;
+        }
+        if (userId !== DEFAULT_USER.id) {
+          throw err;
+        }
       }
 
       updateData.handle = handle;
@@ -220,7 +348,25 @@ export class ProfileService {
       if (input.about && (input.about.length > 1000 || EMOJI_REGEX.test(input.about))) {
         throw new Error("About text cannot exceed 1000 characters or contain emojis.");
       }
+      if (input.about && !validateContentAppropriateness(input.about).isValid) {
+        throw new Error("About text contains inappropriate or prohibited content.");
+      }
       updateData.about = input.about || null;
+    }
+
+    if (input.avatarUrl !== undefined) {
+      if (input.avatarUrl && input.avatarUrl.trim().length > 0) {
+        const trimmed = input.avatarUrl.trim();
+        if (trimmed.length > 2000) {
+          throw new Error("Avatar URL cannot exceed 2000 characters.");
+        }
+        if (!isValidExternalUrl(trimmed)) {
+          throw new Error("Invalid profile picture URL. Must be a valid HTTPS link.");
+        }
+        updateData.avatarUrl = trimmed;
+      } else {
+        updateData.avatarUrl = null;
+      }
     }
 
     if (input.showLocation !== undefined) {
@@ -232,17 +378,66 @@ export class ProfileService {
     }
 
     if (input.locale !== undefined) {
+      if (input.locale !== "tr" && input.locale !== "en") {
+        throw new Error("Invalid locale. Must be 'tr' or 'en'.");
+      }
       updateData.locale = input.locale;
     }
 
     if (input.theme !== undefined) {
+      if (!["light", "dark", "system"].includes(input.theme)) {
+        throw new Error("Invalid theme. Must be 'light', 'dark', or 'system'.");
+      }
       updateData.theme = input.theme;
     }
 
-    await db
-      .update(schema.profiles)
-      .set(updateData)
-      .where(eq(schema.profiles.userId, userId));
+    if (input.trackedSkills !== undefined) {
+      const validSkills = input.trackedSkills
+        .map((s) => s.trim())
+        .filter(
+          (s) =>
+            s.length > 0 &&
+            s.length <= 30 &&
+            !EMOJI_REGEX.test(s) &&
+            validateContentAppropriateness(s).isValid
+        )
+        .slice(0, 5);
+      updateData.trackedSkills = validSkills;
+      if (userId === DEFAULT_USER.id) {
+        DEFAULT_USER.profile.trackedSkills = validSkills;
+      }
+    }
+
+    if (userId === DEFAULT_USER.id) {
+      if (input.displayName !== undefined)
+        DEFAULT_USER.profile.displayName = input.displayName.trim();
+      if (input.handle !== undefined)
+        DEFAULT_USER.profile.handle = input.handle.toLowerCase().trim();
+      if (input.about !== undefined) DEFAULT_USER.profile.about = input.about || "";
+      if (input.avatarUrl !== undefined)
+        DEFAULT_USER.profile.avatarUrl = updateData.avatarUrl ?? null;
+      if (input.showLocation !== undefined) DEFAULT_USER.profile.showLocation = input.showLocation;
+      if (input.revealPhoneAfterMatch !== undefined)
+        DEFAULT_USER.profile.revealPhoneAfterMatch = input.revealPhoneAfterMatch;
+      if (input.locale !== undefined) DEFAULT_USER.profile.locale = input.locale;
+      if (input.theme !== undefined) DEFAULT_USER.profile.theme = input.theme;
+      if (input.trackedSkills !== undefined)
+        DEFAULT_USER.profile.trackedSkills = updateData.trackedSkills;
+
+      if (process.env.VITEST || process.env.NODE_ENV === "test") {
+        return;
+      }
+    }
+
+    try {
+      const db = getDb();
+      await db.update(schema.profiles).set(updateData).where(eq(schema.profiles.userId, userId));
+    } catch (dbErr) {
+      // Allow demo user mutation in environments without live DB
+      if (userId !== DEFAULT_USER.id) {
+        throw dbErr;
+      }
+    }
   }
 
   /**
@@ -254,49 +449,68 @@ export class ProfileService {
     }
 
     const validatedLinks = linksInput.map((l) => profileLinkSchema.parse(l));
-    const db = getDb();
 
-    await db.transaction(async (tx) => {
-      await tx
-        .delete(schema.profileLinks)
-        .where(eq(schema.profileLinks.userId, userId));
+    const mappedLinks = validatedLinks.map((link, idx) => ({
+      id: `link-${idx + 1}`,
+      type: link.type,
+      label: link.label,
+      url: link.url,
+      sortOrder: idx,
+    }));
 
-      for (let i = 0; i < validatedLinks.length; i++) {
-        const link = validatedLinks[i]!;
-        await tx.insert(schema.profileLinks).values({
-          userId,
-          type: link.type,
-          label: link.label,
-          url: link.url,
-          sortOrder: i,
-        });
+    inMemoryUserLinks.set(userId, mappedLinks);
+
+    if (userId === DEFAULT_USER.id) {
+      demoUserLinks = mappedLinks;
+      return;
+    }
+
+    try {
+      const db = getDb();
+      await db.transaction(async (tx) => {
+        await tx.delete(schema.profileLinks).where(eq(schema.profileLinks.userId, userId));
+
+        for (let i = 0; i < validatedLinks.length; i++) {
+          const link = validatedLinks[i]!;
+          await tx.insert(schema.profileLinks).values({
+            userId,
+            type: link.type,
+            label: link.label,
+            url: link.url,
+            sortOrder: i,
+          });
+        }
+      });
+    } catch (err) {
+      if (process.env.NODE_ENV === "production") {
+        throw err;
       }
-    });
+    }
   }
 
   /**
    * Retrieves full profile settings and configured links for the given user ID.
    */
   static async getProfileByUserId(userId: string) {
-    if (userId === DEFAULT_USER.id) {
+    if (process.env.NODE_ENV !== "production" && userId === DEFAULT_USER.id) {
       return {
         userId: DEFAULT_USER.id,
         handle: DEFAULT_USER.profile.handle,
         displayName: DEFAULT_USER.profile.displayName,
         about: DEFAULT_USER.profile.about,
+        avatarUrl: DEFAULT_USER.profile.avatarUrl || null,
         showLocation: DEFAULT_USER.profile.showLocation,
-        revealPhoneAfterMatch: false,
+        revealPhoneAfterMatch: DEFAULT_USER.profile.revealPhoneAfterMatch ?? false,
         locale: DEFAULT_USER.profile.locale,
         theme: DEFAULT_USER.profile.theme,
-        links: [
-          {
-            id: "link-1",
-            type: "github",
-            label: "GitHub",
-            url: "https://github.com/operis",
-            sortOrder: 0,
-          },
+        trackedSkills: DEFAULT_USER.profile.trackedSkills || [
+          "Next.js",
+          "TypeScript",
+          "Tailwind CSS",
+          "PostgreSQL",
+          "React",
         ],
+        links: inMemoryUserLinks.get(DEFAULT_USER.id) || demoUserLinks,
       };
     }
 
@@ -319,21 +533,37 @@ export class ProfileService {
 
       return {
         ...profile,
+        avatarUrl: profile.avatarUrl || null,
         links,
       };
     } catch {
+      if (process.env.NODE_ENV === "production") {
+        return null;
+      }
+      const handle =
+        userId === "usr_mock_mehmet_kaan"
+          ? "mehmetkaan"
+          : userId === "usr_mock_selin_yilmaz"
+            ? "selinyilmaz"
+            : `user-${userId.slice(0, 8)}`;
+      const displayName =
+        userId === "usr_mock_mehmet_kaan"
+          ? "Mehmet Kaan"
+          : userId === "usr_mock_selin_yilmaz"
+            ? "Selin Yılmaz"
+            : "Operis Kullanıcısı";
       return {
         userId,
-        handle: "demir-yildiz",
-        displayName: "Demir Yıldız",
-        about: "Kıdemli Yazılım Mühendisi & Sistem Mimarı.",
+        handle,
+        displayName,
+        about: "Kıdemli Yazılım Mühendisi.",
+        avatarUrl: null,
         showLocation: true,
         revealPhoneAfterMatch: false,
         locale: "tr",
         theme: "dark",
-        links: [],
+        links: inMemoryUserLinks.get(userId) || [],
       };
     }
   }
 }
-

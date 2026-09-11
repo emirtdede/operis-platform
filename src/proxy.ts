@@ -47,25 +47,42 @@ const TR_EXACT_REDIRECTS: Record<string, string> = {
   "/tr/login": "/tr/giris",
   "/tr/register": "/tr/kayit",
   "/tr/dashboard/listings": "/tr/panel/ilanlarim",
+  "/tr/panel/ilanlar": "/tr/panel/ilanlarim",
   "/tr/dashboard/offers/received": "/tr/panel/teklifler/gelen",
   "/tr/dashboard/offers/sent": "/tr/panel/teklifler/gonderilen",
+  "/tr/panel/teklifler/giden": "/tr/panel/teklifler/gonderilen",
+  "/tr/dashboard/settings": "/tr/panel/ayarlar",
+  "/tr/dashboard/security": "/tr/panel/guvenlik",
+  "/tr/dashboard/notifications": "/tr/panel/bildirimler",
+  "/tr/dashboard/categories": "/tr/panel/kategorilerim",
   "/tr/legal/terms": "/tr/yasal/kullanim-kosullari",
   "/tr/legal/privacy": "/tr/yasal/gizlilik-ve-kvkk",
   "/tr/legal/matching-disclaimer": "/tr/yasal/eslestirme-ve-sorumluluk-reddi",
   "/tr/legal/acceptable-use": "/tr/yasal/kabul-edilebilir-kullanim",
   "/tr/legal/cookies": "/tr/yasal/cerez-politikasi",
   "/tr/legal/contact": "/tr/yasal/iletisim",
+  "/tr/legal/intellectual-property": "/tr/yasal/fikri-mulkiyet-ve-telif",
+  "/tr/legal/consent": "/tr/yasal/acik-riza-metni",
+  "/tr/legal/dispute-resolution": "/tr/yasal/uyusmazlik-cozumu",
+  "/tr/legal": "/tr/yasal",
+  "/tr/brand": "/tr/marka",
+  "/tr/forgot-password": "/tr/sifremi-unuttum",
+  "/tr/reset-password": "/tr/sifre-sifirla",
+  "/tr/help": "/tr/yardim",
+  "/tr/about": "/tr/hakkimizda",
+  "/tr/contact": "/tr/iletisim",
+  "/tr/report": "/tr/sikayet-bildir",
+  "/tr/unauthorized": "/tr/yetkisiz",
 };
 
-export default function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // 1. Root route: Intelligent Locale Detection & Preference Persistence
   if (pathname === "/" || pathname === "") {
     // Check saved cookie preferences first
     const cookieLocale =
-      request.cookies.get("NEXT_LOCALE")?.value ||
-      request.cookies.get("fp_locale")?.value;
+      request.cookies.get("NEXT_LOCALE")?.value || request.cookies.get("fp_locale")?.value;
 
     let targetLocale: "tr" | "en";
 
@@ -108,6 +125,31 @@ export default function middleware(request: NextRequest) {
     return NextResponse.redirect(redirectUrl, 301);
   }
 
+  if (pathname.startsWith("/tr/listings/") && pathname !== "/tr/listings/new") {
+    const redirectUrl = request.nextUrl.clone();
+    if (pathname.endsWith("/edit")) {
+      redirectUrl.pathname = pathname
+        .replace("/tr/listings/", "/tr/ilanlar/")
+        .replace(/\/edit$/, "/duzenle");
+    } else {
+      redirectUrl.pathname = pathname.replace("/tr/listings/", "/tr/ilanlar/");
+    }
+    return NextResponse.redirect(redirectUrl, 301);
+  }
+
+  // Dynamic canonical redirects under /en
+  if (pathname.startsWith("/en/u/")) {
+    const redirectUrl = request.nextUrl.clone();
+    redirectUrl.pathname = pathname.replace("/en/u/", "/en/profile/");
+    return NextResponse.redirect(redirectUrl, 301);
+  }
+
+  if (pathname.startsWith("/en/work/")) {
+    const redirectUrl = request.nextUrl.clone();
+    redirectUrl.pathname = pathname.replace("/en/work/", "/en/workspace/");
+    return NextResponse.redirect(redirectUrl, 301);
+  }
+
   if (pathname.startsWith("/admin")) {
     return NextResponse.next();
   }
@@ -115,6 +157,8 @@ export default function middleware(request: NextRequest) {
   // 3. Process localized request with next-intl
   return intlMiddleware(request);
 }
+
+export default proxy;
 
 export const config = {
   // Match internationalized pathnames, excluding api, admin, static files, and assets

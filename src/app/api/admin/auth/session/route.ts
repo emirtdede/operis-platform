@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { createSessionToken, SESSION_COOKIE_NAME, getSession } from "@/src/modules/auth/session";
 
@@ -12,29 +13,101 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}));
-    const requestedRole = body.role || "ADMIN";
-    const email = body.email || "admin@operis.pro";
-    const displayName = body.displayName || "Demir Yıldız (Yönetici)";
+    const {
+      adminKey,
+      role: requestedRole,
+      email: requestedEmail,
+      displayName: requestedName,
+    } = body;
 
-    const validRoles = ["ADMIN", "SECURITY_ADMIN", "MODERATOR", "USER"];
-    const role = validRoles.includes(requestedRole) ? requestedRole : "ADMIN";
+    const configuredKey =
+      process.env.ADMIN_MASTER_KEY ||
+      (process.env.NODE_ENV === "development" || process.env.VITEST
+        ? "operis-admin-secret-key-2026"
+        : null);
+
+    if (!configuredKey) {
+      return NextResponse.json(
+        { error: "Yönetici oturum anahtarı sistemde tanımlanmamış." },
+        { status: 500 }
+      );
+    }
+
+    if (!adminKey || typeof adminKey !== "string") {
+      return NextResponse.json(
+        { error: "Lütfen yönetici güvenlik anahtarını (PIN) giriniz." },
+        { status: 401 }
+      );
+    }
+
+    const keyBuf = Buffer.from(adminKey.trim());
+    const expectedBuf = Buffer.from(configuredKey.trim());
+
+    if (keyBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(keyBuf, expectedBuf)) {
+      return NextResponse.json(
+        { error: "Geçersiz yönetici güvenlik anahtarı (PIN)." },
+        { status: 401 }
+      );
+    }
+
+    // Determine target admin email
+    const email = (requestedEmail || "admin@operis.pro").trim().toLowerCase();
+    const validRoles = ["ADMIN", "SECURITY_ADMIN", "MODERATOR"] as const;
+    let targetRole: (typeof validRoles)[number] = validRoles.includes(requestedRole)
+      ? requestedRole
+      : "ADMIN";
+    let userId = "usr_admin_authorized";
+
+    // Re-verify against database users if available
+    try {
+      const { getDb, schema } = await import("@/src/lib/db");
+      const { eq } = await import("drizzle-orm");
+      const db = getDb();
+      const [existingUser] = await db
+        .select({
+          id: schema.users.id,
+          role: schema.users.role,
+          status: schema.users.status,
+        })
+        .from(schema.users)
+        .where(eq(schema.users.email, email))
+        .limit(1);
+
+      if (existingUser) {
+        if (existingUser.status !== "ACTIVE") {
+          return NextResponse.json(
+            { error: "Yönetici hesabı askıya alınmış veya silinmiş." },
+            { status: 403 }
+          );
+        }
+        userId = existingUser.id;
+        if (validRoles.includes(existingUser.role as (typeof validRoles)[number])) {
+          targetRole = existingUser.role as (typeof validRoles)[number];
+        }
+      }
+    } catch {
+      // In offline / fallback mode, retain default admin assignment
+    }
+
+    const displayName =
+      requestedName || (targetRole === "ADMIN" ? "Demir Yıldız (Yönetici)" : "Güvenlik Sorumlusu");
 
     const sessionToken = createSessionToken({
-      id: "usr_mock_demir_yildiz",
+      id: userId,
       email,
-      role,
+      role: targetRole,
       status: "ACTIVE",
     });
 
     const response = NextResponse.json({
       success: true,
-      message: `Admin oturumu başarıyla oluşturuldu (${role}).`,
-      role,
+      message: `Admin oturumu başarıyla oluşturuldu (${targetRole}).`,
+      role: targetRole,
       user: {
-        id: "usr_mock_demir_yildiz",
+        id: userId,
         email,
         displayName,
-        role,
+        role: targetRole,
       },
     });
 
@@ -59,21 +132,7 @@ export async function DELETE() {
     message: "Admin oturumu sonlandırıldı.",
   });
 
-  // Revert to normal USER role
-  const normalToken = createSessionToken({
-    id: "usr_mock_demir_yildiz",
-    email: "kullanici@operis.pro",
-    role: "USER",
-    status: "ACTIVE",
-  });
-
-  response.cookies.set(SESSION_COOKIE_NAME, normalToken, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: 7 * 24 * 60 * 60,
-  });
+  response.cookies.delete(SESSION_COOKIE_NAME);
 
   return response;
 }

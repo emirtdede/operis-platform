@@ -4,12 +4,12 @@ import { setRequestLocale } from "next-intl/server";
 import { Search, PlusCircle, Clock, ShieldCheck } from "lucide-react";
 import { FeedService, FeedListingItem } from "@/src/modules/listings/feed/service";
 import { CategoryService } from "@/src/modules/categories/service";
-import { ListingCard } from "@/src/components/listings/listing-card";
+import { InteractiveListingsFeed } from "@/src/components/listings/interactive-listings-feed";
 import { EmptyState } from "@/src/components/ui/empty-state";
 import { Button } from "@/src/components/ui/button";
 import { getLocalizedRoute } from "@/src/lib/i18n/routes";
 import { CategoryFilterBar } from "@/src/components/categories/category-filter-bar";
-
+import { getSession } from "@/src/modules/auth/session";
 
 export async function generateMetadata({
   params,
@@ -19,9 +19,7 @@ export async function generateMetadata({
   const { locale } = await params;
   const isTr = locale === "tr";
 
-  const title = isTr
-    ? "Proje İlanları Arama & Filtreleme"
-    : "Browse & Filter Project Listings";
+  const title = isTr ? "Proje İlanları Arama & Filtreleme" : "Browse & Filter Project Listings";
   const description = isTr
     ? "Tüm kategorilerdeki güncel yazılım, tasarım ve teknoloji projelerini inceleyin, doğrudan teklif sunun."
     : "Explore active software, design, and technology project listings across all categories and submit direct proposals.";
@@ -75,12 +73,14 @@ export default async function BrowseListingsPage({
   const listingsPath = isTr ? "/tr/ilanlar" : "/en/listings";
 
   const categories = await CategoryService.getAllCategories(isTr ? "tr" : "en").catch(() => []);
+  const session = await getSession();
 
   const feedResult: { items: FeedListingItem[] } = await FeedService.getFeedListings({
     mode: "all",
     categorySlugs: selectedCategory ? [selectedCategory] : undefined,
     search: searchQuery,
     locale: isTr ? "tr" : "en",
+    userId: session?.userId,
   }).catch(() => ({ items: [] }));
 
   const jsonLd = {
@@ -153,18 +153,21 @@ export default async function BrowseListingsPage({
           className="flex items-center gap-2 max-w-md w-full bg-[var(--color-surface-base)]/80 backdrop-blur-md p-1.5 rounded-2xl border border-[var(--color-border-subtle)] shadow-sm"
           role="search"
         >
-          {selectedCategory && (
-            <input type="hidden" name="category" value={selectedCategory} />
-          )}
+          {selectedCategory && <input type="hidden" name="category" value={selectedCategory} />}
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--color-text-tertiary)]" aria-hidden="true" />
+            <Search
+              className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--color-text-tertiary)]"
+              aria-hidden="true"
+            />
             <input
               type="search"
               name="q"
               defaultValue={searchQuery ?? ""}
               maxLength={100}
               aria-label={isTr ? "İlan arama" : "Search listings"}
-              placeholder={isTr ? "İlan başlığı veya teknoloji ara..." : "Search title or tech stack..."}
+              placeholder={
+                isTr ? "İlan başlığı veya teknoloji ara..." : "Search title or tech stack..."
+              }
               className="w-full rounded-xl bg-transparent pl-9 pr-3 py-2 text-sm text-[var(--color-text-primary)] placeholder-[var(--color-text-tertiary)] focus:outline-none"
             />
           </div>
@@ -205,7 +208,6 @@ export default async function BrowseListingsPage({
         />
       </section>
 
-
       {/* Listings Grid / Content Stream */}
       <section className="space-y-6">
         <div className="flex items-center justify-between text-xs text-[var(--color-text-tertiary)] border-b border-[var(--color-border-subtle)] pb-3">
@@ -233,8 +235,8 @@ export default async function BrowseListingsPage({
                     ? "Arama kriterlerinize uygun aktif ilan bulunamadı. Filtreleri temizleyebilir veya yeni bir arama yapabilirsiniz."
                     : "No active listings matched your search criteria. Try clearing filters or refining your query."
                   : isTr
-                  ? "Şu an bu kategoride aktif ilan bulunmuyor. Kendi projenizi ilk olarak yayınlayabilirsiniz."
-                  : "No active listings currently available. Be the first to publish a project in this space."
+                    ? "Şu an bu kategoride aktif ilan bulunmuyor. Kendi projenizi ilk olarak yayınlayabilirsiniz."
+                    : "No active listings currently available. Be the first to publish a project in this space."
               }
               action={
                 <div className="flex flex-wrap items-center justify-center gap-3 pt-4">
@@ -255,33 +257,7 @@ export default async function BrowseListingsPage({
             />
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {feedResult.items.map((item) => (
-              <ListingCard
-                key={item.id}
-                id={item.id}
-                slug={item.slug}
-                title={item.title}
-                summary={item.summary}
-                categoryName={item.categoryName}
-                budgetMode={item.budgetMode}
-                budgetCurrency={item.budgetCurrency}
-                budgetMin={item.budgetMin}
-                budgetMax={item.budgetMax}
-                timelineMode={item.timelineMode}
-                targetDate={item.targetDate}
-                timelineValue={item.timelineValue}
-                timelineUnit={item.timelineUnit}
-                ownerHandle={item.ownerHandle}
-                ownerDisplayName={item.ownerDisplayName}
-                firstPublishedAt={item.firstPublishedAt}
-                lastActivatedAt={item.lastActivatedAt}
-                activeUntil={item.activeUntil}
-                activationSeq={item.activationSeq}
-                locale={locale}
-              />
-            ))}
-          </div>
+          <InteractiveListingsFeed items={feedResult.items} locale={locale} />
         )}
       </section>
     </main>

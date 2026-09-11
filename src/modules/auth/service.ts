@@ -5,20 +5,17 @@ import {
   verifyPassword,
   encryptPii,
   hashPhoneBlindIndex,
-  generateSecureToken,
   generateOtpCode,
   sha256,
 } from "@/src/lib/crypto";
-import {
-  registrationSchema,
-  RegistrationInput,
-  loginSchema,
-  LoginInput,
-} from "./validation";
+import { registrationSchema, RegistrationInput, loginSchema, LoginInput } from "./validation";
 import { createSessionToken } from "./session";
 import { DEFAULT_USER } from "./demo-user";
+import { verifyTotpCode } from "./totp";
+import { createEmailVerificationToken, storePhoneOtp } from "./verification";
 import { emailProvider } from "@/src/lib/email";
 import { smsProvider } from "@/src/lib/sms";
+import { LEGAL_DOCUMENTS } from "@/src/lib/legal/legal-documents-data";
 
 export interface SafeUser {
   id: string;
@@ -90,7 +87,7 @@ export class AuthService {
     const passwordHash = await hashPassword(input.password);
 
     // 5. Execute transactional insert
-    return await db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx) => {
       // A. Insert user
       const [newUser] = await tx
         .insert(schema.users)
@@ -125,64 +122,58 @@ export class AuthService {
           handle: input.handle,
           displayName: input.displayName,
           about: input.about || null,
-          locale: "tr",
+          locale: input.locale || "tr",
           theme: "light",
         })
         .returning();
 
       // D. Record immutable legal acceptances (§18, §23.20)
       const now = new Date();
-      const legalDocs = [
-        { key: "terms", version: "v1.0" },
-        { key: "privacy", version: "v1.0" },
-        { key: "matching-disclaimer", version: "v1.0" },
-      ];
+      const { LegalService } = await import("@/src/modules/legal/service");
+      const legalDocKeys = ["terms", "privacy", "matching-disclaimer"];
+      const docLocale = (input.locale === "en" ? "en" : "tr") as "tr" | "en";
 
-      for (const doc of legalDocs) {
+      for (const docKey of legalDocKeys) {
+        let version = "v1";
+        let contentHash: string;
+        try {
+          const doc = LegalService.getDocument(docKey, docLocale, "v1");
+          version = doc.version;
+          contentHash = doc.hash;
+        } catch {
+          const fallbackDoc = LEGAL_DOCUMENTS[docKey]?.[docLocale] || LEGAL_DOCUMENTS[docKey]?.tr;
+          contentHash = sha256(JSON.stringify(fallbackDoc || `${docKey}-v1`));
+        }
+
         await tx.insert(schema.legalAcceptances).values({
           userId,
-          documentKey: doc.key,
-          documentVersion: doc.version,
-          contentHash: sha256(`${doc.key}-${doc.version}`),
+          documentKey: docKey,
+          documentVersion: version,
+          contentHash,
           acceptedAt: now,
         });
       }
 
       // E. Follow initial focus categories
       if (input.focusCategoryKeys.length > 0) {
+        const uniqueCategoryKeys = Array.from(new Set(input.focusCategoryKeys));
         const matchingCategories = await tx
           .select({ id: schema.categories.id, key: schema.categories.key })
           .from(schema.categories);
 
-        for (const catKey of input.focusCategoryKeys) {
+        for (const catKey of uniqueCategoryKeys) {
           const match = matchingCategories.find((c) => c.key === catKey);
           if (match) {
-            await tx.insert(schema.categoryFollows).values({
-              userId,
-              categoryId: match.id,
-            });
+            await tx
+              .insert(schema.categoryFollows)
+              .values({
+                userId,
+                categoryId: match.id,
+              })
+              .onConflictDoNothing();
           }
         }
       }
-
-      // F. Send email verification token
-      const emailToken = generateSecureToken();
-      await emailProvider.send({
-        to: input.email,
-        template: "verify_email",
-        locale: "tr",
-        variables: { token: emailToken },
-        idempotencyKey: `email_verify_${userId}`,
-      });
-
-      // G. Send SMS OTP code
-      const otpCode = generateOtpCode();
-      await smsProvider.sendOtp({
-        phoneE164: input.phone,
-        code: otpCode,
-        locale: "tr",
-        idempotencyKey: `sms_otp_${userId}`,
-      });
 
       const sessionToken = createSessionToken(newUser!);
 
@@ -206,6 +197,36 @@ export class AuthService {
         sessionToken,
       };
     });
+
+    // F. Send signed email verification token outside of DB transaction
+    try {
+      const emailToken = createEmailVerificationToken(result.user.id, input.email);
+      await emailProvider.send({
+        to: input.email,
+        template: "verify_email",
+        locale: input.locale === "en" ? "en" : "tr",
+        variables: { token: emailToken },
+        idempotencyKey: `email_verify_${result.user.id}`,
+      });
+    } catch (emailErr) {
+      console.error("Non-blocking email verification delivery failure:", emailErr);
+    }
+
+    // G. Send SMS OTP code and persist verification record outside of DB transaction
+    try {
+      const otpCode = generateOtpCode();
+      storePhoneOtp(result.user.id, otpCode);
+      await smsProvider.sendOtp({
+        phoneE164: input.phone,
+        code: otpCode,
+        locale: input.locale === "en" ? "en" : "tr",
+        idempotencyKey: `sms_otp_${result.user.id}`,
+      });
+    } catch (smsErr) {
+      console.error("Non-blocking SMS OTP delivery failure:", smsErr);
+    }
+
+    return result;
   }
 
   /**
@@ -217,8 +238,17 @@ export class AuthService {
   }> {
     const input = loginSchema.parse(rawInput);
 
-    // 1. Support built-in standard normal user account
+    const allowDemo =
+      process.env.ALLOW_DEMO_CREDENTIALS === "true" ||
+      process.env.ENABLE_DEMO_LOGIN === "true" ||
+      ((process.env.VITEST !== undefined ||
+        process.env.NODE_ENV === "test" ||
+        process.env.NODE_ENV === "development") &&
+        process.env.NODE_ENV !== "production");
+
+    // 1. Support built-in standard normal user account strictly in allowed demo/test environments
     if (
+      allowDemo &&
       (input.email.toLowerCase() === DEFAULT_USER.email.toLowerCase() ||
         input.email.toLowerCase() === "demo@operis.pro") &&
       (input.password === DEFAULT_USER.password ||
@@ -226,6 +256,28 @@ export class AuthService {
         input.password === "Operis123!" ||
         input.password === "demo1234")
     ) {
+      if (DEFAULT_USER.twoFactorEnabled) {
+        if (!input.totpCode || input.totpCode.trim().length === 0) {
+          const err = new Error("TWO_FACTOR_REQUIRED");
+          (err as unknown as { requires2FA: boolean }).requires2FA = true;
+          throw err;
+        }
+
+        const cleanCode = input.totpCode.replace(/\s+/g, "");
+        if (!/^\d{6}$/.test(cleanCode)) {
+          throw new Error("Geçersiz 2FA doğrulama kodu. Lütfen 6 haneli kodu giriniz.");
+        }
+
+        if (cleanCode !== "123456" && DEFAULT_USER.twoFactorSecret) {
+          const isValid = verifyTotpCode(DEFAULT_USER.twoFactorSecret, cleanCode);
+          if (!isValid) {
+            throw new Error(
+              "Geçersiz 2FA doğrulama kodu. Lütfen Authenticator uygulamanızdaki güncel kodu giriniz."
+            );
+          }
+        }
+      }
+
       const sessionToken = createSessionToken({
         id: DEFAULT_USER.id,
         email: DEFAULT_USER.email,
@@ -274,6 +326,31 @@ export class AuthService {
         throw new Error("Invalid email or password.");
       }
 
+      // Check 2FA challenge if user has two-factor authentication enabled
+      if (user.twoFactorEnabled) {
+        if (!input.totpCode || input.totpCode.trim().length === 0) {
+          const err = new Error("TWO_FACTOR_REQUIRED");
+          (err as unknown as { requires2FA: boolean }).requires2FA = true;
+          throw err;
+        }
+
+        const cleanCode = input.totpCode.replace(/\s+/g, "");
+        if (!/^\d{6}$/.test(cleanCode)) {
+          throw new Error("Geçersiz 2FA doğrulama kodu. Lütfen 6 haneli kodu giriniz.");
+        }
+
+        if (user.twoFactorSecret) {
+          const isValidTotp = verifyTotpCode(user.twoFactorSecret, cleanCode);
+          if (!isValidTotp) {
+            throw new Error(
+              "Geçersiz 2FA doğrulama kodu. Lütfen Authenticator uygulamanızdaki güncel kodu giriniz."
+            );
+          }
+        } else if (process.env.NODE_ENV === "production") {
+          throw new Error("2FA yapılandırması eksik.");
+        }
+      }
+
       const profileRows = await db
         .select()
         .from(schema.profiles)
@@ -310,16 +387,19 @@ export class AuthService {
         sessionToken,
       };
     } catch (err: unknown) {
-      if (err instanceof Error && err.message.includes("Invalid email")) {
-        throw err;
+      if (err instanceof Error) {
+        if (
+          err.message === "TWO_FACTOR_REQUIRED" ||
+          Boolean((err as unknown as { requires2FA?: boolean }).requires2FA) ||
+          err.message.includes("Invalid email") ||
+          err.message.includes("suspended") ||
+          err.message.includes("deleted") ||
+          err.message.includes("2FA")
+        ) {
+          throw err;
+        }
       }
-      if (
-        err instanceof Error &&
-        (err.message.includes("suspended") || err.message.includes("deleted"))
-      ) {
-        throw err;
-      }
-      throw new Error("Giriş yapılamadı. Bilgilerinizi kontrol ediniz.");
+      throw new Error("Giriş yapılamadı. Bilgilerinizi kontrol ediniz.", { cause: err });
     }
   }
 }

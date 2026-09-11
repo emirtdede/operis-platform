@@ -67,10 +67,10 @@ export function FollowedCategoriesView({ categories, locale }: FollowedCategorie
       {items.map((cat) => (
         <div
           key={cat.id}
-          className="rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/70 backdrop-blur-xl p-5 sm:p-6 space-y-4 shadow-sm hover:border-blue-500/30 transition-all duration-300 flex flex-col justify-between"
+          className="rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/70 backdrop-blur-xl p-5 sm:p-6 shadow-sm hover:border-blue-500/30 transition-all duration-300 flex flex-col justify-between h-full"
         >
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
+          <div className="flex flex-col flex-1">
+            <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-mono text-blue-400 font-semibold uppercase tracking-wider">
                 {cat.key}
               </span>
@@ -79,15 +79,19 @@ export function FollowedCategoriesView({ categories, locale }: FollowedCategorie
                 <span>{isTr ? "Takipte" : "Followed"}</span>
               </span>
             </div>
-            <h3 className="text-base font-semibold text-[var(--color-text-primary)]">{cat.name}</h3>
-            {cat.description && (
+            <div className="min-h-[2.5rem] flex items-center">
+              <h3 className="text-base font-semibold text-[var(--color-text-primary)] leading-snug line-clamp-2">
+                {cat.name}
+              </h3>
+            </div>
+            <div className="pt-1 min-h-[2.5rem] flex items-start">
               <p className="text-xs text-[var(--color-text-secondary)] line-clamp-2 leading-relaxed">
-                {cat.description}
+                {cat.description || ""}
               </p>
-            )}
+            </div>
           </div>
 
-          <div className="flex items-center justify-between gap-2 pt-2 border-t border-[var(--color-border-subtle)]/60">
+          <div className="mt-4 flex items-center justify-between gap-2 pt-3 border-t border-[var(--color-border-subtle)]/60 shrink-0">
             <Link
               href={isTr ? `/tr/akis?category=${cat.key}` : `/en/feed?category=${cat.key}`}
               className="text-xs font-medium text-blue-400 hover:text-blue-300 transition-colors inline-flex items-center gap-1 hover:underline"

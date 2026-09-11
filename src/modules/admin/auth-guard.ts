@@ -1,7 +1,5 @@
-import { cookies } from "next/headers";
 import {
-  SESSION_COOKIE_NAME,
-  verifySessionToken,
+  getSession,
   SessionPayload,
 } from "@/src/modules/auth/session";
 
@@ -22,43 +20,32 @@ export async function getAdminSession(
   allowedRoles: readonly string[] = ADMIN_ROLES
 ): Promise<AdminAuthResult> {
   try {
-    const cookieStore = await cookies();
-    const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
+    const session = await getSession();
 
-    if (!token) {
+    if (!session) {
       return {
         isAuthenticated: false,
         isAdmin: false,
         session: null,
-        error: "No session found",
+        error: "No active session found or invalid session",
       };
     }
 
-    const payload = verifySessionToken(token);
-    if (!payload) {
-      return {
-        isAuthenticated: false,
-        isAdmin: false,
-        session: null,
-        error: "Invalid or expired session token",
-      };
-    }
-
-    if (payload.status !== "ACTIVE") {
+    if (session.status !== "ACTIVE") {
       return {
         isAuthenticated: true,
         isAdmin: false,
-        session: payload,
+        session,
         error: "Account is suspended or deactivated",
       };
     }
 
-    const hasRole = allowedRoles.includes(payload.role);
+    const hasRole = allowedRoles.includes(session.role);
     if (!hasRole) {
       return {
         isAuthenticated: true,
         isAdmin: false,
-        session: payload,
+        session,
         error: "Insufficient permissions for administrative console",
       };
     }
@@ -66,7 +53,7 @@ export async function getAdminSession(
     return {
       isAuthenticated: true,
       isAdmin: true,
-      session: payload,
+      session,
     };
   } catch (err) {
     return {

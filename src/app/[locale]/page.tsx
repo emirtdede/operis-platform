@@ -66,11 +66,7 @@ export async function generateMetadata({
   };
 }
 
-export default async function LandingPage({
-  params,
-}: {
-  params: Promise<{ locale: string }>;
-}) {
+export default async function LandingPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
   setRequestLocale(locale);
 
@@ -78,7 +74,7 @@ export default async function LandingPage({
 
   const categories = [
     {
-      slug: "frontend-development",
+      slug: "frontend-ui",
       name: isTr ? "Ön Yüz (Frontend) Geliştirme" : "Frontend Development",
       description: isTr
         ? "React, Next.js, Vue, TypeScript ve modern web arayüzleri."
@@ -88,7 +84,7 @@ export default async function LandingPage({
       accent: "from-blue-500/20 to-cyan-500/20",
     },
     {
-      slug: "backend-development",
+      slug: "backend-api",
       name: isTr ? "Arka Yüz (Backend) Geliştirme" : "Backend Development",
       description: isTr
         ? "Node.js, Go, Python, PostgreSQL ve mikroservis mimarileri."
@@ -98,7 +94,7 @@ export default async function LandingPage({
       accent: "from-indigo-500/20 to-blue-500/20",
     },
     {
-      slug: "fullstack-development",
+      slug: "web-development",
       name: isTr ? "Full Stack Geliştirme" : "Full Stack Development",
       description: isTr
         ? "Uçtan uca web ve SaaS uygulaması geliştirme projeleri."
@@ -118,7 +114,7 @@ export default async function LandingPage({
       accent: "from-cyan-500/20 to-teal-500/20",
     },
     {
-      slug: "devops-cloud-infrastructure",
+      slug: "devops-cloud",
       name: isTr ? "DevOps ve Bulut Altyapısı" : "DevOps & Cloud Infrastructure",
       description: isTr
         ? "Docker, Kubernetes, AWS, GCP, CI/CD ve dağıtık sistemler."
@@ -128,7 +124,7 @@ export default async function LandingPage({
       accent: "from-sky-500/20 to-blue-500/20",
     },
     {
-      slug: "ai-machine-learning",
+      slug: "ai-ml",
       name: isTr ? "Yapay Zeka ve Makine Öğrenimi" : "AI & Machine Learning",
       description: isTr
         ? "LLM entegrasyonları, NLP, bilgisayarlı görü ve veri modelleri."
@@ -196,14 +192,13 @@ export default async function LandingPage({
               {isTr ? (
                 <>
                   Yazılım Projelerinde{" "}
-                  <span className="text-gradient-accent">Aracısız, Doğrudan</span>{" "}
-                  ve Güvenli İş Birliği
+                  <span className="text-gradient-accent">Aracısız, Doğrudan</span> ve Güvenli İş
+                  Birliği
                 </>
               ) : (
                 <>
-                  Direct, Transparent &{" "}
-                  <span className="text-gradient-accent">Zero-Escrow</span> Tech
-                  Matching
+                  Direct, Transparent & <span className="text-gradient-accent">Zero-Escrow</span>{" "}
+                  Tech Matching
                 </>
               )}
             </h1>
@@ -218,16 +213,15 @@ export default async function LandingPage({
           {/* Living Reactive CTA Buttons */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-1">
             <Link href={isTr ? "/tr/akis" : "/en/feed"} className="w-full sm:w-auto">
-              <Button
-                variant="shimmer"
-                size="lg"
-                className="w-full sm:w-auto px-8 py-4 text-base"
-              >
+              <Button variant="shimmer" size="lg" className="w-full sm:w-auto px-8 py-4 text-base">
                 <span>{isTr ? "İlanları Keşfet" : "Browse Projects"}</span>
                 <ArrowRight className="h-4 w-4" aria-hidden="true" />
               </Button>
             </Link>
-            <Link href={isTr ? "/tr/ilanlar/yeni" : "/en/listings/new"} className="w-full sm:w-auto">
+            <Link
+              href={isTr ? "/tr/ilanlar/yeni" : "/en/listings/new"}
+              className="w-full sm:w-auto"
+            >
               <Button
                 variant="secondary"
                 size="lg"
@@ -247,7 +241,9 @@ export default async function LandingPage({
               </div>
             </div>
             <div className="p-3 flex flex-col items-center justify-center text-center">
-              <div className="text-2xl font-bold text-cyan-400 font-display">{isTr ? "1 Hafta" : "1 Week"}</div>
+              <div className="text-2xl font-bold text-cyan-400 font-display">
+                {isTr ? "1 Hafta" : "1 Week"}
+              </div>
               <div className="text-xs text-[var(--color-text-secondary)] mt-0.5">
                 {isTr ? "Maksimum İlan Canlılığı" : "Freshness Lifecycle"}
               </div>
@@ -277,9 +273,7 @@ export default async function LandingPage({
               <span>{isTr ? "Temel Avantajlar" : "Key Advantages"}</span>
             </div>
             <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-[var(--color-text-primary)]">
-              {isTr
-                ? "Operis'i Farklı Kılan 3 Temel Prensip"
-                : "3 Core Principles Powering Operis"}
+              {isTr ? "Operis'i Farklı Kılan 3 Temel Prensip" : "3 Core Principles Powering Operis"}
             </h2>
             <p className="text-sm sm:text-base text-[var(--color-text-secondary)]">
               {isTr
@@ -333,7 +327,10 @@ export default async function LandingPage({
                       <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500/10 to-indigo-500/10 text-blue-500 group-hover:scale-110 transition-transform">
                         <Icon className="h-6 w-6" aria-hidden="true" />
                       </div>
-                      <ArrowRight className="h-4 w-4 text-[var(--color-text-tertiary)] group-hover:text-blue-500 group-hover:translate-x-1 transition-all" aria-hidden="true" />
+                      <ArrowRight
+                        className="h-4 w-4 text-[var(--color-text-tertiary)] group-hover:text-blue-500 group-hover:translate-x-1 transition-all"
+                        aria-hidden="true"
+                      />
                     </div>
 
                     <h3 className="font-bold text-base text-[var(--color-text-primary)] group-hover:text-blue-400 transition-colors mb-2">
@@ -364,7 +361,9 @@ export default async function LandingPage({
           <div className="mt-8 rounded-2xl border border-[var(--color-border-subtle)] bg-gradient-to-r from-blue-500/5 via-indigo-500/5 to-purple-500/5 p-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left">
             <div className="space-y-1">
               <h4 className="text-sm font-bold text-[var(--color-text-primary)]">
-                {isTr ? "Tüm 21+ Teknoloji ve Mühendislik Disiplini" : "Explore All 21+ Technology Disciplines"}
+                {isTr
+                  ? "Tüm 21+ Teknoloji ve Mühendislik Disiplini"
+                  : "Explore All 21+ Technology Disciplines"}
               </h4>
               <p className="text-xs text-[var(--color-text-secondary)]">
                 {isTr
@@ -464,7 +463,10 @@ export default async function LandingPage({
         <div className="mx-auto max-w-5xl w-full space-y-8">
           {/* Final High-Impact CTA Card */}
           <div className="relative overflow-hidden rounded-3xl border border-blue-500/30 bg-gradient-to-br from-blue-950/40 via-[var(--color-surface-base)]/80 to-indigo-950/30 p-8 sm:p-12 text-center space-y-6 backdrop-blur-xl shadow-2xl shadow-blue-500/10">
-            <div className="pointer-events-none absolute -top-32 -right-32 w-64 h-64 rounded-full bg-blue-500/10 blur-3xl" aria-hidden="true" />
+            <div
+              className="pointer-events-none absolute -top-32 -right-32 w-64 h-64 rounded-full bg-blue-500/10 blur-3xl"
+              aria-hidden="true"
+            />
             <h2 className="text-3xl sm:text-4xl font-extrabold text-[var(--color-text-primary)]">
               {isTr ? "Yazılım Projenizi Bugün Başlatın" : "Launch Your Tech Project Today"}
             </h2>
@@ -484,7 +486,10 @@ export default async function LandingPage({
                   <ArrowRight className="h-4 w-4" aria-hidden="true" />
                 </Button>
               </Link>
-              <Link href={isTr ? "/tr/ilanlar/yeni" : "/en/listings/new"} className="w-full sm:w-auto">
+              <Link
+                href={isTr ? "/tr/ilanlar/yeni" : "/en/listings/new"}
+                className="w-full sm:w-auto"
+              >
                 <Button
                   variant="secondary"
                   size="lg"
@@ -498,7 +503,10 @@ export default async function LandingPage({
 
           {/* Platform Operation Notice */}
           <div className="relative overflow-hidden rounded-3xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/60 p-6 sm:p-8 text-xs text-[var(--color-text-tertiary)] leading-relaxed space-y-2 backdrop-blur-xl shadow-sm">
-            <div className="pointer-events-none absolute -top-24 -left-24 w-52 h-52 rounded-full bg-blue-500/5 blur-3xl" aria-hidden="true" />
+            <div
+              className="pointer-events-none absolute -top-24 -left-24 w-52 h-52 rounded-full bg-blue-500/5 blur-3xl"
+              aria-hidden="true"
+            />
             <p className="font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider text-[11px]">
               {isTr ? "Platform İşleyiş Duyurusu & Şeffaflık" : "Platform Operation Notice"}
             </p>

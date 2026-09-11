@@ -6,13 +6,18 @@ export interface DemoUser {
   status: "ACTIVE" | "SUSPENDED" | "DELETED";
   emailVerified: boolean;
   phoneVerified: boolean;
+  twoFactorEnabled?: boolean;
+  twoFactorSecret?: string;
   profile: {
     handle: string;
     displayName: string;
     about: string;
+    avatarUrl?: string | null;
     showLocation: boolean;
+    revealPhoneAfterMatch?: boolean;
     locale: string;
     theme: string;
+    trackedSkills?: string[];
   };
 }
 
@@ -24,12 +29,17 @@ export const DEFAULT_USER: DemoUser = {
   status: "ACTIVE",
   emailVerified: true,
   phoneVerified: true,
+  twoFactorEnabled: false,
+  twoFactorSecret: undefined,
   profile: {
     handle: "demokullanici",
     displayName: "Demir Yıldız",
     about: "Kıdemli Yazılım Mühendisi & Teknoloji Profesyoneli",
+    avatarUrl: null,
     showLocation: true,
+    revealPhoneAfterMatch: false,
     locale: "tr",
     theme: "dark",
+    trackedSkills: ["Next.js", "TypeScript", "Tailwind CSS", "PostgreSQL", "React"],
   },
 };

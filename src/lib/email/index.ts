@@ -9,7 +9,10 @@ export type EmailTemplateKey =
   | "match_created"
   | "completion_requested"
   | "listing_expiring"
-  | "listing_expired";
+  | "listing_expired"
+  | "platform_notification"
+  | "contact_form"
+  | (string & {});
 
 export interface TransactionalEmailProvider {
   send(input: {
@@ -56,25 +59,88 @@ class MockEmailProvider implements TransactionalEmailProvider {
   }
 }
 
-export const emailProvider: TransactionalEmailProvider = new MockEmailProvider();
+class ResendEmailProvider implements TransactionalEmailProvider {
+  async send(input: {
+    to: string;
+    template: EmailTemplateKey;
+    locale: Locale;
+    variables: Record<string, string>;
+    idempotencyKey: string;
+  }): Promise<{ success: boolean; messageId?: string; error?: string }> {
+    const apiKey = process.env.EMAIL_API_KEY;
+    const from = process.env.EMAIL_FROM || "noreply@operis.pro";
+
+    if (!apiKey) {
+      return { success: false, error: "EMAIL_API_KEY is missing for Resend provider" };
+    }
+
+    try {
+      const res = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+          "Idempotency-Key": input.idempotencyKey,
+        },
+        body: JSON.stringify({
+          from,
+          to: input.to,
+          subject: input.variables.subject || `Operis - ${input.template}`,
+          text: input.variables.body || JSON.stringify(input.variables, null, 2),
+        }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        return { success: false, error: errData.message || "Resend dispatch failed" };
+      }
+
+      const data = await res.json();
+      return { success: true, messageId: data.id };
+    } catch (err: unknown) {
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : "Resend network error",
+      };
+    }
+  }
+}
+
+function createEmailProvider(): TransactionalEmailProvider {
+  const providerType = process.env.EMAIL_PROVIDER;
+  if (providerType === "resend") {
+    return new ResendEmailProvider();
+  }
+  if (providerType === "smtp" && process.env.NODE_ENV === "production") {
+    console.error(
+      "Critical: EMAIL_PROVIDER=smtp is configured but SMTP direct transport is not initialized. Using fallback provider."
+    );
+  }
+  return new MockEmailProvider();
+}
+
+export const emailProvider: TransactionalEmailProvider = createEmailProvider();
 
 export class EmailAdapter {
   static async sendTransactionalEmail(input: {
     to: string;
     subject: string;
     body: string;
+    template?: EmailTemplateKey;
+    locale?: "tr" | "en";
+    idempotencyKey?: string;
   }): Promise<boolean> {
-    await emailProvider.send({
+    const result = await emailProvider.send({
       to: input.to,
-      template: "new_offer_received",
-      locale: "tr",
+      template: input.template || "platform_notification",
+      locale: input.locale || "tr",
       variables: {
         subject: input.subject,
         body: input.body,
       },
-      idempotencyKey: `tx_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+      idempotencyKey:
+        input.idempotencyKey || `tx_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
     });
-    return true;
+    return Boolean(result.success);
   }
 }
-

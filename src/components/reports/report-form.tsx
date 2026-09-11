@@ -5,25 +5,54 @@ import { CheckCircle2, AlertCircle } from "lucide-react";
 import { Button } from "../ui/button";
 import { TextInput } from "../ui/text-input";
 import { TextArea } from "../ui/text-area";
+import Link from "next/link";
+import { LogIn, Mail } from "lucide-react";
 
 export interface ReportFormProps {
   locale: string;
   defaultTargetType?: string;
   defaultTargetIdentifier?: string;
+  hasSession?: boolean;
 }
 
 const REASON_CODES = [
-  { value: "SPAM_OR_SCAM", label: "Dolandırıcılık veya Sahte İlan / Teklif" },
-  { value: "OFF_PLATFORM_ABUSE", label: "Kötüye Kullanım veya Taciz" },
-  { value: "IP_VIOLATION", label: "Fikri Mülkiyet / Telif Hakkı İhlali" },
-  { value: "PROHIBITED_CONTENT", label: "Yasaklanmış İçerik veya Hizmet" },
-  { value: "OTHER", label: "Diğer Kural İhlali" },
+  {
+    value: "SCAM_FRAUD",
+    labelTr: "Dolandırıcılık veya Sahte İlan / Teklif",
+    labelEn: "Fraud, Scam or Fake Listing / Proposal",
+  },
+  {
+    value: "HARASSMENT_ABUSE",
+    labelTr: "Kötüye Kullanım veya Taciz",
+    labelEn: "Abuse, Harassment or Off-Platform Conduct",
+  },
+  {
+    value: "INTELLECTUAL_PROPERTY",
+    labelTr: "Fikri Mülkiyet / Telif Hakkı İhlali",
+    labelEn: "Intellectual Property / Copyright Infringement",
+  },
+  {
+    value: "PROHIBITED_SERVICE",
+    labelTr: "Yasaklanmış İçerik veya Hizmet",
+    labelEn: "Prohibited Content or Restricted Service",
+  },
+  {
+    value: "SPAM",
+    labelTr: "İstenmeyen İçerik veya Reklam",
+    labelEn: "Spam or Unsolicited Content",
+  },
+  {
+    value: "OTHER",
+    labelTr: "Diğer Kural İhlali",
+    labelEn: "Other Policy Violation",
+  },
 ];
 
 export function ReportForm({
   locale,
   defaultTargetType = "listing",
   defaultTargetIdentifier = "",
+  hasSession = true,
 }: ReportFormProps) {
   const isTr = locale === "tr";
 
@@ -44,17 +73,21 @@ export function ReportForm({
     try {
       const res = await fetch("/api/reports", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-locale": locale,
+        },
         body: JSON.stringify({
           targetType,
           targetIdentifier: targetIdentifier.trim(),
           reasonCode,
           details: details.trim(),
+          locale,
         }),
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Bildirim gönderilemedi");
+      if (!res.ok) throw new Error(data.error || (isTr ? "Bildirim gönderilemedi." : "Failed to submit report."));
 
       setIsSuccess(true);
     } catch (err: unknown) {
@@ -62,8 +95,8 @@ export function ReportForm({
         err instanceof Error
           ? err.message
           : isTr
-          ? "İşlem başarısız oldu. Lütfen tekrar deneyiniz."
-          : "Report could not be submitted."
+            ? "İşlem başarısız oldu. Lütfen tekrar deneyiniz."
+            : "Report could not be submitted."
       );
     } finally {
       setIsLoading(false);
@@ -84,6 +117,52 @@ export function ReportForm({
             ? "Platform güvenliğine ve etik kurallara katkınız için teşekkür ederiz. İlgili kayıt moderatörlerimiz tarafından ivedilikle denetlenecektir."
             : "Thank you for helping keep Operis safe. Our security team will review this report promptly."}
         </p>
+      </div>
+    );
+  }
+
+  if (!hasSession) {
+    const returnUrl = isTr ? "/tr/sikayet-bildir" : "/en/report";
+    const loginUrl = isTr
+      ? `/tr/giris?returnUrl=${encodeURIComponent(returnUrl)}`
+      : `/en/login?returnUrl=${encodeURIComponent(returnUrl)}`;
+
+    return (
+      <div className="space-y-6 rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/80 p-6 sm:p-8 text-center">
+        <div className="mx-auto h-12 w-12 rounded-2xl bg-blue-500/10 text-blue-400 flex items-center justify-center border border-blue-500/20">
+          <LogIn className="h-6 w-6" aria-hidden="true" />
+        </div>
+        <div className="space-y-2 max-w-md mx-auto">
+          <h2 className="text-base font-bold text-[var(--color-text-primary)]">
+            {isTr ? "Bildirim Göndermek İçin Giriş Yapın" : "Sign In to Submit Abuse Report"}
+          </h2>
+          <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed">
+            {isTr
+              ? "Bildiriminizin incelenme durumunu takip edebilmek ve sahte/spam raporlamaları önlemek için Operis oturumu gereklidir."
+              : "An Operis account is required to submit verified reports and track resolution status."}
+          </p>
+        </div>
+
+        <div className="pt-1">
+          <Link href={loginUrl}>
+            <Button variant="primary" size="md" className="gap-2 shadow-lg shadow-blue-500/20">
+              <LogIn className="h-4 w-4" aria-hidden="true" />
+              <span>{isTr ? "Giriş Yaparak Bildir" : "Log In & Report"}</span>
+            </Button>
+          </Link>
+        </div>
+
+        <div className="pt-3 border-t border-[var(--color-border-subtle)]/60 text-[11px] text-[var(--color-text-tertiary)] flex items-center justify-center gap-1.5">
+          <Mail className="h-3.5 w-3.5 text-blue-400" aria-hidden="true" />
+          <span>
+            {isTr
+              ? "Hesabınız yoksa veya FSEK/DMCA telif hakkı sahibiyseniz:"
+              : "No account or DMCA / copyright owner?"}{" "}
+            <a href="mailto:legal@operis.pro" className="text-blue-400 hover:underline font-medium">
+              legal@operis.pro
+            </a>
+          </span>
+        </div>
       </div>
     );
   }
@@ -117,7 +196,9 @@ export function ReportForm({
         label={isTr ? "Hedef Bağlantı veya İlan Başlığı" : "Target URL or Title"}
         value={targetIdentifier}
         onChange={(e) => setTargetIdentifier(e.target.value)}
-        placeholder={isTr ? "https://operis.pro/tr/ilanlar/... veya @kullaniciadi" : "URL or identifier"}
+        placeholder={
+          isTr ? "https://operis.pro/tr/ilanlar/... veya @kullaniciadi" : "URL or identifier"
+        }
         required
       />
 
@@ -132,7 +213,7 @@ export function ReportForm({
         >
           {REASON_CODES.map((r) => (
             <option key={r.value} value={r.value}>
-              {r.label}
+              {isTr ? r.labelTr : r.labelEn}
             </option>
           ))}
         </select>

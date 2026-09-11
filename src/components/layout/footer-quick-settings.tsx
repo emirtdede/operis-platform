@@ -113,7 +113,9 @@ export function FooterQuickSettings() {
               }`}
             >
               <span>Türkçe (TR)</span>
-              {currentLocale === "tr" && <Check className="h-3.5 w-3.5 text-blue-500" aria-hidden="true" />}
+              {currentLocale === "tr" && (
+                <Check className="h-3.5 w-3.5 text-blue-500" aria-hidden="true" />
+              )}
             </button>
             <button
               type="button"
@@ -126,7 +128,9 @@ export function FooterQuickSettings() {
               }`}
             >
               <span>English (EN)</span>
-              {currentLocale === "en" && <Check className="h-3.5 w-3.5 text-blue-500" aria-hidden="true" />}
+              {currentLocale === "en" && (
+                <Check className="h-3.5 w-3.5 text-blue-500" aria-hidden="true" />
+              )}
             </button>
           </div>
         )}

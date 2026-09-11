@@ -45,7 +45,7 @@ export default async function DashboardNotificationsPage({
     redirect(isTr ? "/tr/giris" : "/en/login");
   }
 
-  let notifications: NotificationItem[] = [];
+  let notifications: NotificationItem[];
 
   try {
     const db = getDb();
@@ -59,7 +59,7 @@ export default async function DashboardNotificationsPage({
     notifications = rows.map((r) => ({
       id: r.id,
       type: r.type,
-      payloadJson: r.payloadJson,
+      payloadJson: (r.payloadJson as Record<string, unknown>) || {},
       readAt: r.readAt,
       createdAt: r.createdAt,
     }));

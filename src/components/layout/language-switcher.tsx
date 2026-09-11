@@ -20,8 +20,8 @@ export function LanguageSwitcher({
     ((params?.locale as Locale) && locales.includes(params?.locale as Locale)
       ? (params.locale as Locale)
       : pathname.startsWith("/en")
-      ? "en"
-      : "tr");
+        ? "en"
+        : "tr");
 
   const switchLocale = (newLocale: Locale) => {
     if (newLocale === activeLocale) return;

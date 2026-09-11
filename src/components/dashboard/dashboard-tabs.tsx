@@ -23,11 +23,7 @@ export function DashboardTabs({ locale, counts }: DashboardTabsProps) {
       id: "listings",
       label: isTr ? "Yayınladığım İlanlar" : "My Published Listings",
       href: isTr ? "/tr/panel/ilanlarim" : "/en/dashboard/listings",
-      matchPrefixes: [
-        "/tr/panel/ilanlarim",
-        "/en/dashboard/listings",
-        "/tr/dashboard/listings",
-      ],
+      matchPrefixes: ["/tr/panel/ilanlarim", "/en/dashboard/listings", "/tr/dashboard/listings"],
       icon: Briefcase,
       count: counts?.listings,
     },
@@ -99,9 +95,7 @@ export function DashboardTabs({ locale, counts }: DashboardTabsProps) {
       className="flex items-center gap-1.5 p-1.5 rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/80 backdrop-blur-xl shadow-sm overflow-x-auto scrollbar-none [-ms-overflow-style:none] [scrollbar-width:none]"
     >
       {tabs.map((tab) => {
-        const isActive = tab.matchPrefixes.some((prefix) =>
-          pathname.startsWith(prefix)
-        );
+        const isActive = tab.matchPrefixes.some((prefix) => pathname.startsWith(prefix));
         const Icon = tab.icon;
 
         return (
@@ -114,7 +108,10 @@ export function DashboardTabs({ locale, counts }: DashboardTabsProps) {
                 : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]"
             }`}
           >
-            <Icon className={`h-4 w-4 shrink-0 ${isActive ? "text-white" : "text-[var(--color-text-tertiary)]"}`} aria-hidden="true" />
+            <Icon
+              className={`h-4 w-4 shrink-0 ${isActive ? "text-white" : "text-[var(--color-text-tertiary)]"}`}
+              aria-hidden="true"
+            />
             <span>{tab.label}</span>
             {typeof tab.count === "number" && (
               <span

@@ -32,10 +32,26 @@ const CATEGORIES = [
 ];
 
 const SAMPLE_TAGS = [
-  "react", "nextjs", "typescript", "nodejs", "python",
-  "postgres", "docker", "aws", "tailwind", "figma",
-  "ui-ux", "logo", "seo", "google-ads", "social-media",
-  "copywriting", "ceviri", "ingilizce", "video-editing", "blender"
+  "react",
+  "nextjs",
+  "typescript",
+  "nodejs",
+  "python",
+  "postgres",
+  "docker",
+  "aws",
+  "tailwind",
+  "figma",
+  "ui-ux",
+  "logo",
+  "seo",
+  "google-ads",
+  "social-media",
+  "copywriting",
+  "ceviri",
+  "ingilizce",
+  "video-editing",
+  "blender",
 ];
 
 function normalizeTurkish(str: string): string {
@@ -103,8 +119,16 @@ for (let i = 0; i < TOTAL_LISTINGS; i++) {
 // Inverted Search Index for sub-millisecond search testing
 const SEARCH_INDEX = new Map<string, SimulatedListing[]>();
 const SEARCH_TERMS = [
-  "react", "nextjs", "teknoloji", "uzman", "tasarim",
-  "pazarlama", "ceviri", "video", "yapay", "proje"
+  "react",
+  "nextjs",
+  "teknoloji",
+  "uzman",
+  "tasarim",
+  "pazarlama",
+  "ceviri",
+  "video",
+  "yapay",
+  "proje",
 ];
 
 for (const term of SEARCH_TERMS) {
@@ -138,9 +162,7 @@ function queryFeedSimulated(params: PaginationParams): PaginationResult {
 
   if (params.cursor) {
     try {
-      const decoded = JSON.parse(
-        Buffer.from(params.cursor, "base64").toString("utf-8")
-      );
+      const decoded = JSON.parse(Buffer.from(params.cursor, "base64").toString("utf-8"));
       if (decoded.lastActivatedAt && decoded.id) {
         cursorDate = new Date(decoded.lastActivatedAt);
         cursorId = decoded.id;
@@ -150,9 +172,7 @@ function queryFeedSimulated(params: PaginationParams): PaginationResult {
     }
   }
 
-  const pool = params.categoryId
-    ? (CATEGORY_INDEX.get(params.categoryId) || [])
-    : DATASET_10K;
+  const pool = params.categoryId ? CATEGORY_INDEX.get(params.categoryId) || [] : DATASET_10K;
 
   // Binary search for O(log N) fast seek
   let startIndex = 0;
@@ -165,7 +185,8 @@ function queryFeedSimulated(params: PaginationParams): PaginationResult {
       const item = pool[mid]!;
       const isPast =
         item.lastActivatedAt.getTime() < cursorDate.getTime() ||
-        (item.lastActivatedAt.getTime() === cursorDate.getTime() && item.id.localeCompare(cursorId) < 0);
+        (item.lastActivatedAt.getTime() === cursorDate.getTime() &&
+          item.id.localeCompare(cursorId) < 0);
       if (isPast) {
         startIndex = mid;
         high = mid - 1;
@@ -209,7 +230,11 @@ class ListingMutexRepository {
   /**
    * Serialized atomic transaction simulation (mirrors Postgres SELECT FOR UPDATE / transaction isolation)
    */
-  async atomicAcceptOffer(listingId: string, offerId: string, winnerUserId: string): Promise<{ success: boolean; error?: string }> {
+  async atomicAcceptOffer(
+    listingId: string,
+    offerId: string,
+    winnerUserId: string
+  ): Promise<{ success: boolean; error?: string }> {
     const prevLock = this.lockQueue.get(listingId) || Promise.resolve();
     let releaseLock: () => void;
     const currentLock = new Promise<void>((resolve) => {

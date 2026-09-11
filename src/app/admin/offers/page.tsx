@@ -5,7 +5,8 @@ import { Send } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "Teklif & Yanıt Denetimi | Operis Admin",
-  description: "Kullanıcıların yaptığı tüm teklifler, bütçeler ve alınan yanıtların denetim kayıtları.",
+  description:
+    "Kullanıcıların yaptığı tüm teklifler, bütçeler ve alınan yanıtların denetim kayıtları.",
 };
 
 export const dynamic = "force-dynamic";
@@ -25,7 +26,8 @@ export default async function AdminOffersPage() {
             </span>
           </h1>
           <p className="text-xs text-slate-400 mt-1">
-            Her kullanıcının verdiği tekliflerin, kabul/ret durumlarının ve yanıt gerekçelerinin merkezi denetimi.
+            Her kullanıcının verdiği tekliflerin, kabul/ret durumlarının ve yanıt gerekçelerinin
+            merkezi denetimi.
           </p>
         </div>
       </div>

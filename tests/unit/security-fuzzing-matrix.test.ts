@@ -77,12 +77,12 @@ const XSS_VECTORS = [
   "<details open ontoggle='alert(1)'>",
   "<marquee onstart='alert(1)'>",
   "'\"><script>alert(document.cookie)</script>",
-  "\"><img src=x onerror=prompt(1)>",
+  '"><img src=x onerror=prompt(1)>',
   "<a href=\"javascript:alert('XSS')\">Click</a>",
   "jav&#x0D;ascript:alert('XSS')",
   "jav&#x0A;ascript:alert('XSS')",
   "jav&#x09;ascript:alert('XSS')",
-  "<img src=1 href=1 onerror=\"javascript:alert(1)\"></img>",
+  '<img src=1 href=1 onerror="javascript:alert(1)"></img>',
   "<svg><script>alert(1)</script></svg>",
   "<math><mtext><table><mglyph><style><script>alert(1)</script></style></mglyph></table></mtext></math>",
   "<form action='javascript:alert(1)'><input type='submit'></form>",
@@ -90,28 +90,28 @@ const XSS_VECTORS = [
   "<embed src='javascript:alert(1)'>",
   "<link rel='stylesheet' href='javascript:alert(1)'>",
   "<style>@import 'javascript:alert(1)';</style>",
-  "<meta http-equiv=\"refresh\" content=\"0;url=javascript:alert(1)\">",
-  "<script src=\"data:text/javascript,alert(1)\"></script>",
+  '<meta http-equiv="refresh" content="0;url=javascript:alert(1)">',
+  '<script src="data:text/javascript,alert(1)"></script>',
   "<svg><animate onbegin=alert(1) attributeName=x dur=1s>",
   "<isindex type=image src=1 onerror=alert(1)>",
   "<%2Fscript><script>alert(1)<%2Fscript>",
   "<b onmouseover=alert(1)>hover!</b>",
-  "<div style=\"background-image: url(javascript:alert(1))\">",
+  '<div style="background-image: url(javascript:alert(1))">',
   "<style>:target {color:red;}</style>",
-  "<table background=\"javascript:alert(1)\">",
-  "<base href=\"javascript:alert(1)//\">",
+  '<table background="javascript:alert(1)">',
+  '<base href="javascript:alert(1)//">',
   "<!--<script>alert(1)</script>-->",
   "<![CDATA[<script>alert(1)</script>]]>",
-  "<script\x20type=\"text/javascript\">javascript:alert(1);</script>",
+  '<script\x20type="text/javascript">javascript:alert(1);</script>',
   "<script\x3Ealert(1)</script>",
   "<script\x0Dalert(1)</script>",
   "<script\x0Aalert(1)</script>",
   "<script\x09alert(1)</script>",
   "<script/x>alert(1)</script>",
   "<svg><discard onbegin=alert(1)>",
-  "<embed code=\"javascript:alert(1)\">",
-  "<iframe srcdoc=\"&lt;script&gt;alert(1)&lt;/script&gt;\"></iframe>",
-  "<a href=\"vbscript:msgbox(1)\">VBScript</a>",
+  '<embed code="javascript:alert(1)">',
+  '<iframe srcdoc="&lt;script&gt;alert(1)&lt;/script&gt;"></iframe>',
+  '<a href="vbscript:msgbox(1)">VBScript</a>',
 ];
 
 // Collection of 50 Malicious and Boundary Strings (Null bytes, Unicode, Path traversal, Overflow)
@@ -179,13 +179,10 @@ describe("Security & Validation Fuzzing Test Suite (1,250 Test Scenarios)", () =
       }))
     );
 
-    it.each(cases)(
-      "rejects SQL injection vector in handle: $payload",
-      ({ payload }) => {
-        const result = handleSchema.safeParse(payload);
-        expect(result.success).toBe(false);
-      }
-    );
+    it.each(cases)("rejects SQL injection vector in handle: $payload", ({ payload }) => {
+      const result = handleSchema.safeParse(payload);
+      expect(result.success).toBe(false);
+    });
   });
 
   describe("Handle XSS & Tag Injection Fuzzing (250 Scenarios: 50 XSS x 5 variations)", () => {
@@ -198,13 +195,10 @@ describe("Security & Validation Fuzzing Test Suite (1,250 Test Scenarios)", () =
       }))
     );
 
-    it.each(cases)(
-      "rejects XSS and HTML vector in handle: $payload",
-      ({ payload }) => {
-        const result = handleSchema.safeParse(payload);
-        expect(result.success).toBe(false);
-      }
-    );
+    it.each(cases)("rejects XSS and HTML vector in handle: $payload", ({ payload }) => {
+      const result = handleSchema.safeParse(payload);
+      expect(result.success).toBe(false);
+    });
   });
 
   describe("Email Validation Boundary & Poison Fuzzing (250 Scenarios: 50 Boundary x 5 variations)", () => {
@@ -217,13 +211,10 @@ describe("Security & Validation Fuzzing Test Suite (1,250 Test Scenarios)", () =
       }))
     );
 
-    it.each(cases)(
-      "rejects corrupted or poisoned email: $payload",
-      ({ payload }) => {
-        const result = emailSchema.safeParse(payload);
-        expect(result.success).toBe(false);
-      }
-    );
+    it.each(cases)("rejects corrupted or poisoned email: $payload", ({ payload }) => {
+      const result = emailSchema.safeParse(payload);
+      expect(result.success).toBe(false);
+    });
   });
 
   describe("Password Policy Fuzzing against Weak & Injection Vectors (250 Scenarios)", () => {
@@ -272,23 +263,20 @@ describe("Security & Validation Fuzzing Test Suite (1,250 Test Scenarios)", () =
         message: isShortMsg
           ? "Too short"
           : isLongMsg
-          ? "A".repeat(3001)
-          : "Valid offer message with sufficient technical details exceeding minimum length requirement easily.",
+            ? "A".repeat(3001)
+            : "Valid offer message with sufficient technical details exceeding minimum length requirement easily.",
         expectedValid: !isNegative && !isNan && !isMinGreater && !isShortMsg && !isLongMsg,
       };
     });
 
-    it.each(offerCases)(
-      "enforces offer schema boundary constraints (case $id)",
-      (input) => {
-        const { expectedValid, id: _id, ...payload } = input;
-        const result = submitOfferSchema.safeParse(payload);
-        if (expectedValid) {
-          expect(result.success).toBe(true);
-        } else {
-          expect(result.success).toBe(false);
-        }
+    it.each(offerCases)("enforces offer schema boundary constraints (case $id)", (input) => {
+      const { expectedValid, id: _id, ...payload } = input;
+      const result = submitOfferSchema.safeParse(payload);
+      if (expectedValid) {
+        expect(result.success).toBe(true);
+      } else {
+        expect(result.success).toBe(false);
       }
-    );
+    });
   });
 });

@@ -5,6 +5,7 @@ import { Mail, User, Send, CheckCircle2, AlertCircle } from "lucide-react";
 import { Button } from "../ui/button";
 import { TextInput } from "../ui/text-input";
 import { TextArea } from "../ui/text-area";
+import { EMOJI_REGEX, validateContentAppropriateness } from "@/src/lib/security/content-moderator";
 
 export interface ContactFormProps {
   locale: string;
@@ -24,23 +25,49 @@ export function ContactForm({ locale }: ContactFormProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
     setError(null);
+
+    if (EMOJI_REGEX.test(name) || EMOJI_REGEX.test(subject) || EMOJI_REGEX.test(message)) {
+      setError(
+        isTr
+          ? "Form alanlarında emoji kullanılamaz. Lütfen profesyonel metin kullanınız."
+          : "Form fields cannot contain emojis. Please use plain text."
+      );
+      return;
+    }
+
+    if (
+      !validateContentAppropriateness(subject).isValid ||
+      !validateContentAppropriateness(message).isValid
+    ) {
+      setError(
+        isTr
+          ? "Mesajınız veya konu topluluk kurallarımıza aykırı uygunsuz ifadeler içermektedir."
+          : "Subject or message contains inappropriate content violating guidelines."
+      );
+      return;
+    }
+
+    setIsLoading(true);
 
     try {
       const res = await fetch("/api/contact", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-locale": locale,
+        },
         body: JSON.stringify({
           name: name.trim(),
           email: email.trim(),
           subject: subject.trim(),
           message: message.trim(),
+          locale: locale === "en" ? "en" : "tr",
         }),
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Mesaj iletilemedi");
+      if (!res.ok) throw new Error(data.error || (isTr ? "Mesaj iletilemedi." : "Failed to send message."));
 
       setIsSuccess(true);
       setName("");
@@ -48,7 +75,13 @@ export function ContactForm({ locale }: ContactFormProps) {
       setSubject("");
       setMessage("");
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : (isTr ? "İşlem başarısız oldu." : "Failed to send message."));
+      setError(
+        err instanceof Error
+          ? err.message
+          : isTr
+            ? "İşlem başarısız oldu."
+            : "Failed to send message."
+      );
     } finally {
       setIsLoading(false);
     }
@@ -115,7 +148,9 @@ export function ContactForm({ locale }: ContactFormProps) {
         label={isTr ? "Konu" : "Subject"}
         value={subject}
         onChange={(e) => setSubject(e.target.value)}
-        placeholder={isTr ? "Teknik Destek, Kurumsal Ortaklık vb." : "General Inquiry, Partnership, etc."}
+        placeholder={
+          isTr ? "Teknik Destek, Kurumsal Ortaklık vb." : "General Inquiry, Partnership, etc."
+        }
         required
       />
 
@@ -123,7 +158,9 @@ export function ContactForm({ locale }: ContactFormProps) {
         label={isTr ? "Mesajınız" : "Message"}
         value={message}
         onChange={(e) => setMessage(e.target.value)}
-        placeholder={isTr ? "Mesajınızı ve talebinizi detaylandırın..." : "Write your message here..."}
+        placeholder={
+          isTr ? "Mesajınızı ve talebinizi detaylandırın..." : "Write your message here..."
+        }
         required
         rows={5}
       />

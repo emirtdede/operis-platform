@@ -70,9 +70,11 @@ describe("Database Foundation & Schema Invariants", () => {
         "utf-8"
       );
       expect(migrationSql).toContain('CREATE UNIQUE INDEX "offers_pending_unique_idx" ON "offers"');
-      expect(migrationSql).toContain('WHERE status = \'PENDING\'');
-      expect(migrationSql).toContain('CREATE UNIQUE INDEX "offers_accepted_unique_idx" ON "offers"');
-      expect(migrationSql).toContain('WHERE status = \'ACCEPTED\'');
+      expect(migrationSql).toContain("WHERE status = 'PENDING'");
+      expect(migrationSql).toContain(
+        'CREATE UNIQUE INDEX "offers_accepted_unique_idx" ON "offers"'
+      );
+      expect(migrationSql).toContain("WHERE status = 'ACCEPTED'");
     });
 
     it("verifies listings table has required composite indexes for feed and freshness", () => {

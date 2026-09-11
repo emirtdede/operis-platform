@@ -5,7 +5,8 @@ import { ShieldAlert } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "Siber Tehditler & Saldırı İzleme | Operis Admin",
-  description: "Brute-force saldırıları, SQL enjeksiyon taramaları, DDoS dalgaları ve IP kara liste yönetimi.",
+  description:
+    "Brute-force saldırıları, SQL enjeksiyon taramaları, DDoS dalgaları ve IP kara liste yönetimi.",
 };
 
 export const dynamic = "force-dynamic";
@@ -25,7 +26,8 @@ export default async function AdminSecurityThreatsPage() {
             </span>
           </h1>
           <p className="text-xs text-slate-400 mt-1">
-            Brute-force, SQL/NoSQL enjeksiyonu ve DDoS denemelerini anlık analiz edin. Saldırgan IP adreslerini tek tıkla kara listeye alın.
+            Brute-force, SQL/NoSQL enjeksiyonu ve DDoS denemelerini anlık analiz edin. Saldırgan IP
+            adreslerini tek tıkla kara listeye alın.
           </p>
         </div>
       </div>

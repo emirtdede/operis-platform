@@ -78,6 +78,8 @@ vi.mock("@/src/lib/db", () => {
         lastActivatedAt: "last_activated_at",
         activeUntil: "active_until",
         activationSeq: "activation_seq",
+        viewCount: "view_count",
+        clickCount: "click_count",
         tags: "tags",
         ownerUserId: "owner_user_id",
       },

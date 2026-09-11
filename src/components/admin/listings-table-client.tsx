@@ -8,6 +8,8 @@ import {
   ExternalLink,
   X,
   AlertTriangle,
+  Eye,
+  MousePointerClick,
 } from "lucide-react";
 import { AdminListingItem } from "@/src/modules/admin/service";
 
@@ -41,13 +43,10 @@ export function ListingsTableClient({ initialListings, total: _total }: Listings
   const handleApplyModeration = () => {
     if (!modifyingListing || !moderationReason.trim()) return;
 
-    const newStatus =
-      modifyingListing.status === "ACTIVE" ? "HIDDEN_MODERATION" : "ACTIVE";
+    const newStatus = modifyingListing.status === "ACTIVE" ? "HIDDEN_MODERATION" : "ACTIVE";
 
     setListings((prev) =>
-      prev.map((l) =>
-        l.id === modifyingListing.id ? { ...l, status: newStatus } : l
-      )
+      prev.map((l) => (l.id === modifyingListing.id ? { ...l, status: newStatus } : l))
     );
 
     setActionSuccess(
@@ -111,6 +110,7 @@ export function ListingsTableClient({ initialListings, total: _total }: Listings
                 <th className="py-3 px-4">Bütçe</th>
                 <th className="py-3 px-4">Durum</th>
                 <th className="py-3 px-4">Tazelik Radarı</th>
+                <th className="py-3 px-4">Görüntülenme / Tıklanma</th>
                 <th className="py-3 px-4 text-right">Aksiyonlar</th>
               </tr>
             </thead>
@@ -118,21 +118,15 @@ export function ListingsTableClient({ initialListings, total: _total }: Listings
               {filtered.map((item) => (
                 <tr key={item.id} className="hover:bg-slate-800/40 transition-colors">
                   <td className="py-3 px-4">
-                    <div className="font-semibold text-white truncate max-w-sm">
-                      {item.title}
-                    </div>
+                    <div className="font-semibold text-white truncate max-w-sm">{item.title}</div>
                     <div className="text-[10px] font-mono text-blue-400 mt-0.5">
                       {item.categoryName} • /{item.categoryKey}
                     </div>
                   </td>
 
                   <td className="py-3 px-4">
-                    <div className="text-slate-200 font-medium">
-                      {item.ownerDisplayName}
-                    </div>
-                    <div className="text-[10px] text-slate-500 font-mono">
-                      @{item.ownerHandle}
-                    </div>
+                    <div className="text-slate-200 font-medium">{item.ownerDisplayName}</div>
+                    <div className="text-[10px] text-slate-500 font-mono">@{item.ownerHandle}</div>
                   </td>
 
                   <td className="py-3 px-4 font-mono text-emerald-400 font-semibold">
@@ -141,12 +135,13 @@ export function ListingsTableClient({ initialListings, total: _total }: Listings
 
                   <td className="py-3 px-4">
                     <span
-                      className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${item.status === "ACTIVE"
+                      className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
+                        item.status === "ACTIVE"
                           ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
                           : item.status === "HIDDEN_MODERATION"
                             ? "bg-red-500/10 text-red-400 border-red-500/20"
                             : "bg-slate-800 text-slate-400 border-slate-700"
-                        }`}
+                      }`}
                     >
                       {item.status === "ACTIVE"
                         ? "AKTİF"
@@ -160,6 +155,20 @@ export function ListingsTableClient({ initialListings, total: _total }: Listings
                     <div className="flex items-center gap-1.5 text-[11px] font-mono text-slate-400">
                       <Clock className="h-3 w-3 text-blue-400" />
                       <span>Döngü #{item.activationSeq} (7 Günlük)</span>
+                    </div>
+                  </td>
+
+                  <td className="py-3 px-4">
+                    <div className="flex items-center gap-2 font-mono text-[11px]">
+                      <span className="flex items-center gap-1 text-blue-400" title="Görüntülenme">
+                        <Eye className="h-3 w-3" />
+                        <span>{(item.viewCount ?? 0).toLocaleString()}</span>
+                      </span>
+                      <span className="text-slate-600">|</span>
+                      <span className="flex items-center gap-1 text-emerald-400" title="Tıklanma">
+                        <MousePointerClick className="h-3 w-3" />
+                        <span>{(item.clickCount ?? 0).toLocaleString()}</span>
+                      </span>
                     </div>
                   </td>
 
@@ -177,10 +186,11 @@ export function ListingsTableClient({ initialListings, total: _total }: Listings
                       <button
                         type="button"
                         onClick={() => setModifyingListing(item)}
-                        className={`px-2.5 py-1 rounded-lg border text-[11px] font-semibold transition-colors ${item.status === "ACTIVE"
+                        className={`px-2.5 py-1 rounded-lg border text-[11px] font-semibold transition-colors ${
+                          item.status === "ACTIVE"
                             ? "border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20"
                             : "border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"
-                          }`}
+                        }`}
                       >
                         {item.status === "ACTIVE" ? "Yayından Kaldır" : "Görünür Yap"}
                       </button>
@@ -211,8 +221,10 @@ export function ListingsTableClient({ initialListings, total: _total }: Listings
             </div>
 
             <p className="text-xs text-slate-300">
-              <span className="font-semibold text-white">'{modifyingListing.title}'</span> başlıklı ilanı{" "}
-              {modifyingListing.status === "ACTIVE" ? "yayından kaldırmak" : "tekrar aktif etmek"} üzeresiniz.
+              <span className="font-semibold text-white">'{modifyingListing.title}'</span> başlıklı
+              ilanı{" "}
+              {modifyingListing.status === "ACTIVE" ? "yayından kaldırmak" : "tekrar aktif etmek"}{" "}
+              üzeresiniz.
             </p>
 
             <div className="space-y-1.5">

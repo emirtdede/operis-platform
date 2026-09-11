@@ -3,7 +3,8 @@ import { clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 
 export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
-  variant?: "neutral" | "success" | "warning" | "danger" | "accent" | "primary" | "secondary" | "outline";
+  variant?:
+    "neutral" | "success" | "warning" | "danger" | "accent" | "primary" | "secondary" | "outline";
   size?: "sm" | "md";
 }
 
@@ -20,20 +21,15 @@ export function Badge({
   const variantStyles = {
     neutral:
       "bg-[var(--bg-elevated)] text-[var(--text-secondary)] border border-[var(--border-subtle)]",
-    primary:
-      "bg-[var(--accent)] text-[var(--accent-contrast)]",
+    primary: "bg-[var(--accent)] text-[var(--accent-contrast)]",
     secondary:
       "bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)] border border-[var(--color-border-subtle)]",
     outline:
       "bg-transparent text-[var(--color-text-primary)] border border-[var(--color-border-subtle)]",
-    success:
-      "bg-emerald-500/10 text-[var(--success)] border border-emerald-500/20",
-    warning:
-      "bg-amber-500/10 text-[var(--warning)] border border-amber-500/20",
-    danger:
-      "bg-red-500/10 text-[var(--danger)] border border-red-500/20",
-    accent:
-      "bg-[var(--accent)] text-[var(--accent-contrast)]",
+    success: "bg-emerald-500/10 text-[var(--success)] border border-emerald-500/20",
+    warning: "bg-amber-500/10 text-[var(--warning)] border border-amber-500/20",
+    danger: "bg-red-500/10 text-[var(--danger)] border border-red-500/20",
+    accent: "bg-[var(--accent)] text-[var(--accent-contrast)]",
   };
 
   const sizeStyles = {

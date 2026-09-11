@@ -1,14 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { setRequestLocale } from "next-intl/server";
-import {
-  HelpCircle,
-  Clock,
-  Lock,
-  Handshake,
-  Percent,
-  MessageSquare,
-} from "lucide-react";
+import { HelpCircle, Clock, Lock, Handshake, Percent, MessageSquare } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 
 export async function generateMetadata({
@@ -34,11 +27,7 @@ export async function generateMetadata({
   };
 }
 
-export default async function HelpPage({
-  params,
-}: {
-  params: Promise<{ locale: string }>;
-}) {
+export default async function HelpPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
   setRequestLocale(locale);
   const isTr = locale === "tr";
@@ -105,7 +94,9 @@ export default async function HelpPage({
               key={idx}
               className="rounded-3xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/70 backdrop-blur-xl p-6 sm:p-8 space-y-4 shadow-sm hover:border-blue-500/30 transition-all duration-300"
             >
-              <div className={`h-11 w-11 rounded-2xl border flex items-center justify-center ${item.color}`}>
+              <div
+                className={`h-11 w-11 rounded-2xl border flex items-center justify-center ${item.color}`}
+              >
                 <Icon className="h-5 w-5" aria-hidden="true" />
               </div>
               <h2 className="text-lg font-bold text-[var(--color-text-primary)]">{item.title}</h2>

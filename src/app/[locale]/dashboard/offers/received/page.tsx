@@ -1,10 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { setRequestLocale } from "next-intl/server";
-import { Lock, ShieldCheck, LogIn } from "lucide-react";
+import { Lock, ShieldCheck } from "lucide-react";
 import { getSession } from "@/src/modules/auth/session";
 import { OfferService } from "@/src/modules/offers/service";
-import { ReceivedOffersDashboard, ReceivedOfferItem } from "@/src/components/dashboard/received-offers-dashboard";
+import {
+  ReceivedOffersDashboard,
+  ReceivedOfferItem,
+} from "@/src/components/dashboard/received-offers-dashboard";
 import { DashboardTabs } from "@/src/components/dashboard/dashboard-tabs";
 import { Button } from "@/src/components/ui/button";
 
@@ -16,9 +20,7 @@ export async function generateMetadata({
   const { locale } = await params;
   const isTr = locale === "tr";
 
-  const title = isTr
-    ? "Gelen Teklifler — İncele & Eşleş"
-    : "Incoming Proposals — Review & Match";
+  const title = isTr ? "Gelen Teklifler — İncele & Eşleş" : "Incoming Proposals — Review & Match";
   const description = isTr
     ? "İlanlarınıza gelen özel teklifleri değerlendirin ve doğrudan eşleşme başlatın."
     : "Review private proposals submitted to your listings and initiate direct matching.";
@@ -57,39 +59,53 @@ export const dynamic = "force-dynamic";
 
 export default async function ReceivedOffersPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ locale: string }>;
+  searchParams?: Promise<{ listingId?: string }>;
 }) {
   const { locale } = await params;
+  const sp = searchParams ? await searchParams : {};
+  const filterListingId = sp.listingId;
   setRequestLocale(locale);
 
   const isTr = locale === "tr";
   const session = await getSession();
+  if (!session?.userId) {
+    redirect(
+      isTr
+        ? "/tr/giris?returnUrl=/tr/panel/teklifler/gelen"
+        : "/en/login?returnUrl=/en/dashboard/offers/received"
+    );
+  }
 
-  let initialOffers: ReceivedOfferItem[] = [];
+  let initialOffers: ReceivedOfferItem[];
 
-  if (session?.userId) {
-    try {
-      const rows = await OfferService.getReceivedOffers(session.userId);
-      initialOffers = rows.map((r) => ({
-        id: r.offer.id,
-        listingId: r.listing.id,
-        listingTitle: r.listing.title,
-        offerorUserId: r.offer.offerorUserId,
-        offerorDisplayName: r.offerorProfile.displayName,
-        offerorHandle: r.offerorProfile.handle,
-        status: r.offer.status,
-        message: r.offer.message,
-        budgetCurrency: r.offer.budgetCurrency,
-        budgetMin: r.offer.budgetMin,
-        budgetMax: r.offer.budgetMax,
-        estimatedDurationValue: r.offer.estimatedDurationValue,
-        estimatedDurationUnit: r.offer.estimatedDurationUnit,
-        createdAt: r.offer.createdAt,
-      }));
-    } catch {
-      initialOffers = [];
+  try {
+    const rows = await OfferService.getReceivedOffers(session.userId);
+    initialOffers = rows.map((r) => ({
+      id: r.offer.id,
+      listingId: r.listing.id,
+      listingTitle: r.listing.title,
+      offerorUserId: r.offer.offerorUserId,
+      offerorDisplayName: r.offerorProfile.displayName,
+      offerorHandle: r.offerorProfile.handle,
+      status: r.offer.status,
+      message: r.offer.message,
+      budgetCurrency: r.offer.budgetCurrency,
+      budgetMin: r.offer.budgetMin,
+      budgetMax: r.offer.budgetMax,
+      estimatedDurationValue: r.offer.estimatedDurationValue,
+      estimatedDurationUnit: r.offer.estimatedDurationUnit,
+      createdAt: r.offer.createdAt,
+      engagementId: r.engagementId ?? null,
+    }));
+
+    if (filterListingId) {
+      initialOffers = initialOffers.filter((o) => o.listingId === filterListingId);
     }
+  } catch {
+    initialOffers = [];
   }
 
   const receivedOffersUrl = isTr
@@ -161,7 +177,9 @@ export default async function ReceivedOffersPage({
           <Lock className="h-5 w-5 text-purple-400 shrink-0 mt-0.5" aria-hidden="true" />
           <div className="space-y-1 text-xs sm:text-sm text-[var(--color-text-secondary)] leading-relaxed">
             <span className="font-semibold text-[var(--color-text-primary)] block">
-              {isTr ? "Teklif Onayı Süreci & Otomatik Ret Kuralları" : "Offer Acceptance & Auto-Decline Mechanics"}
+              {isTr
+                ? "Teklif Onayı Süreci & Otomatik Ret Kuralları"
+                : "Offer Acceptance & Auto-Decline Mechanics"}
             </span>
             <p>
               {isTr
@@ -177,40 +195,6 @@ export default async function ReceivedOffersPage({
         </div>
       </section>
 
-      {/* Auth Prompt if Guest */}
-      {!session && (
-        <section
-          aria-label={isTr ? "Giriş Hatırlatması" : "Sign In Reminder"}
-          className="relative overflow-hidden rounded-3xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/70 p-8 sm:p-12 text-center space-y-5 backdrop-blur-xl shadow-xl"
-        >
-          <div className="pointer-events-none absolute -top-12 -right-12 h-44 w-44 rounded-full bg-blue-500/10 blur-3xl" />
-          <div className="pointer-events-none absolute -bottom-12 -left-12 h-44 w-44 rounded-full bg-emerald-500/10 blur-3xl" />
-
-          <div className="relative z-10 mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-500 border border-blue-500/20 shadow-sm">
-            <LogIn className="h-7 w-7" aria-hidden="true" />
-          </div>
-
-          <div className="relative z-10 max-w-md mx-auto space-y-2">
-            <h2 className="text-lg font-bold text-[var(--color-text-primary)]">
-              {isTr ? "Tekliflerinizi İncelemek İçin Giriş Yapın" : "Sign In to Review Proposals"}
-            </h2>
-            <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed">
-              {isTr
-                ? "Yayınladığınız projelere gelen teklifler gizlidir ve yalnızca ilan sahibi oturum açtığında çözülür."
-                : "Offers sent to your projects are private and decrypted only when the listing owner is signed in."}
-            </p>
-          </div>
-          <div className="relative z-10 pt-1">
-            <Link href={isTr ? "/tr/giris" : "/en/login"}>
-              <Button variant="primary" size="md" className="gap-2 shadow-lg shadow-blue-500/20">
-                <LogIn className="h-4 w-4" aria-hidden="true" />
-                <span>{isTr ? "Giriş Yap" : "Log In"}</span>
-              </Button>
-            </Link>
-          </div>
-        </section>
-      )}
-
       {/* Received Offers Dashboard */}
       <section aria-label={isTr ? "Gelen Teklif Listesi" : "Received Offer List"}>
         <ReceivedOffersDashboard initialOffers={initialOffers} locale={locale} />
@@ -218,4 +202,3 @@ export default async function ReceivedOffersPage({
     </main>
   );
 }
-

@@ -1,10 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { setRequestLocale } from "next-intl/server";
-import { Clock, ShieldCheck, PlusCircle, LogIn } from "lucide-react";
+import { Clock, ShieldCheck, PlusCircle } from "lucide-react";
 import { getSession } from "@/src/modules/auth/session";
 import { ListingService } from "@/src/modules/listings/service";
-import { OwnerListingsDashboard, OwnerListingItem } from "@/src/components/dashboard/owner-listings-dashboard";
+import {
+  OwnerListingsDashboard,
+  OwnerListingItem,
+} from "@/src/components/dashboard/owner-listings-dashboard";
 import { DashboardTabs } from "@/src/components/dashboard/dashboard-tabs";
 import { Button } from "@/src/components/ui/button";
 
@@ -16,9 +20,7 @@ export async function generateMetadata({
   const { locale } = await params;
   const isTr = locale === "tr";
 
-  const title = isTr
-    ? "Yayınladığım İlanlar & Yaşam Döngüsü"
-    : "My Published Listings & Lifecycle";
+  const title = isTr ? "Yayınladığım İlanlar & Yaşam Döngüsü" : "My Published Listings & Lifecycle";
   const description = isTr
     ? "Yayınladığınız teknoloji proje ilanlarını yönetin, teklifleri inceleyin ve 1 haftalık yaşam döngüsünü yenileyin."
     : "Manage your published technology project listings, review incoming proposals, and renew 1-week lifecycles.";
@@ -65,29 +67,36 @@ export default async function DashboardListingsPage({
 
   const isTr = locale === "tr";
   const session = await getSession();
+  if (!session?.userId) {
+    redirect(
+      isTr
+        ? "/tr/giris?returnUrl=/tr/panel/ilanlarim"
+        : "/en/login?returnUrl=/en/dashboard/listings"
+    );
+  }
 
-  let initialListings: OwnerListingItem[] = [];
+  let initialListings: OwnerListingItem[];
 
-  if (session?.userId) {
-    try {
-      const rows = await ListingService.getOwnerListings(session.userId);
-      initialListings = rows.map((r) => ({
-        id: r.id,
-        slug: r.slug,
-        title: r.title,
-        status: r.status,
-        budgetMode: r.budgetMode,
-        budgetCurrency: r.budgetCurrency,
-        budgetMin: r.budgetMin,
-        budgetMax: r.budgetMax,
-        firstPublishedAt: r.firstPublishedAt,
-        lastActivatedAt: r.lastActivatedAt,
-        activeUntil: r.activeUntil,
-        activationSeq: r.activationSeq,
-      }));
-    } catch {
-      initialListings = [];
-    }
+  try {
+    const rows = await ListingService.getOwnerListings(session.userId);
+    initialListings = rows.map((r) => ({
+      id: r.id,
+      slug: r.slug,
+      title: r.title,
+      status: r.status,
+      budgetMode: r.budgetMode,
+      budgetCurrency: r.budgetCurrency,
+      budgetMin: r.budgetMin,
+      budgetMax: r.budgetMax,
+      firstPublishedAt: r.firstPublishedAt,
+      lastActivatedAt: r.lastActivatedAt,
+      activeUntil: r.activeUntil,
+      activationSeq: r.activationSeq,
+      viewCount: r.viewCount ?? 0,
+      clickCount: r.clickCount ?? 0,
+    }));
+  } catch {
+    initialListings = [];
   }
 
   const dashboardUrl = isTr
@@ -154,7 +163,9 @@ export default async function DashboardListingsPage({
           <Clock className="h-5 w-5 text-blue-400 shrink-0 mt-0.5" aria-hidden="true" />
           <div className="space-y-1 text-xs sm:text-sm text-[var(--color-text-secondary)] leading-relaxed">
             <span className="font-semibold text-[var(--color-text-primary)] block">
-              {isTr ? "1 Haftalık Canlılık ve Yenileme Kuralı" : "1-Week Freshness & Renewal Policy"}
+              {isTr
+                ? "1 Haftalık Canlılık ve Yenileme Kuralı"
+                : "1-Week Freshness & Renewal Policy"}
             </span>
             <p>
               {isTr
@@ -170,40 +181,6 @@ export default async function DashboardListingsPage({
         </div>
       </section>
 
-      {/* Auth Prompt if Guest */}
-      {!session && (
-        <section
-          aria-label={isTr ? "Giriş Hatırlatması" : "Sign In Reminder"}
-          className="relative overflow-hidden rounded-3xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/70 p-8 sm:p-12 text-center space-y-5 backdrop-blur-xl shadow-xl"
-        >
-          <div className="pointer-events-none absolute -top-12 -right-12 h-44 w-44 rounded-full bg-blue-500/10 blur-3xl" />
-          <div className="pointer-events-none absolute -bottom-12 -left-12 h-44 w-44 rounded-full bg-indigo-500/10 blur-3xl" />
-
-          <div className="relative z-10 mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-500 border border-blue-500/20 shadow-sm">
-            <LogIn className="h-7 w-7" aria-hidden="true" />
-          </div>
-
-          <div className="relative z-10 max-w-md mx-auto space-y-2">
-            <h2 className="text-lg font-bold text-[var(--color-text-primary)]">
-              {isTr ? "İlanlarınızı Yönetmek İçin Giriş Yapın" : "Sign In to Manage Your Listings"}
-            </h2>
-            <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed">
-              {isTr
-                ? "Daha önce yayınladığınız veya taslak halindeki projelerinizi görüntülemek için lütfen hesabınıza oturum açın."
-                : "Please log in to your account to view and manage your published projects and incoming proposals."}
-            </p>
-          </div>
-          <div className="relative z-10 pt-1">
-            <Link href={isTr ? "/tr/giris" : "/en/login"}>
-              <Button variant="primary" size="md" className="gap-2 shadow-lg shadow-blue-500/20">
-                <LogIn className="h-4 w-4" aria-hidden="true" />
-                <span>{isTr ? "Giriş Yap" : "Log In"}</span>
-              </Button>
-            </Link>
-          </div>
-        </section>
-      )}
-
       {/* Listings Table / Cards */}
       <section aria-label={isTr ? "İlan Yönetimi" : "Listing Management"}>
         <OwnerListingsDashboard initialListings={initialListings} locale={locale} />
@@ -211,4 +188,3 @@ export default async function DashboardListingsPage({
     </main>
   );
 }
-

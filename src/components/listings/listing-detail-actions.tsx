@@ -2,15 +2,22 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Share2, Check } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Share2, Check, LogIn, Zap, SlidersHorizontal } from "lucide-react";
 import { Button } from "../ui/button";
 import { SubmitOfferModal } from "../offers/submit-offer-modal";
+import { QuickOfferDrawer } from "../offers/quick-offer-drawer";
 import { getLocalizedRoute } from "@/src/lib/i18n/routes";
 
 export interface ListingDetailActionsProps {
   listingId: string;
   listingSlug?: string;
   listingTitle: string;
+  categoryName?: string;
+  budgetMin?: string | null;
+  budgetMax?: string | null;
+  budgetCurrency?: string | null;
+  ownerDisplayName?: string;
   ownerUserId: string;
   currentUserId?: string;
   isOwner: boolean;
@@ -22,12 +29,28 @@ export function ListingDetailActions({
   listingId,
   listingSlug,
   listingTitle,
+  categoryName = "Teknoloji",
+  budgetMin = null,
+  budgetMax = null,
+  budgetCurrency = "TRY",
+  ownerDisplayName = "Proje Sahibi",
+  currentUserId,
   isOwner,
   isActive,
   locale,
 }: ListingDetailActionsProps) {
   const isTr = locale === "tr";
+  const router = useRouter();
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
+  const [initialData, setInitialData] = useState<{
+    message: string;
+    budgetCurrency: string;
+    budgetMin: string;
+    budgetMax: string;
+    timelineValue: string;
+    timelineUnit: "DAYS" | "WEEKS" | "MONTHS";
+  } | undefined>(undefined);
   const [copied, setCopied] = useState(false);
 
   const handleCopyLink = async () => {
@@ -42,6 +65,33 @@ export function ListingDetailActions({
     }
   };
 
+  const redirectToLogin = () => {
+    const returnPath = isTr
+      ? `/tr/ilanlar/${listingSlug ?? listingId}`
+      : `/en/listings/${listingSlug ?? listingId}`;
+    const loginUrl = isTr
+      ? `/tr/giris?returnUrl=${encodeURIComponent(returnPath)}`
+      : `/en/login?returnUrl=${encodeURIComponent(returnPath)}`;
+    router.push(loginUrl);
+  };
+
+  const handleQuickOfferClick = () => {
+    if (!currentUserId) {
+      redirectToLogin();
+      return;
+    }
+    setDrawerOpen(true);
+  };
+
+  const handleDetailedOfferClick = () => {
+    if (!currentUserId) {
+      redirectToLogin();
+      return;
+    }
+    setInitialData(undefined);
+    setModalOpen(true);
+  };
+
   const copyButton = (
     <Button
       type="button"
@@ -49,7 +99,15 @@ export function ListingDetailActions({
       size={isOwner ? "md" : "lg"}
       onClick={handleCopyLink}
       className="gap-2 transition-all"
-      aria-label={copied ? (isTr ? "Bağlantı kopyalandı" : "Link copied") : (isTr ? "Bağlantıyı kopyala" : "Copy link")}
+      aria-label={
+        copied
+          ? isTr
+            ? "Bağlantı kopyalandı"
+            : "Link copied"
+          : isTr
+            ? "Bağlantıyı kopyala"
+            : "Copy link"
+      }
     >
       {copied ? (
         <>
@@ -68,22 +126,22 @@ export function ListingDetailActions({
   if (isOwner) {
     return (
       <div className="flex flex-wrap items-center gap-3">
-        <Link href={`${getLocalizedRoute("dashboardReceivedOffers", locale)}?listingId=${listingId}`}>
+        <Link
+          href={`${getLocalizedRoute("dashboardReceivedOffers", locale)}?listingId=${listingId}`}
+        >
           <Button variant="primary">
             {isTr ? "Gelen Teklifleri İncele" : "View Received Offers"}
           </Button>
         </Link>
-        {listingSlug && (
-          <Link href={isTr ? `/tr/ilanlar/${listingSlug}/duzenle` : `/en/listings/${listingSlug}/edit`}>
-            <Button variant="secondary">
-              {isTr ? "İlanı Düzenle" : "Edit Listing"}
-            </Button>
+        {listingSlug && isActive && (
+          <Link
+            href={isTr ? `/tr/ilanlar/${listingSlug}/duzenle` : `/en/listings/${listingSlug}/edit`}
+          >
+            <Button variant="secondary">{isTr ? "İlanı Düzenle" : "Edit Listing"}</Button>
           </Link>
         )}
         <Link href={getLocalizedRoute("dashboardListings", locale)}>
-          <Button variant="outline">
-            {isTr ? "Tüm İlanlarım" : "All My Listings"}
-          </Button>
+          <Button variant="outline">{isTr ? "Tüm İlanlarım" : "All My Listings"}</Button>
         </Link>
         {copyButton}
       </div>
@@ -103,21 +161,93 @@ export function ListingDetailActions({
     );
   }
 
+  const drawerListing = {
+    id: listingId,
+    slug: listingSlug || listingId,
+    title: listingTitle,
+    categoryName,
+    budgetMin,
+    budgetMax,
+    budgetCurrency,
+    ownerDisplayName,
+  };
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-3">
-        <Button variant="primary" size="lg" onClick={() => setModalOpen(true)}>
-          {isTr ? "Birebir Gizli Teklif Ver" : "Submit Private Offer"}
+        <Button
+          variant="primary"
+          size="lg"
+          onClick={handleQuickOfferClick}
+          className="gap-2 shadow-lg shadow-blue-500/20 font-semibold"
+        >
+          {!currentUserId ? (
+            <LogIn className="h-4 w-4" aria-hidden="true" />
+          ) : (
+            <Zap className="h-4 w-4 fill-current text-amber-400" aria-hidden="true" />
+          )}
+          <span>
+            {!currentUserId
+              ? isTr
+                ? "Giriş Yaparak Teklif Ver"
+                : "Sign In to Submit Offer"
+              : isTr
+                ? "Hızlı Teklif Ver"
+                : "Quick Proposal"}
+          </span>
         </Button>
+
+        {currentUserId && (
+          <Button
+            type="button"
+            variant="secondary"
+            size="lg"
+            onClick={handleDetailedOfferClick}
+            className="gap-2"
+          >
+            <SlidersHorizontal className="h-4 w-4 text-blue-400" aria-hidden="true" />
+            <span>{isTr ? "Detaylı Teklif" : "Detailed Proposal"}</span>
+          </Button>
+        )}
+
         {copyButton}
 
-        <SubmitOfferModal
-          isOpen={modalOpen}
-          onClose={() => setModalOpen(false)}
-          listingId={listingId}
-          listingTitle={listingTitle}
-          locale={locale}
-        />
+        {drawerOpen && (
+          <QuickOfferDrawer
+            isOpen={drawerOpen}
+            onClose={() => setDrawerOpen(false)}
+            listing={drawerListing}
+            locale={locale}
+            onOpenFullModal={(data) => {
+              setDrawerOpen(false);
+              setInitialData(data);
+              setModalOpen(true);
+            }}
+            onSuccess={() => {
+              setDrawerOpen(false);
+              router.refresh();
+            }}
+          />
+        )}
+
+        {modalOpen && (
+          <SubmitOfferModal
+            isOpen={modalOpen}
+            onClose={() => {
+              setModalOpen(false);
+              setInitialData(undefined);
+            }}
+            listingId={listingId}
+            listingTitle={listingTitle}
+            locale={locale}
+            initialData={initialData}
+            onSuccess={() => {
+              setModalOpen(false);
+              setInitialData(undefined);
+              router.refresh();
+            }}
+          />
+        )}
       </div>
 
       <p className="text-[11px] text-[var(--color-text-tertiary)] flex items-center gap-1.5 pt-1">
@@ -127,7 +257,9 @@ export function ListingDetailActions({
             ? "Operis kar amacı gütmeyen ücretsiz bir buluşma platformudur; ticari risk almaz. Ödeme ve sözleşmeler tarafların kendi sorumluluğundadır."
             : "Operis is a non-profit, zero-commission matching venue. All payments and contracts are strictly direct; the platform assumes zero commercial risk."}{" "}
           <Link
-            href={isTr ? "/tr/yasal/eslestirme-ve-sorumluluk-reddi" : "/en/legal/matching-disclaimer"}
+            href={
+              isTr ? "/tr/yasal/eslestirme-ve-sorumluluk-reddi" : "/en/legal/matching-disclaimer"
+            }
             className="text-blue-400 hover:underline inline-block font-medium"
           >
             {isTr ? "Yasal Sorumluluk Reddi" : "Disclaimer"}
@@ -137,4 +269,3 @@ export function ListingDetailActions({
     </div>
   );
 }
-

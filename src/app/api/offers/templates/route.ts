@@ -1,0 +1,163 @@
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { getSession } from "@/src/modules/auth/session";
+import { OfferService } from "@/src/modules/offers/service";
+import {
+  checkRateLimit,
+  getClientIp,
+  rateLimitExceededResponse,
+} from "@/src/lib/security/rate-limit";
+
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const locale = searchParams.get("locale") || (req.headers.get("x-locale") === "en" ? "en" : "tr");
+  const isEn = locale === "en";
+
+  try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json(
+        { error: isEn ? "Sign in to view templates." : "Şablonları görüntülemek için oturum açın." },
+        { status: 401 }
+      );
+    }
+
+    const templates = await OfferService.getUserOfferTemplatesAsync(session.userId, locale);
+    return NextResponse.json({ templates }, { status: 200 });
+  } catch (err: unknown) {
+    const message =
+      err instanceof Error
+        ? err.message
+        : isEn
+          ? "Failed to load templates."
+          : "Şablonlar yüklenemedi.";
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
+}
+
+export async function POST(req: Request) {
+  const ip = getClientIp(req);
+  const headerLocale = req.headers.get("x-locale");
+  let isEn = headerLocale === "en";
+
+  try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json(
+        { error: isEn ? "Sign in to save templates." : "Şablon kaydedebilmek için oturum açın." },
+        { status: 401 }
+      );
+    }
+
+    const limitCheck = checkRateLimit(`offer:templates:${session.userId}:${ip}`, 30, 60 * 1000);
+    if (!limitCheck.success) {
+      return rateLimitExceededResponse(
+        limitCheck.reset,
+        isEn
+          ? "Too many template actions. Please wait a moment."
+          : "Çok fazla işlem yapıldı. Lütfen biraz bekleyiniz."
+      );
+    }
+
+    const body = await req.json();
+    if (body?.locale === "en") isEn = true;
+    const template = await OfferService.saveOfferTemplateAsync(session.userId, body);
+
+    return NextResponse.json({ success: true, template }, { status: 200 });
+  } catch (err: unknown) {
+    let message = isEn ? "Failed to save template." : "Şablon kaydedilemedi.";
+
+    if (err instanceof z.ZodError) {
+      const rawMsg = err.issues[0]?.message || "";
+      if (isEn) {
+        if (rawMsg.includes("en az 2")) {
+          message = "Template name must be at least 2 characters.";
+        } else if (rawMsg.includes("en az 50")) {
+          message = "Template message must be at least 50 characters.";
+        } else if (rawMsg.includes("uygunsuz")) {
+          message = "Template content contains prohibited or inappropriate language.";
+        } else if (rawMsg.includes("Emojis are strictly prohibited")) {
+          message = "Template cannot contain emojis. Please use plain text.";
+        } else {
+          message = rawMsg || "Invalid template format.";
+        }
+      } else {
+        if (rawMsg.includes("Emojis are strictly prohibited")) {
+          message = "Şablon emoji içeremez. Lütfen profesyonel metin kullanınız.";
+        } else if (rawMsg.includes("Invalid budget format")) {
+          message = "Geçersiz bütçe formatı.";
+        } else if (rawMsg.includes("Minimum budget cannot exceed")) {
+          message = "Minimum bütçe, maksimum bütçeden büyük olamaz.";
+        } else {
+          message = rawMsg || "Geçersiz şablon formatı.";
+        }
+      }
+    } else if (err instanceof Error) {
+      message = err.message;
+    }
+
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
+}
+
+export async function DELETE(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const isEn = req.headers.get("x-locale") === "en" || searchParams.get("locale") === "en";
+  const ip = getClientIp(req);
+
+  try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json(
+        { error: isEn ? "Sign in to delete templates." : "Şablon silebilmek için oturum açın." },
+        { status: 401 }
+      );
+    }
+
+    const limitCheck = checkRateLimit(`offer:templates:del:${session.userId}:${ip}`, 30, 60 * 1000);
+    if (!limitCheck.success) {
+      return rateLimitExceededResponse(
+        limitCheck.reset,
+        isEn
+          ? "Too many template actions. Please wait a moment."
+          : "Çok fazla işlem yapıldı. Lütfen biraz bekleyiniz."
+      );
+    }
+
+    let templateId = searchParams.get("id");
+    if (!templateId) {
+      try {
+        const body = await req.json();
+        if (body && typeof body.id === "string") {
+          templateId = body.id;
+        }
+      } catch {
+        // No json body provided
+      }
+    }
+
+    if (!templateId) {
+      return NextResponse.json(
+        { error: isEn ? "Invalid template ID." : "Geçersiz şablon ID." },
+        { status: 400 }
+      );
+    }
+
+    const deleted = await OfferService.deleteOfferTemplateAsync(session.userId, templateId);
+    if (!deleted) {
+      return NextResponse.json(
+        { error: isEn ? "Template not found." : "Şablon bulunamadı." },
+        { status: 404 }
+      );
+    }
+    return NextResponse.json({ success: true }, { status: 200 });
+  } catch (err: unknown) {
+    const message =
+      err instanceof Error
+        ? err.message
+        : isEn
+          ? "Failed to delete template."
+          : "Şablon silinemedi.";
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
+}

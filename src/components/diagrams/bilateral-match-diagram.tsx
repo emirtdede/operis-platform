@@ -20,7 +20,8 @@ export function BilateralMatchDiagram() {
               Birebir Gizli Teklifleşme
             </h3>
             <p className="text-xs text-[var(--color-text-secondary)] mt-0.5">
-              Teklif tutarlarınız ve proje detaylarınız rakiplere kapalıdır; yalnızca siz ve anlaştığınız uzman görebilir.
+              Teklif tutarlarınız ve proje detaylarınız rakiplere kapalıdır; yalnızca siz ve
+              anlaştığınız uzman görebilir.
             </p>
           </div>
         </div>
@@ -42,12 +43,8 @@ export function BilateralMatchDiagram() {
             </span>
           </div>
           <div>
-            <div className="font-semibold text-sm text-[var(--color-text-primary)]">
-              İş Veren
-            </div>
-            <div className="text-xs text-[var(--color-text-secondary)]">
-              Proje Sahibi
-            </div>
+            <div className="font-semibold text-sm text-[var(--color-text-primary)]">İş Veren</div>
+            <div className="text-xs text-[var(--color-text-secondary)]">Proje Sahibi</div>
           </div>
         </div>
 
@@ -96,11 +93,7 @@ export function BilateralMatchDiagram() {
 
               {/* Moving Lock Particle */}
               <circle r="4" fill="#38bdf8" filter="drop-shadow(0 0 6px #38bdf8)">
-                <animateMotion
-                  path="M 20 30 Q 160 0 300 30"
-                  dur="2.5s"
-                  repeatCount="indefinite"
-                />
+                <animateMotion path="M 20 30 Q 160 0 300 30" dur="2.5s" repeatCount="indefinite" />
               </circle>
             </svg>
           </div>
@@ -130,9 +123,7 @@ export function BilateralMatchDiagram() {
             </span>
           </div>
           <div>
-            <div className="font-semibold text-sm text-[var(--color-text-primary)]">
-              Yazılımcı
-            </div>
+            <div className="font-semibold text-sm text-[var(--color-text-primary)]">Yazılımcı</div>
             <div className="text-xs text-[var(--color-text-secondary)]">
               Doğrulanmış Profesyonel
             </div>
@@ -145,19 +136,24 @@ export function BilateralMatchDiagram() {
         <div className="flex items-center gap-2.5 p-2 rounded-xl bg-[var(--color-surface-hover)]/40">
           <CheckCircle2 className="h-4 w-4 text-blue-400 shrink-0" aria-hidden="true" />
           <span className="text-[var(--color-text-secondary)]">
-            <strong className="text-[var(--color-text-primary)] font-medium">Fiyat Kırma Savaşı Yok:</strong> Açık artırma usulü teklif yarışı yaşanmaz.
+            <strong className="text-[var(--color-text-primary)] font-medium">
+              Fiyat Kırma Savaşı Yok:
+            </strong>{" "}
+            Açık artırma usulü teklif yarışı yaşanmaz.
           </span>
         </div>
         <div className="flex items-center gap-2.5 p-2 rounded-xl bg-[var(--color-surface-hover)]/40">
           <CheckCircle2 className="h-4 w-4 text-cyan-400 shrink-0" aria-hidden="true" />
           <span className="text-[var(--color-text-secondary)]">
-            <strong className="text-[var(--color-text-primary)] font-medium">Tam Gizlilik:</strong> Teklif detayları arama motorlarına kapalıdır.
+            <strong className="text-[var(--color-text-primary)] font-medium">Tam Gizlilik:</strong>{" "}
+            Teklif detayları arama motorlarına kapalıdır.
           </span>
         </div>
         <div className="flex items-center gap-2.5 p-2 rounded-xl bg-[var(--color-surface-hover)]/40">
           <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" aria-hidden="true" />
           <span className="text-[var(--color-text-secondary)]">
-            <strong className="text-[var(--color-text-primary)] font-medium">Birebir Temas:</strong> Eşleşme onaylandığında doğrudan iletişim başlar.
+            <strong className="text-[var(--color-text-primary)] font-medium">Birebir Temas:</strong>{" "}
+            Eşleşme onaylandığında doğrudan iletişim başlar.
           </span>
         </div>
       </div>

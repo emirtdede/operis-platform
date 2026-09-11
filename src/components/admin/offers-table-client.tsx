@@ -1,11 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import {
-  Search,
-  X,
-  FileText,
-} from "lucide-react";
+import { Search, X, FileText } from "lucide-react";
 import { AdminOfferItem } from "@/src/modules/admin/service";
 
 interface OffersTableClientProps {
@@ -96,18 +92,12 @@ export function OffersTableClient({ initialOffers, total: _total }: OffersTableC
                   </td>
 
                   <td className="py-3 px-4">
-                    <div className="font-medium text-slate-200">
-                      {item.senderDisplayName}
-                    </div>
-                    <div className="text-[10px] text-slate-500 font-mono">
-                      @{item.senderHandle}
-                    </div>
+                    <div className="font-medium text-slate-200">{item.senderDisplayName}</div>
+                    <div className="text-[10px] text-slate-500 font-mono">@{item.senderHandle}</div>
                   </td>
 
                   <td className="py-3 px-4">
-                    <div className="font-medium text-slate-200">
-                      {item.recipientDisplayName}
-                    </div>
+                    <div className="font-medium text-slate-200">{item.recipientDisplayName}</div>
                     <div className="text-[10px] text-slate-500 font-mono">
                       @{item.recipientHandle}
                     </div>
@@ -125,12 +115,13 @@ export function OffersTableClient({ initialOffers, total: _total }: OffersTableC
                   <td className="py-3 px-4">
                     <div className="flex items-center gap-1.5">
                       <span
-                        className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${item.status === "ACCEPTED"
+                        className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
+                          item.status === "ACCEPTED"
                             ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
                             : item.status === "PENDING"
                               ? "bg-purple-500/10 text-purple-400 border-purple-500/20"
                               : "bg-red-500/10 text-red-400 border-red-500/20"
-                          }`}
+                        }`}
                       >
                         {item.status === "ACCEPTED"
                           ? "KABUL EDİLDİ"
@@ -196,13 +187,19 @@ export function OffersTableClient({ initialOffers, total: _total }: OffersTableC
                 <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
                   <div className="text-slate-500 font-medium">Teklif Sunan Uzman</div>
                   <div className="font-semibold text-white">{selectedOffer.senderDisplayName}</div>
-                  <div className="font-mono text-slate-400 text-[11px]">@{selectedOffer.senderHandle}</div>
+                  <div className="font-mono text-slate-400 text-[11px]">
+                    @{selectedOffer.senderHandle}
+                  </div>
                 </div>
 
                 <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
                   <div className="text-slate-500 font-medium">İlan Sahibi (İşveren)</div>
-                  <div className="font-semibold text-white">{selectedOffer.recipientDisplayName}</div>
-                  <div className="font-mono text-slate-400 text-[11px]">@{selectedOffer.recipientHandle}</div>
+                  <div className="font-semibold text-white">
+                    {selectedOffer.recipientDisplayName}
+                  </div>
+                  <div className="font-mono text-slate-400 text-[11px]">
+                    @{selectedOffer.recipientHandle}
+                  </div>
                 </div>
               </div>
 
@@ -212,7 +209,9 @@ export function OffersTableClient({ initialOffers, total: _total }: OffersTableC
                   <div className="font-mono text-emerald-400 font-bold text-base">
                     {selectedOffer.budgetFormatted}
                   </div>
-                  <div className="text-[10px] text-slate-400">Süre: {selectedOffer.estimatedDuration}</div>
+                  <div className="text-[10px] text-slate-400">
+                    Süre: {selectedOffer.estimatedDuration}
+                  </div>
                 </div>
 
                 <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
@@ -231,7 +230,9 @@ export function OffersTableClient({ initialOffers, total: _total }: OffersTableC
               <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 text-[11px] text-slate-400 space-y-1">
                 <div className="font-semibold text-slate-300">Şifreli İletişim Güvencesi:</div>
                 <p className="text-slate-500 leading-relaxed">
-                  Operis mimarisinde teklifler AES-256 ile şifrelenir ve yalnızca ilan sahibi tarafından çözülebilir. Yönetici konsolu; ticari sırları ifşa etmeksizin teklifin bütçe, süre, zaman damgası ve yanıt durumunu eksiksiz denetleme olanağı sağlar.
+                  Operis mimarisinde teklifler AES-256 ile şifrelenir ve yalnızca ilan sahibi
+                  tarafından çözülebilir. Yönetici konsolu; ticari sırları ifşa etmeksizin teklifin
+                  bütçe, süre, zaman damgası ve yanıt durumunu eksiksiz denetleme olanağı sağlar.
                 </p>
               </div>
             </div>

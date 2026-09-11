@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { setRequestLocale } from "next-intl/server";
 import { ShieldCheck, Lock, Clock, CheckCircle2, ArrowLeft } from "lucide-react";
 import { CategoryService } from "@/src/modules/categories/service";
 import { ListingWizardForm } from "@/src/components/listings/listing-wizard-form";
 import { getLocalizedRoute } from "@/src/lib/i18n/routes";
+import { getSession } from "@/src/modules/auth/session";
 
 export async function generateMetadata({
   params,
@@ -53,15 +55,18 @@ export async function generateMetadata({
 
 export const dynamic = "force-dynamic";
 
-export default async function NewListingPage({
-  params,
-}: {
-  params: Promise<{ locale: string }>;
-}) {
+export default async function NewListingPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
   setRequestLocale(locale);
 
   const isTr = locale === "tr";
+  const session = await getSession();
+  if (!session?.userId) {
+    redirect(
+      isTr ? "/tr/giris?returnUrl=/tr/ilanlar/yeni" : "/en/login?returnUrl=/en/listings/new"
+    );
+  }
+
   const categories = await CategoryService.getAllCategories(isTr ? "tr" : "en").catch(() => []);
 
   const jsonLd = {
@@ -98,7 +103,10 @@ export default async function NewListingPage({
       />
 
       {/* Navigation Breadcrumb */}
-      <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-xs text-[var(--color-text-tertiary)]">
+      <nav
+        aria-label="Breadcrumb"
+        className="flex items-center gap-2 text-xs text-[var(--color-text-tertiary)]"
+      >
         <Link
           href={getLocalizedRoute("listings", locale)}
           className="inline-flex items-center gap-1 hover:text-[var(--color-text-primary)] transition-colors"
@@ -206,4 +214,3 @@ export default async function NewListingPage({
     </main>
   );
 }
-

@@ -12,24 +12,32 @@ vi.mock("@/src/lib/db", () => {
         const txMock = {
           select: () => ({
             from: (table: unknown) => ({
-              where: () => ({
-                limit: () => {
+              where: () => {
+                const getResult = () => {
                   const tbl = table as { id?: string; listingId?: string } | string;
                   if (tbl === "offers" || (typeof tbl === "object" && tbl?.id === "offers")) {
-                    return Promise.resolve(mockOffers);
+                    return mockOffers;
                   }
                   if (tbl === "listings" || (typeof tbl === "object" && tbl?.id === "listings")) {
-                    return Promise.resolve(mockListings);
+                    return mockListings;
                   }
-                  if (tbl === "engagements" || (typeof tbl === "object" && tbl?.listingId === "engagements")) {
-                    return Promise.resolve(mockEngagements);
+                  if (
+                    tbl === "engagements" ||
+                    (typeof tbl === "object" && tbl?.listingId === "engagements")
+                  ) {
+                    return mockEngagements;
                   }
                   if (tbl === "categories") {
-                    return Promise.resolve([{ slug: "web-development" }]);
+                    return [{ key: "web-development", slug: "web-development" }];
                   }
-                  return Promise.resolve([]);
-                },
-              }),
+                  return [];
+                };
+
+                const p = Promise.resolve(getResult());
+                return Object.assign(p, {
+                  limit: () => Promise.resolve(getResult()),
+                });
+              },
             }),
           }),
           update: () => ({
@@ -99,9 +107,9 @@ describe("Engagements Module — Acceptance, Match Handoff & Completion", () => 
     ];
     mockEngagements = [];
 
-    await expect(
-      EngagementService.acceptOffer(ownerId, offerId)
-    ).rejects.toThrow("LISTING_EXPIRED");
+    await expect(EngagementService.acceptOffer(ownerId, offerId)).rejects.toThrow(
+      "LISTING_EXPIRED"
+    );
   });
 
   it("fails offer acceptance if listing already has an engagement (LISTING_ALREADY_MATCHED)", async () => {
@@ -124,9 +132,9 @@ describe("Engagements Module — Acceptance, Match Handoff & Completion", () => 
     ];
     mockEngagements = [{ id: "existing-match-uuid" }];
 
-    await expect(
-      EngagementService.acceptOffer(ownerId, offerId)
-    ).rejects.toThrow("LISTING_ALREADY_MATCHED");
+    await expect(EngagementService.acceptOffer(ownerId, offerId)).rejects.toThrow(
+      "LISTING_ALREADY_MATCHED"
+    );
   });
 
   it("successfully accepts offer and creates match when conditions are satisfied", async () => {
@@ -163,14 +171,12 @@ describe("Engagements Module — Acceptance, Match Handoff & Completion", () => 
     const freelancerMarkNotYet = { status: "NOT_MARKED" };
 
     const bothComplete1 =
-      ownerMark.status === "MARKED_COMPLETE" &&
-      freelancerMarkNotYet.status === "MARKED_COMPLETE";
+      ownerMark.status === "MARKED_COMPLETE" && freelancerMarkNotYet.status === "MARKED_COMPLETE";
     expect(bothComplete1).toBe(false);
 
     const freelancerMarkComplete = { status: "MARKED_COMPLETE" };
     const bothComplete2 =
-      ownerMark.status === "MARKED_COMPLETE" &&
-      freelancerMarkComplete.status === "MARKED_COMPLETE";
+      ownerMark.status === "MARKED_COMPLETE" && freelancerMarkComplete.status === "MARKED_COMPLETE";
     expect(bothComplete2).toBe(true);
   });
 });

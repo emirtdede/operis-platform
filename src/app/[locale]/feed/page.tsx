@@ -4,12 +4,12 @@ import { setRequestLocale } from "next-intl/server";
 import { Search, PlusCircle, Clock, ShieldCheck } from "lucide-react";
 import { FeedService, FeedListingItem } from "@/src/modules/listings/feed/service";
 import { CategoryService } from "@/src/modules/categories/service";
-import { ListingCard } from "@/src/components/listings/listing-card";
+import { InteractiveListingsFeed } from "@/src/components/listings/interactive-listings-feed";
 import { EmptyState } from "@/src/components/ui/empty-state";
 import { Button } from "@/src/components/ui/button";
 import { getLocalizedRoute } from "@/src/lib/i18n/routes";
 import { CategoryFilterBar } from "@/src/components/categories/category-filter-bar";
-
+import { getSession } from "@/src/modules/auth/session";
 
 export async function generateMetadata({
   params,
@@ -63,20 +63,27 @@ export default async function FeedPage({
   searchParams,
 }: {
   params: Promise<{ locale: string }>;
-  searchParams: Promise<{ mode?: string; category?: string; q?: string }>;
+  searchParams: Promise<{
+    mode?: string;
+    category?: string;
+    kategori?: string;
+    q?: string;
+    ara?: string;
+  }>;
 }) {
   const { locale } = await params;
   const sp = await searchParams;
   setRequestLocale(locale);
 
   const isTr = locale === "tr";
-  const mode = sp.mode === "all" ? "all" : "following";
-  const selectedCategory = sp.category;
-  const searchQuery = sp.q;
+  const mode = sp.mode === "following" ? "following" : "all";
+  const selectedCategory = sp.category || sp.kategori;
+  const searchQuery = sp.q || sp.ara;
   const feedPath = isTr ? "/tr/akis" : "/en/feed";
 
   // Fetch categories for filter panel
   const categories = await CategoryService.getAllCategories(isTr ? "tr" : "en").catch(() => []);
+  const session = await getSession();
 
   // Fetch feed listings
   const feedResult: { items: FeedListingItem[]; hasFollowedCategories?: boolean } =
@@ -85,6 +92,7 @@ export default async function FeedPage({
       categorySlugs: selectedCategory ? [selectedCategory] : undefined,
       search: searchQuery,
       locale: isTr ? "tr" : "en",
+      userId: session?.userId,
     }).catch(() => ({ items: [], hasFollowedCategories: true }));
 
   const jsonLd = {
@@ -158,18 +166,21 @@ export default async function FeedPage({
           role="search"
         >
           <input type="hidden" name="mode" value={mode} />
-          {selectedCategory && (
-            <input type="hidden" name="category" value={selectedCategory} />
-          )}
+          {selectedCategory && <input type="hidden" name="category" value={selectedCategory} />}
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--color-text-tertiary)]" aria-hidden="true" />
+            <Search
+              className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--color-text-tertiary)]"
+              aria-hidden="true"
+            />
             <input
               type="search"
               name="q"
               defaultValue={searchQuery ?? ""}
               maxLength={100}
               aria-label={isTr ? "İlan arama" : "Search listings"}
-              placeholder={isTr ? "İlan başlığı veya teknoloji ara..." : "Search title or tech stack..."}
+              placeholder={
+                isTr ? "İlan başlığı veya teknoloji ara..." : "Search title or tech stack..."
+              }
               className="w-full rounded-xl bg-transparent pl-9 pr-3 py-2 text-sm text-[var(--color-text-primary)] placeholder-[var(--color-text-tertiary)] focus:outline-none"
             />
           </div>
@@ -180,7 +191,10 @@ export default async function FeedPage({
       </header>
 
       {/* Mode Switcher Tabs */}
-      <nav aria-label={isTr ? "Akış Sekmeleri" : "Feed Tabs"} className="flex flex-wrap items-center gap-3">
+      <nav
+        aria-label={isTr ? "Akış Sekmeleri" : "Feed Tabs"}
+        className="flex flex-wrap items-center gap-3"
+      >
         <Link
           href={`${feedPath}?mode=following${
             selectedCategory ? `&category=${selectedCategory}` : ""
@@ -240,7 +254,6 @@ export default async function FeedPage({
         />
       </section>
 
-
       {/* Main Stream Area */}
       <section className="space-y-6">
         <div className="flex items-center justify-between text-xs text-[var(--color-text-tertiary)] border-b border-[var(--color-border-subtle)] pb-3">
@@ -267,8 +280,8 @@ export default async function FeedPage({
                     ? "Henüz Kategori Takip Etmiyorsunuz"
                     : "No Categories Followed Yet"
                   : isTr
-                  ? "Eşleşen Canlı İlan Bulunamadı"
-                  : "No Matching Live Listings"
+                    ? "Eşleşen Canlı İlan Bulunamadı"
+                    : "No Matching Live Listings"
               }
               description={
                 mode === "following" && !feedResult.hasFollowedCategories
@@ -276,8 +289,8 @@ export default async function FeedPage({
                     ? "İlginizi çeken teknoloji kategorilerini takip ederek özelleştirilmiş proje akışınızı oluşturun."
                     : "Follow technology categories you specialize in to build your personalized feed."
                   : isTr
-                  ? "Arama ve filtre kriterlerinize uygun aktif ilan bulunamadı. Filtreleri temizleyebilir veya tüm akışı inceleyebilirsiniz."
-                  : "No active projects match your filters. You can clear filters or view all listings."
+                    ? "Arama ve filtre kriterlerinize uygun aktif ilan bulunamadı. Filtreleri temizleyebilir veya tüm akışı inceleyebilirsiniz."
+                    : "No active projects match your filters. You can clear filters or view all listings."
               }
               action={
                 <div className="flex flex-wrap items-center justify-center gap-3 pt-4">
@@ -306,33 +319,7 @@ export default async function FeedPage({
             />
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {feedResult.items.map((item) => (
-              <ListingCard
-                key={item.id}
-                id={item.id}
-                slug={item.slug}
-                title={item.title}
-                summary={item.summary}
-                categoryName={item.categoryName}
-                budgetMode={item.budgetMode}
-                budgetCurrency={item.budgetCurrency}
-                budgetMin={item.budgetMin}
-                budgetMax={item.budgetMax}
-                timelineMode={item.timelineMode}
-                targetDate={item.targetDate}
-                timelineValue={item.timelineValue}
-                timelineUnit={item.timelineUnit}
-                ownerHandle={item.ownerHandle}
-                ownerDisplayName={item.ownerDisplayName}
-                firstPublishedAt={item.firstPublishedAt}
-                lastActivatedAt={item.lastActivatedAt}
-                activeUntil={item.activeUntil}
-                activationSeq={item.activationSeq}
-                locale={locale}
-              />
-            ))}
-          </div>
+          <InteractiveListingsFeed items={feedResult.items} locale={locale} />
         )}
       </section>
     </main>

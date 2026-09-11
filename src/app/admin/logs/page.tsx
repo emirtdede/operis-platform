@@ -5,7 +5,8 @@ import { ScrollText } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "Çok Kategorili Log Konsolu | Operis Admin",
-  description: "Kimlik doğrulama, iş mantığı, yönetici denetim izi ve sistem olaylarının detaylı logları.",
+  description:
+    "Kimlik doğrulama, iş mantığı, yönetici denetim izi ve sistem olaylarının detaylı logları.",
 };
 
 export const dynamic = "force-dynamic";
@@ -25,7 +26,8 @@ export default async function AdminLogsPage() {
             </span>
           </h1>
           <p className="text-xs text-slate-400 mt-1">
-            Kimlik doğrulama, iş mantığı hareketleri, denetim izi ve sistem hatalarını 4 ayrı kategoride analiz edin.
+            Kimlik doğrulama, iş mantığı hareketleri, denetim izi ve sistem hatalarını 4 ayrı
+            kategoride analiz edin.
           </p>
         </div>
       </div>

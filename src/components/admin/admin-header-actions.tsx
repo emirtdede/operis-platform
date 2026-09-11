@@ -47,10 +47,10 @@ export function AdminHeaderActions({ currentRole }: AdminHeaderActionsProps) {
       </button>
 
       <Link
-        href="/tr/calisma-alani/ilanlarim"
+        href="/tr/panel/ilanlarim"
         className="px-3 py-1.5 rounded-lg border border-slate-800 bg-slate-800/40 text-xs text-slate-300 hover:text-white hover:bg-slate-800 transition-colors hidden sm:block"
       >
-        Çalışma Alanım
+        İlanlarım / Panel
       </Link>
 
       <button

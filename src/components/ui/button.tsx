@@ -4,15 +4,8 @@ import React, { useState } from "react";
 import { clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 
-export interface ButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?:
-    | "primary"
-    | "secondary"
-    | "outline"
-    | "ghost"
-    | "danger"
-    | "shimmer";
+export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: "primary" | "secondary" | "outline" | "ghost" | "danger" | "shimmer";
   size?: "sm" | "md" | "lg";
   isLoading?: boolean;
 }
@@ -65,8 +58,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         "bg-[var(--color-surface-base)]/80 backdrop-blur-md text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)] border border-[var(--color-border-subtle)] hover:border-[var(--color-border-strong)] shadow-sm",
       outline:
         "border border-[var(--color-border-strong)] bg-transparent text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]",
-      ghost:
-        "text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]",
+      ghost: "text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]",
       danger:
         "bg-gradient-to-b from-red-600 to-red-700 text-white hover:brightness-110 shadow-sm shadow-red-500/20 border border-red-500/30",
     };
@@ -83,9 +75,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         disabled={disabled || isLoading}
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
-        className={twMerge(
-          clsx(baseStyles, variantStyles[variant], sizeStyles[size], className)
-        )}
+        className={twMerge(clsx(baseStyles, variantStyles[variant], sizeStyles[size], className))}
         {...props}
       >
         {/* Dynamic Cursor Spotlight Sheen */}
@@ -132,9 +122,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
           </svg>
         )}
 
-        <span className="relative z-10 inline-flex items-center gap-2">
-          {children}
-        </span>
+        <span className="relative z-10 inline-flex items-center gap-2">{children}</span>
       </button>
     );
   }

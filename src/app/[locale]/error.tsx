@@ -32,7 +32,12 @@ export default function GlobalErrorBoundary({
   const isTr = !isEn;
 
   const referenceCode =
-    error.digest || `OPR-ERR-${Math.abs(error.message.split("").reduce((a, b) => ((a << 5) - a + b.charCodeAt(0)) | 0, 0)).toString(16).toUpperCase()}`;
+    error.digest ||
+    `OPR-ERR-${Math.abs(
+      error.message.split("").reduce((a, b) => ((a << 5) - a + b.charCodeAt(0)) | 0, 0)
+    )
+      .toString(16)
+      .toUpperCase()}`;
 
   useEffect(() => {
     document.title = isTr
@@ -62,9 +67,7 @@ export default function GlobalErrorBoundary({
         badgeText="500 SERVER ERROR"
         badgeColor="rose"
         statusLabel={
-          isTr
-            ? "Operis Servisleri: Hata İzleme Aktif"
-            : "Operis Systems: Error Tracing Active"
+          isTr ? "Operis Servisleri: Hata İzleme Aktif" : "Operis Systems: Error Tracing Active"
         }
         subtitle={isTr ? "Sistem Hatası (500)" : "System Error (500)"}
         title={isTr ? "Beklenmeyen Bir Hata Oluştu" : "An Unexpected Error Occurred"}

@@ -1,6 +1,10 @@
-import { and, count, desc, eq, gt, ilike, or, sql } from "drizzle-orm";
+import { and, count, desc, eq, gt, ilike, or, sql, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/src/lib/db";
-import { inMemoryListings } from "@/src/modules/listings/service";
+import { ListingService, inMemoryListings } from "@/src/modules/listings/service";
+import { NotificationService } from "@/src/modules/notifications/service";
+import { DEFAULT_USER } from "@/src/modules/auth/demo-user";
+import { inMemorySentOffers, inMemoryReceivedOffers } from "@/src/modules/offers/service";
+import { blockIpAddress, unblockIpAddress } from "@/src/lib/security/rate-limit";
 
 export interface PaginatedResult<T> {
   items: T[];
@@ -38,6 +42,8 @@ export interface AdminListingItem {
   budgetMode: string;
   budgetFormatted: string;
   activationSeq: number;
+  viewCount: number;
+  clickCount: number;
   activeUntil: Date | null;
   createdAt: Date;
 }
@@ -93,11 +99,7 @@ export interface AdminAbuseItem {
 export interface AdminThreatItem {
   id: string;
   threatType:
-    | "BRUTE_FORCE"
-    | "RATE_LIMIT_DDOS"
-    | "INJECTION_PROBE"
-    | "UNAUTHORIZED_PATH"
-    | "TOKEN_FORGERY";
+    "BRUTE_FORCE" | "RATE_LIMIT_DDOS" | "INJECTION_PROBE" | "UNAUTHORIZED_PATH" | "TOKEN_FORGERY";
   severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
   sourceIp: string;
   targetEndpoint: string;
@@ -183,7 +185,7 @@ const mockUsers: AdminUserItem[] = [
 
 const mockBlockedIps = new Set<string>(["185.220.101.5", "194.26.29.112"]);
 
-const mockAbuseEvents: AdminAbuseItem[] = [
+export const mockAbuseEvents: AdminAbuseItem[] = [
   {
     id: "abuse_001",
     reporterUserId: "usr_mock_selin_kaya",
@@ -193,7 +195,8 @@ const mockAbuseEvents: AdminAbuseItem[] = [
     targetType: "offer",
     targetId: "off_mock_spam_99",
     reasonCode: "SPAM_PROMOTION",
-    details: "İlanda belirtilmeyen harici Telegram grubuna yönlendirme ve kripto yatırım vaadi içeren teklif.",
+    details:
+      "İlanda belirtilmeyen harici Telegram grubuna yönlendirme ve kripto yatırım vaadi içeren teklif.",
     flaggedTerms: ["t.me/crypto", "yatırım", "garanti"],
     status: "OPEN",
     createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
@@ -207,7 +210,8 @@ const mockAbuseEvents: AdminAbuseItem[] = [
     targetType: "message",
     targetId: "off_mock_insult_12",
     reasonCode: "PROFANITY_INSULT",
-    details: "Bütçe pazarlığı esnasında karşı tarafa küfür ve hakaret içeren mesaj gönderme teşebbüsü.",
+    details:
+      "Bütçe pazarlığı esnasında karşı tarafa küfür ve hakaret içeren mesaj gönderme teşebbüsü.",
     flaggedTerms: ["gerizekalı", "amk", "ahmak"],
     status: "OPEN",
     createdAt: new Date(Date.now() - 4 * 60 * 60 * 1000),
@@ -221,7 +225,8 @@ const mockAbuseEvents: AdminAbuseItem[] = [
     targetType: "listing",
     targetId: "list_mock_fake_01",
     reasonCode: "EXTERNAL_CONTACT_LEAK",
-    details: "Proje açıklamasında WhatsApp numarası ve doğrudan banka havalesi talep eden sahte ilan.",
+    details:
+      "Proje açıklamasında WhatsApp numarası ve doğrudan banka havalesi talep eden sahte ilan.",
     flaggedTerms: ["0555", "whatsapp", "havale"],
     status: "RESOLVED",
     createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000),
@@ -281,7 +286,8 @@ const mockLogs: AdminLogItem[] = [
     category: "auth",
     level: "WARN",
     action: "AUTH_BRUTE_FORCE_TRIGGER",
-    safeSummary: "185.220.101.5 IP adresinden 100+ başarısız giriş denemesi tespit edildi ve IP geçici olarak engellendi.",
+    safeSummary:
+      "185.220.101.5 IP adresinden 100+ başarısız giriş denemesi tespit edildi ve IP geçici olarak engellendi.",
     ipAddress: "185.220.101.5",
     createdAt: new Date(Date.now() - 15 * 60 * 1000),
   },
@@ -292,7 +298,8 @@ const mockLogs: AdminLogItem[] = [
     action: "USER_SUSPEND",
     actorEmail: "kullanici@operis.pro",
     targetId: "usr_mock_spammer_bot",
-    safeSummary: "Admin Demir Yıldız tarafından @cryptopromote hesabı spam/dolandırıcılık gerekçesiyle askıya alındı.",
+    safeSummary:
+      "Admin Demir Yıldız tarafından @cryptopromote hesabı spam/dolandırıcılık gerekçesiyle askıya alındı.",
     createdAt: new Date(Date.now() - 25 * 60 * 1000),
   },
   {
@@ -300,7 +307,8 @@ const mockLogs: AdminLogItem[] = [
     category: "business",
     level: "INFO",
     action: "OFFER_SUBMITTED",
-    safeSummary: "Mert Aydın tarafından 'Next.js ve Tailwind ile E-Ticaret' ilanına 30.000 TRY tutarında şifreli teklif sunuldu.",
+    safeSummary:
+      "Mert Aydın tarafından 'Next.js ve Tailwind ile E-Ticaret' ilanına 30.000 TRY tutarında şifreli teklif sunuldu.",
     createdAt: new Date(Date.now() - 40 * 60 * 1000),
   },
   {
@@ -308,7 +316,8 @@ const mockLogs: AdminLogItem[] = [
     category: "system",
     level: "INFO",
     action: "WORKER_7DAY_EXPIRY_RUN",
-    safeSummary: "7 günlük yaşam döngüsü arka plan görevi başarıyla çalıştı. 2 süresi dolan ilan INACTIVE_EXPIRED durumuna alındı.",
+    safeSummary:
+      "7 günlük yaşam döngüsü arka plan görevi başarıyla çalıştı. 2 süresi dolan ilan INACTIVE_EXPIRED durumuna alındı.",
     createdAt: new Date(Date.now() - 60 * 60 * 1000),
   },
   {
@@ -316,7 +325,8 @@ const mockLogs: AdminLogItem[] = [
     category: "system",
     level: "WARN",
     action: "DB_SLOW_QUERY",
-    safeSummary: "Kategori takip filtre sorgusu 215ms sürdü (eşik: 200ms). Gecikme analizi için loglandı.",
+    safeSummary:
+      "Kategori takip filtre sorgusu 215ms sürdü (eşik: 200ms). Gecikme analizi için loglandı.",
     createdAt: new Date(Date.now() - 120 * 60 * 1000),
   },
 ];
@@ -364,19 +374,35 @@ export class AdminService {
         .where(eq(schema.users.status, "SUSPENDED"));
 
       return {
-        totalUsers: totalUsersRow?.val || 10420,
-        activeListings: activeListingsRow?.val || inMemoryListings.filter((l) => l.status === "ACTIVE").length || 1,
-        expiredListingsLast24h: expired24hRow?.val ?? 2,
-        offersLast24h: offers24hRow?.val ?? 18,
-        matchesLast24h: matches24hRow?.val ?? 6,
-        openReports: openReportsRow?.val || mockAbuseEvents.filter((a) => a.status === "OPEN").length,
-        suspendedUsers: suspendedUsersRow?.val ?? 1,
+        totalUsers: totalUsersRow?.val ?? 0,
+        activeListings: activeListingsRow?.val ?? 0,
+        expiredListingsLast24h: expired24hRow?.val ?? 0,
+        offersLast24h: offers24hRow?.val ?? 0,
+        matchesLast24h: matches24hRow?.val ?? 0,
+        openReports: openReportsRow?.val ?? 0,
+        suspendedUsers: suspendedUsersRow?.val ?? 0,
         deadLetters: 0,
-        activeThreats: mockThreats.filter((t) => t.status === "BLOCKED" || t.status === "DETECTED").length,
+        activeThreats: mockThreats.filter((t) => t.status === "BLOCKED" || t.status === "DETECTED")
+          .length,
         blockedIpsCount: mockBlockedIps.size,
         systemHealthPercent: 99.98,
       };
     } catch {
+      if (process.env.NODE_ENV === "production") {
+        return {
+          totalUsers: 0,
+          activeListings: 0,
+          expiredListingsLast24h: 0,
+          offersLast24h: 0,
+          matchesLast24h: 0,
+          openReports: 0,
+          suspendedUsers: 0,
+          deadLetters: 0,
+          activeThreats: 0,
+          blockedIpsCount: mockBlockedIps.size,
+          systemHealthPercent: 100,
+        };
+      }
       return {
         totalUsers: 10420,
         activeListings: inMemoryListings.filter((l) => l.status === "ACTIVE").length || 1,
@@ -386,7 +412,8 @@ export class AdminService {
         openReports: mockAbuseEvents.filter((a) => a.status === "OPEN").length,
         suspendedUsers: 1,
         deadLetters: 0,
-        activeThreats: mockThreats.filter((t) => t.status === "BLOCKED" || t.status === "DETECTED").length,
+        activeThreats: mockThreats.filter((t) => t.status === "BLOCKED" || t.status === "DETECTED")
+          .length,
         blockedIpsCount: mockBlockedIps.size,
         systemHealthPercent: 99.98,
       };
@@ -429,6 +456,13 @@ export class AdminService {
         );
       }
 
+      const [totalCountRow] = await db
+        .select({ val: count() })
+        .from(schema.users)
+        .leftJoin(schema.profiles, eq(schema.users.id, schema.profiles.userId))
+        .where(conditions.length > 0 ? and(...conditions) : undefined);
+      const total = totalCountRow?.val ?? 0;
+
       const rows = await db
         .select({
           id: schema.users.id,
@@ -465,10 +499,10 @@ export class AdminService {
             createdAt: r.createdAt,
             updatedAt: r.updatedAt,
           })),
-          total: 10420,
+          total,
           page,
           limit,
-          totalPages: Math.ceil(10420 / limit),
+          totalPages: Math.max(1, Math.ceil(total / limit)),
         };
       }
     } catch {
@@ -518,6 +552,91 @@ export class AdminService {
     const page = Math.max(1, params.page || 1);
     const limit = Math.min(100, Math.max(10, params.limit || 25));
 
+    try {
+      const db = getDb();
+      const conditions = [];
+
+      if (params.status && params.status !== "ALL") {
+        conditions.push(eq(schema.listings.status, params.status));
+      }
+      if (params.categoryId && params.categoryId !== "ALL") {
+        conditions.push(eq(schema.listings.categoryId, params.categoryId));
+      }
+      if (params.search && params.search.trim()) {
+        const q = `%${params.search.trim()}%`;
+        conditions.push(
+          or(
+            ilike(schema.listings.title, q),
+            ilike(schema.listings.slug, q),
+            ilike(schema.profiles.displayName, q),
+            ilike(schema.profiles.handle, q)
+          )
+        );
+      }
+
+      const [totalCountRow] = await db
+        .select({ val: count() })
+        .from(schema.listings)
+        .leftJoin(schema.profiles, eq(schema.listings.ownerUserId, schema.profiles.userId))
+        .where(conditions.length > 0 ? and(...conditions) : undefined);
+      const total = totalCountRow?.val ?? 0;
+
+      const rows = await db
+        .select({
+          listing: schema.listings,
+          profile: schema.profiles,
+          category: schema.categories,
+          categoryTranslation: schema.categoryTranslations,
+        })
+        .from(schema.listings)
+        .leftJoin(schema.profiles, eq(schema.listings.ownerUserId, schema.profiles.userId))
+        .leftJoin(schema.categories, eq(schema.listings.categoryId, schema.categories.id))
+        .leftJoin(
+          schema.categoryTranslations,
+          and(
+            eq(schema.categoryTranslations.categoryId, schema.categories.id),
+            eq(schema.categoryTranslations.locale, "tr")
+          )
+        )
+        .where(conditions.length > 0 ? and(...conditions) : undefined)
+        .limit(limit)
+        .offset((page - 1) * limit)
+        .orderBy(desc(schema.listings.createdAt));
+
+      return {
+        items: rows.map(({ listing: l, profile: p, category: c, categoryTranslation: cTrans }) => ({
+          id: l.id,
+          title: l.title,
+          slug: l.slug,
+          status: l.status,
+          categoryName: cTrans?.name || c?.key || "Web Geliştirme",
+          categoryKey: c?.key || "web-development",
+          ownerDisplayName: p?.displayName || "Demir Yıldız",
+          ownerHandle: p?.handle || "demokullanici",
+          ownerUserId: l.ownerUserId,
+          budgetMode: l.budgetMode,
+          budgetFormatted:
+            l.budgetMin && l.budgetMax
+              ? `${parseInt(l.budgetMin).toLocaleString()} - ${parseInt(l.budgetMax).toLocaleString()} ${l.budgetCurrency}`
+              : "Anlaşmaya Bağlı",
+          activationSeq: l.activationSeq,
+          viewCount: l.viewCount ?? 0,
+          clickCount: l.clickCount ?? 0,
+          activeUntil: l.activeUntil,
+          createdAt: l.firstPublishedAt || l.createdAt,
+        })),
+        total,
+        page,
+        limit,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+      };
+    } catch {
+      if (process.env.NODE_ENV === "production") {
+        return { items: [], total: 0, page, limit, totalPages: 1 };
+      }
+      // In-memory fallback
+    }
+
     // Gather from in-memory listings
     let all = inMemoryListings.map((l) => ({
       id: l.id,
@@ -535,6 +654,8 @@ export class AdminService {
           ? `${parseInt(l.budgetMin).toLocaleString()} - ${parseInt(l.budgetMax).toLocaleString()} ${l.budgetCurrency}`
           : "Anlaşmaya Bağlı",
       activationSeq: l.activationSeq,
+      viewCount: l.viewCount ?? 0,
+      clickCount: l.clickCount ?? 0,
       activeUntil: l.activeUntil,
       createdAt: l.firstPublishedAt,
     }));
@@ -554,6 +675,8 @@ export class AdminService {
           budgetMode: "FIXED_RANGE",
           budgetFormatted: "25.000 - 40.000 TRY",
           activationSeq: 1,
+          viewCount: 142,
+          clickCount: 89,
           activeUntil: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
           createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
         },
@@ -598,6 +721,107 @@ export class AdminService {
   }): Promise<PaginatedResult<AdminOfferItem>> {
     const page = Math.max(1, params.page || 1);
     const limit = Math.min(100, Math.max(10, params.limit || 25));
+
+    try {
+      const db = getDb();
+      const conditions = [];
+
+      if (params.status && params.status !== "ALL") {
+        conditions.push(eq(schema.offers.status, params.status));
+      }
+      if (params.search && params.search.trim()) {
+        const q = `%${params.search.trim()}%`;
+        conditions.push(
+          or(
+            ilike(schema.listings.title, q),
+            ilike(schema.listings.slug, q)
+          )
+        );
+      }
+
+      const [totalCountRow] = await db
+        .select({ val: count() })
+        .from(schema.offers)
+        .innerJoin(schema.listings, eq(schema.offers.listingId, schema.listings.id))
+        .where(conditions.length > 0 ? and(...conditions) : undefined);
+      const total = totalCountRow?.val ?? 0;
+
+      const rows = await db
+        .select({
+          offer: schema.offers,
+          listing: schema.listings,
+        })
+        .from(schema.offers)
+        .innerJoin(schema.listings, eq(schema.offers.listingId, schema.listings.id))
+        .where(conditions.length > 0 ? and(...conditions) : undefined)
+        .limit(limit)
+        .offset((page - 1) * limit)
+        .orderBy(desc(schema.offers.createdAt));
+
+      const participantUserIds = [
+        ...new Set([
+          ...rows.map((r) => r.offer.offerorUserId),
+          ...rows.map((r) => r.listing.ownerUserId),
+        ]),
+      ];
+
+      let profileMap = new Map<string, { displayName: string; handle: string }>();
+      if (participantUserIds.length > 0) {
+        const profiles = await db
+          .select({
+            userId: schema.profiles.userId,
+            displayName: schema.profiles.displayName,
+            handle: schema.profiles.handle,
+          })
+          .from(schema.profiles)
+          .where(inArray(schema.profiles.userId, participantUserIds));
+        profileMap = new Map(
+          profiles.map((p) => [p.userId, { displayName: p.displayName, handle: p.handle }])
+        );
+      }
+
+      return {
+        items: rows.map(({ offer: o, listing: l }) => {
+          const sender = profileMap.get(o.offerorUserId);
+          const recipient = profileMap.get(l.ownerUserId);
+          return {
+            id: o.id,
+            listingId: l.id,
+            listingTitle: l.title,
+            listingSlug: l.slug,
+            senderUserId: o.offerorUserId,
+            senderDisplayName: sender?.displayName || "Kullanıcı",
+            senderHandle: sender?.handle || "user",
+            recipientUserId: l.ownerUserId,
+            recipientDisplayName: recipient?.displayName || "Kullanıcı",
+            recipientHandle: recipient?.handle || "user",
+            status: o.status,
+            rejectionReasonCode: o.rejectionCode || null,
+            budgetFormatted:
+              o.budgetMin && o.budgetMax
+                ? `${parseInt(o.budgetMin).toLocaleString()} - ${parseInt(o.budgetMax).toLocaleString()} ${o.budgetCurrency || "TRY"}`
+                : o.budgetMin
+                  ? `${parseInt(o.budgetMin).toLocaleString()} ${o.budgetCurrency || "TRY"}`
+                  : "Belirtilmedi",
+            estimatedDuration:
+              o.estimatedDurationValue && o.estimatedDurationUnit
+                ? `${o.estimatedDurationValue} ${o.estimatedDurationUnit}`
+                : "Belirtilmedi",
+            createdAt: o.createdAt,
+            resolvedAt: o.resolvedAt || null,
+          };
+        }),
+        total,
+        page,
+        limit,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+      };
+    } catch {
+      if (process.env.NODE_ENV === "production") {
+        return { items: [], total: 0, page, limit, totalPages: 1 };
+      }
+      // In-memory fallback
+    }
 
     const mockOffers: AdminOfferItem[] = [
       {
@@ -734,7 +958,42 @@ export class AdminService {
     status?: string;
     search?: string;
   }): Promise<AdminAbuseItem[]> {
-    let all = [...mockAbuseEvents];
+    let dbReports: AdminAbuseItem[] = [];
+    try {
+      const db = getDb();
+      const rows = await db
+        .select({
+          id: schema.reports.id,
+          reporterUserId: schema.reports.reporterUserId,
+          targetType: schema.reports.targetType,
+          targetId: schema.reports.targetId,
+          reasonCode: schema.reports.reasonCode,
+          details: schema.reports.details,
+          status: schema.reports.status,
+          createdAt: schema.reports.createdAt,
+          reporterHandle: schema.profiles.handle,
+          reporterDisplayName: schema.profiles.displayName,
+        })
+        .from(schema.reports)
+        .leftJoin(schema.profiles, eq(schema.reports.reporterUserId, schema.profiles.userId))
+        .orderBy(desc(schema.reports.createdAt));
+
+      dbReports = rows.map((r) => ({
+        id: r.id,
+        reporterUserId: r.reporterUserId,
+        reporterDisplayName: r.reporterDisplayName || "Kullanici",
+        targetType: (r.targetType as "listing" | "profile" | "offer" | "message") || "listing",
+        targetId: r.targetId,
+        reasonCode: r.reasonCode,
+        details: r.details || "",
+        status: (r.status as "OPEN" | "REVIEWING" | "RESOLVED" | "DISMISSED") || "OPEN",
+        createdAt: r.createdAt,
+      }));
+    } catch {
+      // In-memory fallback
+    }
+
+    let all = dbReports.length > 0 ? [...dbReports, ...mockAbuseEvents] : [...mockAbuseEvents];
     if (params.status && params.status !== "ALL") {
       all = all.filter((a) => a.status === params.status);
     }
@@ -790,49 +1049,134 @@ export class AdminService {
       throw new Error("A reason is strictly required for moderation actions");
     }
 
-    try {
-      const db = getDb();
-      const newStatus = action === "SUSPEND" ? "SUSPENDED" : "ACTIVE";
+    const isTargetUuid =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetUserId);
 
-      return await db.transaction(async (tx) => {
-        const [updatedUser] = await tx
-          .update(schema.users)
-          .set({
-            status: newStatus,
-            updatedAt: new Date(),
-          })
-          .where(eq(schema.users.id, targetUserId))
-          .returning();
+    if (isTargetUuid) {
+      try {
+        const db = getDb();
 
-        await tx.insert(schema.adminAuditLog).values({
-          adminUserId,
-          action: `USER_${action}`,
-          targetType: "user",
-          targetId: targetUserId,
-          reasonCode: "ADMIN_ACTION",
-          safeSummary: reason,
+        return await db.transaction(async (tx) => {
+          let updatedUser;
+
+          if (action === "WARN") {
+            // Do NOT alter user status on WARN
+            const [existing] = await tx
+              .select()
+              .from(schema.users)
+              .where(eq(schema.users.id, targetUserId));
+            updatedUser = existing;
+
+            await tx
+              .insert(schema.notifications)
+              .values({
+                userId: targetUserId,
+                type: "SECURITY_EVENT",
+                payloadJson: {
+                  title: "Yönetici Uyarısı",
+                  message: `Hesabınız için resmi bir yönetici uyarısı iletildi: ${reason}`,
+                },
+              })
+              .catch(() => {});
+          } else {
+            const newStatus = action === "SUSPEND" ? "SUSPENDED" : "ACTIVE";
+            const [u] = await tx
+              .update(schema.users)
+              .set({
+                status: newStatus,
+                updatedAt: new Date(),
+              })
+              .where(eq(schema.users.id, targetUserId))
+              .returning();
+            updatedUser = u;
+
+            if (action === "SUSPEND") {
+              await tx
+                .update(schema.listings)
+                .set({
+                  status: "HIDDEN_MODERATION",
+                  updatedAt: new Date(),
+                })
+                .where(
+                  and(
+                    eq(schema.listings.ownerUserId, targetUserId),
+                    eq(schema.listings.status, "ACTIVE")
+                  )
+                );
+
+              await tx
+                .update(schema.offers)
+                .set({
+                  status: "EXPIRED_LISTING_INACTIVE",
+                  resolvedAt: new Date(),
+                  updatedAt: new Date(),
+                })
+                .where(
+                  and(
+                    eq(schema.offers.offerorUserId, targetUserId),
+                    eq(schema.offers.status, "PENDING")
+                  )
+                );
+            }
+          }
+
+          await tx.insert(schema.adminAuditLog).values({
+            adminUserId,
+            action: `USER_${action}`,
+            targetType: "user",
+            targetId: targetUserId,
+            reasonCode: "ADMIN_ACTION",
+            safeSummary: reason,
+          });
+
+          return updatedUser;
         });
-
-        return updatedUser;
-      });
-    } catch {
-      // In-memory fallback
-      const u = mockUsers.find((user) => user.id === targetUserId);
-      if (u) {
-        u.status = action === "SUSPEND" ? "SUSPENDED" : "ACTIVE";
+      } catch {
+        // Fall through to in-memory fallback
       }
-      mockLogs.unshift({
-        id: `log_${Date.now()}`,
-        category: "audit",
-        level: "WARN",
-        action: `USER_${action}`,
-        actorId: adminUserId,
-        targetId: targetUserId,
-        safeSummary: reason,
-        createdAt: new Date(),
-      });
-      return u;
     }
+
+    // In-memory fallback
+    if (action !== "WARN") {
+      if (targetUserId === DEFAULT_USER.id) {
+        DEFAULT_USER.status = action === "SUSPEND" ? "SUSPENDED" : "ACTIVE";
+      }
+    }
+    const u = mockUsers.find((user) => user.id === targetUserId);
+    if (u && action !== "WARN") {
+      u.status = action === "SUSPEND" ? "SUSPENDED" : "ACTIVE";
+    }
+    if (action === "SUSPEND") {
+      for (const l of inMemoryListings) {
+        if (l.ownerUserId === targetUserId && l.status === "ACTIVE") {
+          l.status = "HIDDEN_MODERATION";
+        }
+      }
+      for (const o of inMemorySentOffers) {
+        if (o.offer.offerorUserId === targetUserId && o.offer.status === "PENDING") {
+          o.offer.status = "EXPIRED_LISTING_INACTIVE";
+          o.offer.resolvedAt = new Date();
+          o.offer.updatedAt = new Date();
+        }
+      }
+    }
+    mockLogs.unshift({
+      id: `log_${Date.now()}`,
+      category: "audit",
+      level: "WARN",
+      action: `USER_${action}`,
+      actorId: adminUserId,
+      targetId: targetUserId,
+      safeSummary: reason,
+      createdAt: new Date(),
+    });
+    return (
+      u || {
+        id: targetUserId,
+        status: action === "SUSPEND" ? "SUSPENDED" : "ACTIVE",
+        updatedAt: new Date(),
+      }
+    );
   }
 
   /**
@@ -848,49 +1192,120 @@ export class AdminService {
       throw new Error("A reason is strictly required for moderation actions");
     }
 
-    const targetStatus =
+    const isListingUuid =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(listingId);
+
+    if (isListingUuid) {
+      try {
+        const db = getDb();
+
+        return await db.transaction(async (tx) => {
+          const [currentListing] = await tx
+            .select()
+            .from(schema.listings)
+            .where(eq(schema.listings.id, listingId));
+
+          if (!currentListing) {
+            throw new Error("Listing not found");
+          }
+
+          let computedStatus: (typeof schema.listings.$inferSelect)["status"] =
+            action === "HIDE"
+              ? "HIDDEN_MODERATION"
+              : action === "DEACTIVATE"
+                ? "INACTIVE_OWNER"
+                : "ACTIVE";
+
+          if (action === "UNHIDE") {
+            const isPast =
+              currentListing.activeUntil &&
+              new Date(currentListing.activeUntil).getTime() <= Date.now();
+            if (isPast || currentListing.status === "INACTIVE_EXPIRED") {
+              computedStatus = "INACTIVE_EXPIRED";
+            } else {
+              computedStatus = "ACTIVE";
+            }
+          }
+
+          const [updatedListing] = await tx
+            .update(schema.listings)
+            .set({
+              status: computedStatus,
+              updatedAt: new Date(),
+            })
+            .where(eq(schema.listings.id, listingId))
+            .returning();
+
+          await tx.insert(schema.listingStatusEvents).values({
+            listingId,
+            fromStatus: currentListing.status,
+            toStatus: computedStatus,
+            reason:
+              action === "DEACTIVATE"
+                ? `ADMIN_DEACTIVATION: ${reason}`
+                : `ADMIN_${action}: ${reason}`,
+            actorType: "ADMIN",
+            actorId: adminUserId,
+            activationSeq: currentListing.activationSeq,
+          });
+
+          await tx.insert(schema.adminAuditLog).values({
+            adminUserId,
+            action: `LISTING_${action}`,
+            targetType: "listing",
+            targetId: listingId,
+            reasonCode: action === "DEACTIVATE" ? "ADMIN_DEACTIVATION" : "ADMIN_ACTION",
+            safeSummary: reason,
+          });
+
+          return updatedListing;
+        });
+      } catch (err) {
+        if (process.env.NODE_ENV === "production") {
+          throw err;
+        }
+      }
+    }
+
+    const l = inMemoryListings.find((item) => item.id === listingId);
+    let targetStatus: (typeof schema.listings.$inferSelect)["status"] =
       action === "HIDE"
         ? "HIDDEN_MODERATION"
         : action === "DEACTIVATE"
-        ? "INACTIVE_OWNER"
-        : "ACTIVE";
+          ? "INACTIVE_OWNER"
+          : "ACTIVE";
 
-    try {
-      const db = getDb();
-
-      return await db.transaction(async (tx) => {
-        const [updatedListing] = await tx
-          .update(schema.listings)
-          .set({
-            status: targetStatus,
-            updatedAt: new Date(),
-          })
-          .where(eq(schema.listings.id, listingId))
-          .returning();
-
-        await tx.insert(schema.adminAuditLog).values({
-          adminUserId,
-          action: `LISTING_${action}`,
-          targetType: "listing",
-          targetId: listingId,
-          reasonCode: "ADMIN_ACTION",
-          safeSummary: reason,
-        });
-
-        return updatedListing;
-      });
-    } catch {
-      const l = inMemoryListings.find((item) => item.id === listingId);
-      if (l) {
-        l.status = targetStatus;
-        return l;
+    if (action === "UNHIDE" && l) {
+      const isPast = l.activeUntil && new Date(l.activeUntil).getTime() <= Date.now();
+      if (isPast || l.status === "INACTIVE_EXPIRED") {
+        targetStatus = "INACTIVE_EXPIRED";
+      } else {
+        targetStatus = "ACTIVE";
       }
-      return {
-        id: listingId,
-        status: targetStatus,
-        updatedAt: new Date(),
-      };
     }
+
+    if (l) {
+      l.status = targetStatus;
+    }
+    for (const s of inMemorySentOffers) {
+      if (s.listing.id === listingId) {
+        s.listing.status = targetStatus;
+      }
+    }
+    for (const r of inMemoryReceivedOffers) {
+      if (r.listing.id === listingId) {
+        r.listing.status = targetStatus;
+      }
+    }
+
+    if (l) {
+      return l;
+    }
+    return {
+      id: listingId,
+      status: targetStatus,
+      updatedAt: new Date(),
+    };
   }
 
   /**
@@ -898,6 +1313,7 @@ export class AdminService {
    */
   static async blockIp(adminUserId: string, ip: string, reason: string): Promise<boolean> {
     mockBlockedIps.add(ip);
+    blockIpAddress(ip);
     mockLogs.unshift({
       id: `log_${Date.now()}`,
       category: "audit",
@@ -916,6 +1332,7 @@ export class AdminService {
    */
   static async unblockIp(adminUserId: string, ip: string): Promise<boolean> {
     mockBlockedIps.delete(ip);
+    unblockIpAddress(ip);
     mockLogs.unshift({
       id: `log_${Date.now()}`,
       category: "audit",
@@ -937,20 +1354,39 @@ export class AdminService {
     reportId: string,
     resolution: "RESOLVED" | "DISMISSED"
   ): Promise<boolean> {
+    const isReportUuid =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(reportId);
+
+    if (isReportUuid) {
+      try {
+        const db = getDb();
+        await db
+          .update(schema.reports)
+          .set({
+            status: resolution,
+            assignedAdminId: adminUserId,
+            resolvedAt: new Date(),
+          })
+          .where(eq(schema.reports.id, reportId));
+      } catch {
+        // In-memory fallback
+      }
+    }
+
     const report = mockAbuseEvents.find((r) => r.id === reportId);
     if (report) {
       report.status = resolution;
-      mockLogs.unshift({
-        id: `log_${Date.now()}`,
-        category: "audit",
-        level: "INFO",
-        action: `REPORT_${resolution}`,
-        actorId: adminUserId,
-        targetId: reportId,
-        safeSummary: `Şikayet ${reportId} incelendi ve '${resolution}' olarak sonuçlandırıldı.`,
-        createdAt: new Date(),
-      });
     }
+    mockLogs.unshift({
+      id: `log_${Date.now()}`,
+      category: "audit",
+      level: "INFO",
+      action: `REPORT_${resolution}`,
+      actorId: adminUserId,
+      targetId: reportId,
+      safeSummary: `Sikayet ${reportId} incelendi ve '${resolution}' olarak sonuclandirildi.`,
+      createdAt: new Date(),
+    });
     return true;
   }
 
@@ -975,32 +1411,86 @@ export class AdminService {
     }
 
     if (action === "run_expiry") {
-      mockLogs.unshift({
-        id: `log_${Date.now()}`,
-        category: "system",
-        level: "INFO",
-        action: "OPT_RUN_EXPIRY",
-        actorId: adminUserId,
-        safeSummary: "7 günlük yaşam döngüsü temizlik worker'ı manuel olarak tetiklendi.",
-        createdAt: new Date(),
-      });
-      return { success: true, message: "7 günlük yaşam döngüsü çalıştırıldı. Süresi dolan ilanlar güncellendi." };
+      try {
+        const expiredCount = await ListingService.expireListingsJob();
+        mockLogs.unshift({
+          id: `log_${Date.now()}`,
+          category: "system",
+          level: "INFO",
+          action: "OPT_RUN_EXPIRY",
+          actorId: adminUserId,
+          safeSummary: `7 günlük yaşam döngüsü temizlik worker'ı çalıştırıldı. ${expiredCount} adet süresi dolan ilan güncellendi.`,
+          createdAt: new Date(),
+        });
+        return {
+          success: true,
+          message: `7 günlük yaşam döngüsü başarıyla çalıştırıldı. ${expiredCount} ilan güncellendi.`,
+        };
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        mockLogs.unshift({
+          id: `log_${Date.now()}`,
+          category: "system",
+          level: "CRITICAL",
+          action: "OPT_RUN_EXPIRY_FAIL",
+          actorId: adminUserId,
+          safeSummary: `Yaşam döngüsü temizlik worker'ı hata verdi: ${msg}`,
+          createdAt: new Date(),
+        });
+        return {
+          success: false,
+          message: `Yaşam döngüsü worker hatası: ${msg}`,
+        };
+      }
     }
 
     if (action === "retry_outbox") {
-      mockLogs.unshift({
-        id: `log_${Date.now()}`,
-        category: "system",
-        level: "INFO",
-        action: "OPT_RETRY_OUTBOX",
-        actorId: adminUserId,
-        safeSummary: "Hatalı outbox bildirim kuyruğu yeniden denendi.",
-        createdAt: new Date(),
-      });
-      return { success: true, message: "Outbox kuyruğundaki bekleyen tüm bildirimler yeniden sıraya alındı." };
+      try {
+        const processed = await NotificationService.processOutboxBatch(100);
+        mockLogs.unshift({
+          id: `log_${Date.now()}`,
+          category: "system",
+          level: "INFO",
+          action: "OPT_RETRY_OUTBOX",
+          actorId: adminUserId,
+          safeSummary: `Outbox bildirim kuyruğu çalıştırıldı. ${processed} bildirim başarıyla iletildi.`,
+          createdAt: new Date(),
+        });
+        return {
+          success: true,
+          message: `Outbox kuyruğundaki bildirimler işlendi (${processed} adet gönderildi).`,
+        };
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        mockLogs.unshift({
+          id: `log_${Date.now()}`,
+          category: "system",
+          level: "CRITICAL",
+          action: "OPT_RETRY_OUTBOX_FAIL",
+          actorId: adminUserId,
+          safeSummary: `Outbox kuyruğu işlenirken hata oluştu: ${msg}`,
+          createdAt: new Date(),
+        });
+        return {
+          success: false,
+          message: `Outbox kuyruk hatası: ${msg}`,
+        };
+      }
     }
 
-    return { success: true, message: "Veritabanı ping süresi: 4.2ms (Mükemmel)." };
+    if (action === "ping_db") {
+      try {
+        const db = getDb();
+        const start = Date.now();
+        await db.execute(sql`SELECT 1`);
+        const latency = Date.now() - start;
+        return { success: true, message: `Veritabanı bağlantısı aktif. Gecikme süresi: ${latency}ms.` };
+      } catch {
+        return { success: false, message: "Veritabanı bağlantısına ulaşılamadı." };
+      }
+    }
+
+    return { success: true, message: "İşlem tamamlandı." };
   }
 
   /**

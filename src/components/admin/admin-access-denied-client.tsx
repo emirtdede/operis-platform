@@ -2,13 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import {
-  ShieldAlert,
-  Lock,
-  ArrowLeft,
-  UserCheck,
-  Shield,
-} from "lucide-react";
+import { ShieldAlert, Lock, ArrowLeft, UserCheck, Shield } from "lucide-react";
 import { BrandLogo } from "@/src/components/layout/brand-logo";
 
 interface AdminAccessDeniedClientProps {
@@ -26,22 +20,30 @@ export function AdminAccessDeniedClient({
   const [isPending, startTransition] = useTransition();
 
   const handleAdminLogin = (role: "ADMIN" | "SECURITY_ADMIN") => {
+    if (!adminKey.trim()) {
+      setErrorMsg("Lütfen güvenlik anahtarını / PIN kodunu giriniz.");
+      return;
+    }
+    setErrorMsg(null);
     startTransition(async () => {
       try {
         const res = await fetch("/api/admin/auth/session", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
+            adminKey: adminKey.trim(),
             role,
             email: adminEmail,
             displayName: role === "ADMIN" ? "Demir Yıldız (Admin)" : "Güvenlik Sorumlusu",
           }),
         });
 
+        const data = await res.json().catch(() => ({}));
+
         if (res.ok) {
           window.location.reload();
         } else {
-          setErrorMsg("Yetkilendirme doğrulanamadı.");
+          setErrorMsg(data.error || "Yetkilendirme doğrulanamadı.");
         }
       } catch {
         setErrorMsg("Bağlantı hatası oluştu.");
@@ -70,9 +72,7 @@ export function AdminAccessDeniedClient({
             <ShieldAlert className="h-5 w-5 shrink-0" />
             <span>Yetkisiz Yönetim Girişimi Engellendi</span>
           </div>
-          <p className="text-xs text-slate-400 leading-relaxed">
-            {errorReason}
-          </p>
+          <p className="text-xs text-slate-400 leading-relaxed">{errorReason}</p>
           <div className="flex items-center gap-2 pt-1 font-mono text-[11px]">
             <span className="text-slate-500">Mevcut Oturum Rolü:</span>
             <span className="px-2 py-0.5 rounded bg-slate-800 text-amber-300 border border-slate-700">
@@ -130,7 +130,9 @@ export function AdminAccessDeniedClient({
                 className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20"
               >
                 <UserCheck className="h-4 w-4" />
-                <span>{isPending ? "Doğrulanıyor..." : "Demir Yıldız (Süper Admin) Olarak Konsola Gir"}</span>
+                <span>
+                  {isPending ? "Doğrulanıyor..." : "Demir Yıldız (Süper Admin) Olarak Konsola Gir"}
+                </span>
               </button>
 
               <button

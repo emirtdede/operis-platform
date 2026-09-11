@@ -98,9 +98,13 @@ export function LegalModal({
                 {docData.title}
               </h2>
               <div className="flex items-center gap-2 mt-0.5 text-xs text-[var(--text-muted)]">
-                <span>{isTr ? "Son Güncelleme:" : "Updated:"} {docData.lastUpdated}</span>
+                <span>
+                  {isTr ? "Son Güncelleme:" : "Updated:"} {docData.lastUpdated}
+                </span>
                 <span className="text-[var(--border-strong)]">•</span>
-                <span className="font-mono text-[11px] font-semibold text-blue-500">{docData.version}</span>
+                <span className="font-mono text-[11px] font-semibold text-blue-500">
+                  {docData.version}
+                </span>
               </div>
             </div>
           </div>

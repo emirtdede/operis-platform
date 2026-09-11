@@ -7,9 +7,7 @@ import { LifecycleRadarDiagram } from "./lifecycle-radar-diagram";
 import { DirectNetworkDiagram } from "./direct-network-diagram";
 
 export function InteractiveArchitectureShowcase({ isTr = true }: { isTr?: boolean }) {
-  const [activeTab, setActiveTab] = useState<"bilateral" | "lifecycle" | "direct">(
-    "bilateral"
-  );
+  const [activeTab, setActiveTab] = useState<"bilateral" | "lifecycle" | "direct">("bilateral");
 
   const tabs = [
     {
@@ -58,7 +56,9 @@ export function InteractiveArchitectureShowcase({ isTr = true }: { isTr?: boolea
             >
               <div
                 className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-colors ${
-                  isActive ? "bg-current/10" : "bg-[var(--color-surface-hover)] group-hover:bg-current/10"
+                  isActive
+                    ? "bg-current/10"
+                    : "bg-[var(--color-surface-hover)] group-hover:bg-current/10"
                 }`}
               >
                 <Icon className="h-4 w-4" aria-hidden="true" />
@@ -67,9 +67,7 @@ export function InteractiveArchitectureShowcase({ isTr = true }: { isTr?: boolea
                 <div className="text-xs font-semibold text-[var(--color-text-primary)]">
                   {tab.label}
                 </div>
-                <div className="text-[10px] text-[var(--color-text-tertiary)]">
-                  {tab.sublabel}
-                </div>
+                <div className="text-[10px] text-[var(--color-text-tertiary)]">{tab.sublabel}</div>
               </div>
             </button>
           );

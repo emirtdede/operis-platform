@@ -27,11 +27,7 @@ export async function generateMetadata({
   };
 }
 
-export default async function AboutPage({
-  params,
-}: {
-  params: Promise<{ locale: string }>;
-}) {
+export default async function AboutPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
   setRequestLocale(locale);
   const isTr = locale === "tr";
@@ -63,7 +59,7 @@ export default async function AboutPage({
         </h2>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="rounded-3xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/70 backdrop-blur-xl p-6 sm:p-7 space-y-3">
+          <div id="zero-commission" className="scroll-mt-24 rounded-3xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/70 backdrop-blur-xl p-6 sm:p-7 space-y-3">
             <div className="h-10 w-10 rounded-2xl bg-blue-500/10 text-blue-400 border border-blue-500/20 flex items-center justify-center font-bold">
               1
             </div>
@@ -77,7 +73,7 @@ export default async function AboutPage({
             </p>
           </div>
 
-          <div className="rounded-3xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/70 backdrop-blur-xl p-6 sm:p-7 space-y-3">
+          <div id="freshness-radar" className="scroll-mt-24 rounded-3xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/70 backdrop-blur-xl p-6 sm:p-7 space-y-3">
             <div className="h-10 w-10 rounded-2xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center font-bold">
               2
             </div>
@@ -91,7 +87,7 @@ export default async function AboutPage({
             </p>
           </div>
 
-          <div className="rounded-3xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/70 backdrop-blur-xl p-6 sm:p-7 space-y-3">
+          <div id="encrypted-offers" className="scroll-mt-24 rounded-3xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/70 backdrop-blur-xl p-6 sm:p-7 space-y-3">
             <div className="h-10 w-10 rounded-2xl bg-purple-500/10 text-purple-400 border border-purple-500/20 flex items-center justify-center font-bold">
               3
             </div>
@@ -110,7 +106,9 @@ export default async function AboutPage({
       {/* CTA Section */}
       <section className="rounded-3xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-hover)]/60 p-8 sm:p-12 text-center space-y-6">
         <h2 className="text-2xl font-bold text-[var(--color-text-primary)]">
-          {isTr ? "Yeni Nesil Teknoloji Ağına Katılın" : "Join the Next Generation Matching Network"}
+          {isTr
+            ? "Yeni Nesil Teknoloji Ağına Katılın"
+            : "Join the Next Generation Matching Network"}
         </h2>
         <p className="text-xs sm:text-sm text-[var(--color-text-secondary)] max-w-xl mx-auto">
           {isTr

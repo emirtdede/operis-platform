@@ -8,6 +8,13 @@
       "when": 1788714485662,
       "tag": "0000_unique_serpent_society",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1789047835659,
+      "tag": "0001_noisy_riptide",
+      "breakpoints": true
     }
   ]
 }

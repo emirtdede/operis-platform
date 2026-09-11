@@ -67,20 +67,11 @@ export function AbuseManagementClient({ initialAbuseItems }: AbuseManagementClie
     if (!suspendModalItem || !suspendModalItem.offenderUserId || !suspendReason.trim()) return;
     const offenderId = suspendModalItem.offenderUserId;
     startTransition(async () => {
-      await moderateUserAction(
-        offenderId,
-        "SUSPEND",
-        suspendReason
-      );
+      await moderateUserAction(offenderId, "SUSPEND", suspendReason);
       // Auto-resolve report as well
-      await resolveReportAction(
-        suspendModalItem.id,
-        "RESOLVED"
-      );
+      await resolveReportAction(suspendModalItem.id, "RESOLVED");
       setItems((prev) =>
-        prev.map((it) =>
-          it.id === suspendModalItem.id ? { ...it, status: "RESOLVED" } : it
-        )
+        prev.map((it) => (it.id === suspendModalItem.id ? { ...it, status: "RESOLVED" } : it))
       );
       setActionSuccessMessage(
         `Kullanıcı (${suspendModalItem.offenderDisplayName}) askıya alındı ve şikayet kapatıldı.`
@@ -165,10 +156,11 @@ export function AbuseManagementClient({ initialAbuseItems }: AbuseManagementClie
               <button
                 key={st}
                 onClick={() => setStatusFilter(st)}
-                className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${statusFilter === st
+                className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
+                  statusFilter === st
                     ? "bg-amber-500 text-slate-950 font-semibold"
                     : "text-slate-400 hover:text-white"
-                  }`}
+                }`}
               >
                 {st === "ALL"
                   ? "Tümü"
@@ -211,12 +203,13 @@ export function AbuseManagementClient({ initialAbuseItems }: AbuseManagementClie
                     <td className="px-4 py-3.5">
                       <div className="flex items-center gap-2">
                         <div
-                          className={`p-1.5 rounded-lg ${item.reasonCode.includes("PROFANITY")
+                          className={`p-1.5 rounded-lg ${
+                            item.reasonCode.includes("PROFANITY")
                               ? "bg-rose-500/10 text-rose-400 border border-rose-500/20"
                               : item.reasonCode.includes("SPAM")
                                 ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
                                 : "bg-blue-500/10 text-blue-400 border border-blue-500/20"
-                            }`}
+                          }`}
                         >
                           <AlertTriangle className="h-3.5 w-3.5" />
                         </div>
@@ -269,12 +262,13 @@ export function AbuseManagementClient({ initialAbuseItems }: AbuseManagementClie
 
                     <td className="px-4 py-3.5">
                       <span
-                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${item.status === "OPEN"
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                          item.status === "OPEN"
                             ? "bg-amber-500/10 text-amber-400 border-amber-500/30 animate-pulse"
                             : item.status === "RESOLVED"
                               ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
                               : "bg-slate-700/30 text-slate-400 border-slate-700"
-                          }`}
+                        }`}
                       >
                         {item.status === "OPEN"
                           ? "Açık / İncelemede"
@@ -362,9 +356,7 @@ export function AbuseManagementClient({ initialAbuseItems }: AbuseManagementClie
                 <div className="font-mono text-amber-300 font-bold text-sm">
                   {selectedItem.reasonCode}
                 </div>
-                <div className="text-slate-300 mt-1 leading-relaxed">
-                  {selectedItem.details}
-                </div>
+                <div className="text-slate-300 mt-1 leading-relaxed">{selectedItem.details}</div>
               </div>
 
               {selectedItem.flaggedTerms && selectedItem.flaggedTerms.length > 0 && (
@@ -386,9 +378,7 @@ export function AbuseManagementClient({ initialAbuseItems }: AbuseManagementClie
               <div className="grid grid-cols-2 gap-3">
                 <div className="p-3 rounded-xl bg-[#0d0e12] border border-slate-800 space-y-1">
                   <span className="text-slate-500">Şikayet Edilen:</span>
-                  <div className="font-semibold text-white">
-                    {selectedItem.offenderDisplayName}
-                  </div>
+                  <div className="font-semibold text-white">{selectedItem.offenderDisplayName}</div>
                   <div className="font-mono text-[10px] text-slate-400">
                     {selectedItem.offenderUserId}
                   </div>
@@ -405,7 +395,9 @@ export function AbuseManagementClient({ initialAbuseItems }: AbuseManagementClie
               </div>
 
               <div className="flex items-center justify-between text-slate-400 p-2 border-t border-slate-800">
-                <span>Hedef Kaynak: {selectedItem.targetType} ({selectedItem.targetId})</span>
+                <span>
+                  Hedef Kaynak: {selectedItem.targetType} ({selectedItem.targetId})
+                </span>
                 <span>{new Date(selectedItem.createdAt).toLocaleString("tr-TR")}</span>
               </div>
             </div>

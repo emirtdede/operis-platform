@@ -2,30 +2,23 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import {
-  FileQuestion,
-  Home,
-  Search,
-  PlusCircle,
-  ArrowLeft,
-  Compass,
-} from "lucide-react";
+import { useParams, usePathname, useRouter } from "next/navigation";
+import { FileQuestion, Home, Search, PlusCircle, ArrowLeft, Compass } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 import { ErrorCard } from "@/src/components/ui/error-card";
 
 export default function NotFound() {
   const router = useRouter();
   const pathname = usePathname();
-  const isEn = pathname?.startsWith("/en");
+  const params = useParams();
+  const paramLocale = typeof params?.locale === "string" ? params.locale : null;
+  const isEn = paramLocale === "en" || pathname?.startsWith("/en");
   const locale = isEn ? "en" : "tr";
   const isTr = !isEn;
   const [canGoBack, setCanGoBack] = useState(false);
 
   useEffect(() => {
-    document.title = isTr
-      ? "404 — Sayfa Bulunamadı | Operis"
-      : "404 — Page Not Found | Operis";
+    document.title = isTr ? "404 — Sayfa Bulunamadı | Operis" : "404 — Page Not Found | Operis";
     if (typeof window !== "undefined" && window.history.length > 1) {
       setCanGoBack(true);
     }
@@ -91,12 +84,12 @@ export default function NotFound() {
           </span>
           <div className="flex flex-wrap items-center justify-center gap-2">
             {[
-              { label: "Frontend", slug: "frontend-development" },
-              { label: "Backend", slug: "backend-development" },
-              { label: "Full Stack", slug: "fullstack-development" },
-              { label: "Mobil", slug: "mobile-development" },
+              { label: isTr ? "Ön Yüz" : "Frontend", slug: "frontend-ui" },
+              { label: isTr ? "Arka Yüz" : "Backend", slug: "backend-api" },
+              { label: "Full Stack", slug: "web-development" },
+              { label: isTr ? "Mobil" : "Mobile", slug: "mobile-development" },
               { label: "DevOps & Cloud", slug: "devops-cloud" },
-              { label: "Yapay Zeka & Veri", slug: "ai-machine-learning" },
+              { label: isTr ? "Yapay Zeka & ML" : "AI & ML", slug: "ai-ml" },
             ].map((cat) => (
               <Link
                 key={cat.slug}
@@ -132,7 +125,12 @@ export default function NotFound() {
           </Link>
 
           <Link href={feedPath}>
-            <Button type="button" variant="primary" size="sm" className="gap-1.5 shadow-md shadow-blue-500/10">
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              className="gap-1.5 shadow-md shadow-blue-500/10"
+            >
               <Compass className="h-4 w-4" aria-hidden="true" />
               <span>{isTr ? "İlanları Keşfet" : "Browse Projects"}</span>
             </Button>

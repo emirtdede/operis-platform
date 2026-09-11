@@ -30,7 +30,7 @@ export const LEGAL_DOCUMENTS: Record<string, Record<"tr" | "en", LegalDocumentMo
         {
           title: "1. Taraflar ve Hizmetin Hukuki Niteliği",
           paragraphs: [
-            "İşbu Kullanım Koşulları (\"Sözleşme\"), Operis Teknoloji A.Ş. (\"Platform\") ile sisteme üye olan kullanıcı (\"Kullanıcı\") arasında akdedilmiştir.",
+            'İşbu Kullanım Koşulları ("Sözleşme"), Operis Teknoloji A.Ş. ("Platform") ile sisteme üye olan kullanıcı ("Kullanıcı") arasında akdedilmiştir.',
             "Platform; 6563 sayılı Elektronik Ticaretin Düzenlenmesi Hakkında Kanun ve 5651 sayılı Kanun uyarınca münhasıran bir 'Aracı Hizmet Sağlayıcı' ve 'Yer Sağlayıcı' niteliğindedir.",
           ],
           bullets: [
@@ -162,7 +162,7 @@ export const LEGAL_DOCUMENTS: Record<string, Record<"tr" | "en", LegalDocumentMo
       lastUpdated: "07.09.2026",
       badge: "AES-256 Şifreli • KVKK Uyumlu",
       highlight:
-        "T.C. Kimlik Numarası (TCKN), biyometrik veri veya adli sicil kaydı asla toplanmaz. İletişim verileriniz uygulama katmanında AES-256-GCM ile şifrelenir ve karşılıklı eşleşme olmadan karşı tarafa kesinlikle açılmaz.",
+        "T.C. Kimlik Numarası (TCKN), biyometrik veri veya adli sicil kaydı asla toplanmaz. Telefon numaranız ve yasal kimlik verileriniz uygulama katmanında AES-256-GCM ile şifrelenir, e-posta adresiniz hesap kimliği olarak güvenli saklanır; iletişim verileriniz karşılıklı eşleşme olmadan karşı tarafa kesinlikle açılmaz.",
       sections: [
         {
           title: "1. Veri Sorumlusunun Kimliği",
@@ -172,9 +172,7 @@ export const LEGAL_DOCUMENTS: Record<string, Record<"tr" | "en", LegalDocumentMo
         },
         {
           title: "2. İşlenen Veriler ve Veri Minimizasyonu",
-          paragraphs: [
-            "Sistemimiz yalnızca hizmetin ifası için asgari düzeydeki verileri işler:",
-          ],
+          paragraphs: ["Sistemimiz yalnızca hizmetin ifası için asgari düzeydeki verileri işler:"],
           bullets: [
             "Kimlik & İletişim: Yasal ad, soyad, doğum tarihi (18+ yaş teyidi için), ikamet ili/ülkesi, doğrulanmış e-posta ve telefon.",
             "İşlem Güvenliği: Scrypt parola özetleri, oturum token'ları, SHA-256 onay logları, IP adresleri.",
@@ -218,7 +216,7 @@ export const LEGAL_DOCUMENTS: Record<string, Record<"tr" | "en", LegalDocumentMo
       lastUpdated: "07.09.2026",
       badge: "AES-256 Encrypted • Privacy by Design",
       highlight:
-        "We strictly never collect national ID numbers (TCKN) or biometric data. Contact details are encrypted with AES-256-GCM and never revealed until mutual offer acceptance.",
+        "We strictly never collect national ID numbers (TCKN) or biometric data. Phone numbers and legal identity details are encrypted with AES-256-GCM, while account emails are stored securely for authentication; contact details are never revealed until mutual offer acceptance.",
       sections: [
         {
           title: "1. Data Controller",

@@ -25,7 +25,8 @@ export default async function AdminListingsPage() {
             </span>
           </h1>
           <p className="text-xs text-slate-400 mt-1">
-            Platformdaki tüm aktif, süresi dolmuş veya moderasyonla gizlenmiş teknoloji projelerini denetleyin.
+            Platformdaki tüm aktif, süresi dolmuş veya moderasyonla gizlenmiş teknoloji projelerini
+            denetleyin.
           </p>
         </div>
       </div>

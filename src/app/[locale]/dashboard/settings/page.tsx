@@ -51,6 +51,7 @@ export default async function DashboardSettingsPage({
     displayName: profile?.displayName || "Demir Yıldız",
     handle: profile?.handle || "demir-yildiz",
     about: profile?.about || "",
+    avatarUrl: profile?.avatarUrl || "",
     showLocation: profile?.showLocation ?? true,
     revealPhoneAfterMatch: profile?.revealPhoneAfterMatch ?? false,
     links: (profile?.links || []).map((l) => ({
@@ -88,7 +89,11 @@ export default async function DashboardSettingsPage({
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          <Link href={isTr ? `/tr/profil/${initialProfile.handle}` : `/en/profile/${initialProfile.handle}`}>
+          <Link
+            href={
+              isTr ? `/tr/profil/${initialProfile.handle}` : `/en/profile/${initialProfile.handle}`
+            }
+          >
             <Button variant="secondary" size="sm" className="gap-1.5 text-xs font-semibold">
               <User className="h-3.5 w-3.5" aria-hidden="true" />
               <span>{isTr ? "Profilimi Gör" : "View Profile"}</span>

@@ -66,10 +66,7 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
           aria-hidden="true"
         >
           <circle cx="12" cy="12" r="9" strokeWidth="2" />
-          <path
-            fill="currentColor"
-            d="M12 3a9 9 0 000 18V3z"
-          />
+          <path fill="currentColor" d="M12 3a9 9 0 000 18V3z" />
         </svg>
       )}
     </button>

@@ -1,15 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import {
-  ScrollText,
-  Search,
-  Shield,
-  Briefcase,
-  Activity,
-  Terminal,
-  Download,
-} from "lucide-react";
+import { ScrollText, Search, Shield, Briefcase, Activity, Terminal, Download } from "lucide-react";
 import { AdminLogItem } from "@/src/modules/admin/service";
 
 interface LogsConsoleClientProps {
@@ -67,10 +59,11 @@ export function LogsConsoleClient({ initialLogs, total: _total }: LogsConsoleCli
             <button
               key={cat.id}
               onClick={() => setActiveCategory(cat.id)}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${isActive
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                isActive
                   ? "bg-blue-600 text-white shadow-md shadow-blue-600/25"
                   : "text-slate-400 hover:text-white hover:bg-slate-800/60"
-                }`}
+              }`}
             >
               <Icon className="h-4 w-4" />
               <span>{cat.label}</span>
@@ -134,14 +127,15 @@ export function LogsConsoleClient({ initialLogs, total: _total }: LogsConsoleCli
                 <tr key={log.id} className="hover:bg-slate-800/40 transition-colors">
                   <td className="py-3 px-4">
                     <span
-                      className={`px-2 py-0.5 rounded text-[10px] font-bold border ${log.level === "CRITICAL"
+                      className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                        log.level === "CRITICAL"
                           ? "bg-red-500/20 text-red-400 border-red-500/40 animate-pulse"
                           : log.level === "WARN"
                             ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
                             : log.level === "ERROR"
                               ? "bg-orange-500/20 text-orange-400 border-orange-500/30"
                               : "bg-blue-500/10 text-blue-400 border-blue-500/20"
-                        }`}
+                      }`}
                     >
                       {log.level}
                     </span>
@@ -151,13 +145,9 @@ export function LogsConsoleClient({ initialLogs, total: _total }: LogsConsoleCli
                     {log.category.toUpperCase()}
                   </td>
 
-                  <td className="py-3 px-4 text-white font-semibold">
-                    {log.action}
-                  </td>
+                  <td className="py-3 px-4 text-white font-semibold">{log.action}</td>
 
-                  <td className="py-3 px-4 font-sans text-slate-300 max-w-md">
-                    {log.safeSummary}
-                  </td>
+                  <td className="py-3 px-4 font-sans text-slate-300 max-w-md">{log.safeSummary}</td>
 
                   <td className="py-3 px-4 text-slate-400 text-[11px]">
                     {log.ipAddress || log.actorEmail || log.actorId || "System Core"}

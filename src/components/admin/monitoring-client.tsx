@@ -1,17 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import {
-  Database,
-  Cpu,
-  Clock,
-  Zap,
-  RefreshCw,
-  Trash2,
-  CheckCircle2,
-  X,
-  Gauge,
-} from "lucide-react";
+import { Database, Cpu, Clock, Zap, RefreshCw, Trash2, CheckCircle2, X, Gauge } from "lucide-react";
 import { triggerSystemOptimizationAction } from "@/src/modules/admin/actions";
 
 export function MonitoringClient() {

@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { setRequestLocale } from "next-intl/server";
 import { LoginForm } from "@/src/components/auth/login-form";
 import { AuthValueHero } from "@/src/components/onboarding/auth-value-hero";
+import { getSession } from "@/src/modules/auth/session";
+import { getLocalizedRoute } from "@/src/lib/i18n/routes";
 
 export async function generateMetadata({
   params,
@@ -11,9 +14,7 @@ export async function generateMetadata({
   const { locale } = await params;
   const isTr = locale === "tr";
 
-  const title = isTr
-    ? "Giriş Yap — Güvenli Oturum"
-    : "Sign In — Secure Portal Access";
+  const title = isTr ? "Giriş Yap — Güvenli Oturum" : "Sign In — Secure Portal Access";
   const description = isTr
     ? "Hesabınıza güvenle giriş yaparak proje ilanlarını inceleyin, tekliflerinizi yönetin ve doğrudan iletişim kurun."
     : "Log in securely to review technology projects, manage proposals, and access direct match workspaces.";
@@ -50,11 +51,23 @@ export async function generateMetadata({
 
 export default async function LoginPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ locale: string }>;
+  searchParams?: Promise<{ returnUrl?: string }>;
 }) {
   const { locale } = await params;
+  const sp = searchParams ? await searchParams : {};
   setRequestLocale(locale);
+
+  // Authenticated users must not access login page; redirect to returnUrl or workspace
+  const session = await getSession();
+  if (session) {
+    if (sp.returnUrl && /^\/(tr|en)(\/|$)/.test(sp.returnUrl) && !sp.returnUrl.startsWith("//")) {
+      redirect(sp.returnUrl);
+    }
+    redirect(getLocalizedRoute("dashboardListings", locale));
+  }
 
   const isTr = locale === "tr";
   const loginUrl = isTr ? "https://operis.pro/tr/giris" : "https://operis.pro/en/login";
@@ -116,7 +129,7 @@ export default async function LoginPage({
             </header>
 
             <section aria-label={isTr ? "Giriş Formu" : "Login Form"}>
-              <LoginForm locale={locale} />
+              <LoginForm locale={locale} returnUrl={sp.returnUrl} />
             </section>
           </div>
         </div>
@@ -124,4 +137,3 @@ export default async function LoginPage({
     </main>
   );
 }
-

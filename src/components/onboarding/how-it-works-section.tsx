@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 import { SpotlightCard } from "@/src/components/ui/spotlight-card";
+import { getLocalizedRoute } from "@/src/lib/i18n/routes";
 
 interface HowItWorksSectionProps {
   locale: string;
@@ -36,7 +37,9 @@ export function HowItWorksSection({ locale }: HowItWorksSectionProps) {
     {
       num: "02",
       icon: Lock,
-      title: isTr ? "Şifrelenmiş Birebir Teklifleri İnceleyin" : "Review Encrypted 1-to-1 Proposals",
+      title: isTr
+        ? "Şifrelenmiş Birebir Teklifleri İnceleyin"
+        : "Review Encrypted 1-to-1 Proposals",
       description: isTr
         ? "Teklifler AES-256 ile korunur; rakipler göremez, fiyat kırma savaşı yaşanmaz. İletişim bilgileriniz gizli kalır."
         : "Proposals are AES-256 encrypted; competitors cannot view them, avoiding price undercutting. Your contact info stays private.",
@@ -134,68 +137,68 @@ export function HowItWorksSection({ locale }: HowItWorksSectionProps) {
           </div>
         </div>
 
-      {/* 3 Step Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {steps.map((step) => {
-          const Icon = step.icon;
-          return (
-            <SpotlightCard
-              key={step.num}
-              className="p-6 sm:p-8 space-y-5 rounded-2xl flex flex-col justify-between"
-            >
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-2xl font-mono font-extrabold text-blue-500/60">
-                    {step.num}
+        {/* 3 Step Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {steps.map((step) => {
+            const Icon = step.icon;
+            return (
+              <SpotlightCard
+                key={step.num}
+                className="p-6 sm:p-8 space-y-5 rounded-2xl flex flex-col justify-between"
+              >
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-2xl font-mono font-extrabold text-blue-500/60">
+                      {step.num}
+                    </span>
+                    <span className="inline-flex items-center rounded-md border border-[var(--color-border-subtle)] bg-[var(--color-surface-hover)] px-2.5 py-0.5 text-xs font-medium text-[var(--color-text-secondary)]">
+                      {step.badge}
+                    </span>
+                  </div>
+
+                  <div className="h-10 w-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400">
+                    <Icon className="h-5 w-5" aria-hidden="true" />
+                  </div>
+
+                  <div className="space-y-2">
+                    <h3 className="text-lg font-bold text-[var(--color-text-primary)]">
+                      {step.title}
+                    </h3>
+                    <p className="text-xs sm:text-sm text-[var(--color-text-secondary)] leading-relaxed">
+                      {step.description}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-[var(--color-border-subtle)]/60">
+                  <span className="text-xs text-[var(--color-text-tertiary)] flex items-center gap-1.5">
+                    <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" aria-hidden="true" />
+                    <span>{isTr ? "Güvenli ve Doğrulanmış" : "Verified & Secure"}</span>
                   </span>
-                  <span className="inline-flex items-center rounded-md border border-[var(--color-border-subtle)] bg-[var(--color-surface-hover)] px-2.5 py-0.5 text-xs font-medium text-[var(--color-text-secondary)]">
-                    {step.badge}
-                  </span>
                 </div>
+              </SpotlightCard>
+            );
+          })}
+        </div>
 
-                <div className="h-10 w-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400">
-                  <Icon className="h-5 w-5" aria-hidden="true" />
-                </div>
-
-                <div className="space-y-2">
-                  <h3 className="text-lg font-bold text-[var(--color-text-primary)]">
-                    {step.title}
-                  </h3>
-                  <p className="text-xs sm:text-sm text-[var(--color-text-secondary)] leading-relaxed">
-                    {step.description}
-                  </p>
-                </div>
-              </div>
-
-              <div className="pt-2 border-t border-[var(--color-border-subtle)]/60">
-                <span className="text-xs text-[var(--color-text-tertiary)] flex items-center gap-1.5">
-                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" aria-hidden="true" />
-                  <span>{isTr ? "Güvenli ve Doğrulanmış" : "Verified & Secure"}</span>
-                </span>
-              </div>
-            </SpotlightCard>
-          );
-        })}
-      </div>
-
-      {/* Action Footer */}
-      <div className="text-center pt-2">
-        {role === "client" ? (
-          <Link href={`/${locale}/listings/new`}>
-            <Button variant="shimmer" size="md" className="gap-2">
-              <span>{isTr ? "Hemen İlanınızı Oluşturun" : "Post Your First Project"}</span>
-              <ArrowRight className="h-4 w-4" aria-hidden="true" />
-            </Button>
-          </Link>
-        ) : (
-          <Link href={`/${locale}/feed`}>
-            <Button variant="shimmer" size="md" className="gap-2">
-              <span>{isTr ? "Canlı İlanları İnceleyin" : "Explore Active Feed"}</span>
-              <ArrowRight className="h-4 w-4" aria-hidden="true" />
-            </Button>
-          </Link>
-        )}
-      </div>
+        {/* Action Footer */}
+        <div className="text-center pt-2">
+          {role === "client" ? (
+            <Link href={getLocalizedRoute("newListing", locale)}>
+              <Button variant="shimmer" size="md" className="gap-2">
+                <span>{isTr ? "Hemen İlanınızı Oluşturun" : "Post Your First Project"}</span>
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </Button>
+            </Link>
+          ) : (
+            <Link href={getLocalizedRoute("feed", locale)}>
+              <Button variant="shimmer" size="md" className="gap-2">
+                <span>{isTr ? "Canlı İlanları İnceleyin" : "Explore Active Feed"}</span>
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </Button>
+            </Link>
+          )}
+        </div>
       </div>
     </section>
   );

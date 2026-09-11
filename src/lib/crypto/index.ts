@@ -15,10 +15,7 @@ export function encryptPii(plaintext: string): string {
   const iv = crypto.randomBytes(IV_LENGTH);
 
   const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
-  const encrypted = Buffer.concat([
-    cipher.update(plaintext, "utf8"),
-    cipher.final(),
-  ]);
+  const encrypted = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
   const authTag = cipher.getAuthTag();
 
   return `${iv.toString("hex")}:${authTag.toString("hex")}:${encrypted.toString("hex")}`;
@@ -51,10 +48,7 @@ export function decryptPii(encryptedText: string): string {
       const key = Buffer.from(keyHex, "hex");
       const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
       decipher.setAuthTag(authTag);
-      const decrypted = Buffer.concat([
-        decipher.update(ciphertext),
-        decipher.final(),
-      ]);
+      const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
       return decrypted.toString("utf8");
     } catch {
       // Try next key if key rotation in progress
@@ -95,15 +89,25 @@ export async function hashPassword(password: string): Promise<string> {
  */
 export async function verifyPassword(password: string, storedHash: string): Promise<boolean> {
   return new Promise((resolve) => {
+    if (!storedHash || typeof storedHash !== "string") return resolve(false);
     const parts = storedHash.split(":");
     if (parts.length !== 2) return resolve(false);
 
     const [salt, key] = parts;
-    crypto.scrypt(password, salt!, 64, { N: 16384, r: 8, p: 1 }, (err, derivedKey) => {
+    if (!salt || !key) return resolve(false);
+
+    crypto.scrypt(password, salt, 64, { N: 16384, r: 8, p: 1 }, (err, derivedKey) => {
       if (err) return resolve(false);
-      const keyBuffer = Buffer.from(key!, "hex");
-      const match = crypto.timingSafeEqual(keyBuffer, derivedKey);
-      resolve(match);
+      try {
+        const keyBuffer = Buffer.from(key, "hex");
+        if (keyBuffer.length !== derivedKey.length) {
+          return resolve(false);
+        }
+        const match = crypto.timingSafeEqual(keyBuffer, derivedKey);
+        resolve(match);
+      } catch {
+        resolve(false);
+      }
     });
   });
 }

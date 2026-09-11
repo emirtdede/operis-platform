@@ -61,8 +61,8 @@ export function AuthValueHero({ locale, isRegister = false }: AuthValueHeroProps
                 ? "Yazılım Dünyasında Aracısız Yeni Bir Dönem"
                 : "Autonomous Software Collaboration"
               : isTr
-              ? "Güvenli ve Aracısız Yazılım Ağı"
-              : "Direct & Secure Tech Network"}
+                ? "Güvenli ve Aracısız Yazılım Ağı"
+                : "Direct & Secure Tech Network"}
           </h2>
           <p className="text-sm text-[var(--color-text-secondary)] leading-relaxed">
             {isTr
