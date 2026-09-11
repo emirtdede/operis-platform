@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { getDb, schema } from "@/src/lib/db";
 import { inMemoryListings } from "@/src/modules/listings/service";
@@ -18,12 +19,18 @@ export class PrivacyService {
       const db = getDb();
 
       return await db.transaction(async (tx) => {
-      // 1. Verify user exists and is not already deleted
-      const userRows = await tx
+      // 1. Verify user exists and is not already deleted (with row lock)
+      let userQuery = tx
         .select()
         .from(schema.users)
         .where(eq(schema.users.id, userId))
         .limit(1);
+
+      if ("for" in userQuery && typeof (userQuery as unknown as Record<string, unknown>).for === "function") {
+        userQuery = (userQuery as unknown as { for: (clause: string) => typeof userQuery }).for("update");
+      }
+
+      const userRows = await userQuery;
 
       const user = userRows[0];
       if (!user) {
@@ -56,7 +63,8 @@ export class PrivacyService {
       }
 
       // 2. Mark user status as DELETED, scramble email, and purge 2FA credentials
-      const anonymizedEmail = `deleted-${user.id.slice(0, 8)}@deleted.internal`;
+      const randomSuffix = crypto.randomUUID().replace(/-/g, "");
+      const anonymizedEmail = `deleted-${randomSuffix.slice(0, 12)}@deleted.internal`;
       await tx
         .update(schema.users)
         .set({
@@ -76,7 +84,7 @@ export class PrivacyService {
           legalFirstNameEnc: "DELETED",
           legalLastNameEnc: "DELETED",
           phoneE164Enc: "DELETED",
-          phoneHmac: `DELETED_${user.id}`,
+          phoneHmac: `DELETED_${randomSuffix}`,
           dateOfBirthEnc: "DELETED",
           city: "DELETED",
           updatedAt: now,
@@ -88,7 +96,7 @@ export class PrivacyService {
         .update(schema.profiles)
         .set({
           displayName: "Former user",
-          handle: `deleted-${user.id.slice(0, 8)}`,
+          handle: `deleted-${randomSuffix.slice(0, 12)}`,
           about: null,
           avatarUrl: null,
           trackedSkills: [],

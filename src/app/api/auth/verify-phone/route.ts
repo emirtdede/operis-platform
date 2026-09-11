@@ -3,7 +3,7 @@ import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { getSession } from "@/src/modules/auth/session";
 import { getDb, schema } from "@/src/lib/db";
-import { verifyPhoneOtp } from "@/src/modules/auth/verification";
+import { verifyPhoneOtp, consumePhoneOtp } from "@/src/modules/auth/verification";
 
 import {
   checkRateLimit,
@@ -48,7 +48,7 @@ export async function POST(req: Request) {
     const isEn = body?.locale === "en" || isEnHeader;
     const { code } = createVerifyPhoneSchema(isEn).parse(body);
 
-    const isValid = verifyPhoneOtp(session.userId, code);
+    const isValid = verifyPhoneOtp(session.userId, code, false);
     if (!isValid) {
       return NextResponse.json(
         {
@@ -75,6 +75,9 @@ export async function POST(req: Request) {
         throw new Error(isEn ? "Database update failed." : "Veritabanı güncellemesi tamamlanamadı.");
       }
     }
+
+    // Explicitly consume OTP only after DB update was successful
+    consumePhoneOtp(session.userId);
 
     if (session.userId === DEFAULT_USER.id) {
       DEFAULT_USER.phoneVerified = true;

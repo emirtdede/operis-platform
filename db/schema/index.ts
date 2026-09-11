@@ -475,3 +475,22 @@ export const endorsements = pgTable(
     index("endorsements_recipient_idx").on(table.recipientUserId),
   ]
 );
+
+// 25. Idempotency Keys (Atomic deduplication for operations like batch submissions - B12)
+export const idempotencyKeys = pgTable(
+  "idempotency_keys",
+  {
+    key: varchar("key", { length: 255 }).primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    action: varchar("action", { length: 60 }).notNull(),
+    responseJson: jsonb("response_json"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    index("idempotency_keys_user_action_idx").on(table.userId, table.action),
+  ]
+);
+

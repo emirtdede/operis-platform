@@ -9,7 +9,7 @@ import {
   rateLimitExceededResponse,
 } from "@/src/lib/security/rate-limit";
 import { EMOJI_REGEX } from "@/src/lib/security/content-moderator";
-import { ModerationService, ReportReason } from "@/src/modules/moderation/service";
+import { ModerationService, ReportReason, REPORT_REASONS } from "@/src/modules/moderation/service";
 import { inMemoryListings } from "@/src/modules/listings/service";
 
 const createReportSchema = (isEn: boolean) =>
@@ -139,13 +139,23 @@ export async function POST(req: Request) {
     }
 
     const canonicalReason = (REASON_MAP[data.reasonCode] || data.reasonCode) as ReportReason;
+    if (!REPORT_REASONS.includes(canonicalReason)) {
+      return NextResponse.json(
+        { error: isEn ? "Invalid report reason code." : "Geçersiz bildirim nedeni kodu." },
+        { status: 400 }
+      );
+    }
+
+    const detailsPrefix = `[Hedef: ${data.targetIdentifier}] `;
+    const combinedDetails = detailsPrefix + data.details;
+    const finalDetails = combinedDetails.length > 2000 ? combinedDetails.slice(0, 2000) : combinedDetails;
 
     try {
       await ModerationService.submitReport(session.userId, {
         targetType: data.targetType,
         targetId: targetId || cleanIdentifier,
         reasonCode: canonicalReason,
-        details: `[Hedef: ${data.targetIdentifier}] ${data.details}`,
+        details: finalDetails,
       });
     } catch (dbErr) {
       if (process.env.NODE_ENV === "production") {

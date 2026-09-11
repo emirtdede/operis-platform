@@ -5,6 +5,7 @@ import { ProfileLinkInput, profileLinkSchema, isValidExternalUrl } from "./links
 import { RESERVED_HANDLES } from "../auth/validation";
 import { DEFAULT_USER } from "../auth/demo-user";
 import { EndorsementService, EndorsementDto } from "../endorsements/service";
+import { z } from "zod";
 
 export interface PublicProfileDto {
   userId: string;
@@ -45,6 +46,7 @@ export interface UpdateProfileInput {
   locale?: string;
   theme?: string;
   trackedSkills?: string[];
+  links?: ProfileLinkInput[];
 }
 
 let demoUserLinks: Array<{
@@ -385,8 +387,8 @@ export class ProfileService {
     }
 
     if (input.theme !== undefined) {
-      if (!["light", "dark", "system"].includes(input.theme)) {
-        throw new Error("Invalid theme. Must be 'light', 'dark', or 'system'.");
+      if (!["light", "dark", "black", "system"].includes(input.theme)) {
+        throw new Error("Invalid theme. Must be 'light', 'dark', 'black', or 'system'.");
       }
       updateData.theme = input.theme;
     }
@@ -408,6 +410,17 @@ export class ProfileService {
       }
     }
 
+    let validatedLinks: ProfileLinkInput[] | undefined;
+    if (input.links !== undefined) {
+      if (!Array.isArray(input.links)) {
+        throw new Error("Invalid links format. Expected an array.");
+      }
+      if (input.links.length > 10) {
+        throw new Error("You can configure at most 10 professional links.");
+      }
+      validatedLinks = z.array(profileLinkSchema).max(10).parse(input.links);
+    }
+
     if (userId === DEFAULT_USER.id) {
       if (input.displayName !== undefined)
         DEFAULT_USER.profile.displayName = input.displayName.trim();
@@ -423,15 +436,55 @@ export class ProfileService {
       if (input.theme !== undefined) DEFAULT_USER.profile.theme = input.theme;
       if (input.trackedSkills !== undefined)
         DEFAULT_USER.profile.trackedSkills = updateData.trackedSkills;
+      if (validatedLinks !== undefined) {
+        demoUserLinks = validatedLinks.map((l, idx) => ({
+          id: `link-${Date.now()}-${idx}`,
+          type: l.type,
+          label: l.label || l.type,
+          url: l.url,
+          sortOrder: idx,
+        }));
+      }
 
       if (process.env.VITEST || process.env.NODE_ENV === "test") {
         return;
       }
     }
 
+    if (validatedLinks !== undefined) {
+      inMemoryUserLinks.set(
+        userId,
+        validatedLinks.map((l, idx) => ({
+          id: `link-${Date.now()}-${idx}`,
+          type: l.type,
+          label: l.label || l.type,
+          url: l.url,
+          sortOrder: idx,
+        }))
+      );
+    }
+
     try {
       const db = getDb();
-      await db.update(schema.profiles).set(updateData).where(eq(schema.profiles.userId, userId));
+      await db.transaction(async (tx) => {
+        if (Object.keys(updateData).length > 0) {
+          await tx.update(schema.profiles).set(updateData).where(eq(schema.profiles.userId, userId));
+        }
+        if (validatedLinks !== undefined) {
+          await tx.delete(schema.profileLinks).where(eq(schema.profileLinks.userId, userId));
+          if (validatedLinks.length > 0) {
+            await tx.insert(schema.profileLinks).values(
+              validatedLinks.map((l, idx) => ({
+                userId,
+                type: l.type,
+                label: l.label?.trim() || l.type || "",
+                url: l.url,
+                sortOrder: idx,
+              }))
+            );
+          }
+        }
+      });
     } catch (dbErr) {
       // Allow demo user mutation in environments without live DB
       if (userId !== DEFAULT_USER.id) {

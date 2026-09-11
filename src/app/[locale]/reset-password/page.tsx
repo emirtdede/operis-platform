@@ -33,15 +33,18 @@ export async function generateMetadata({
 
 export default async function ResetPasswordPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ locale: string }>;
+  searchParams?: Promise<{ token?: string }>;
 }) {
   const { locale } = await params;
+  const sParams = searchParams ? await searchParams : {};
   setRequestLocale(locale);
 
-  // Authenticated users must not access password reset page; redirect to workspace
+  // If no reset token is provided and user is authenticated, redirect to workspace
   const session = await getSession();
-  if (session) {
+  if (session && !sParams.token) {
     redirect(getLocalizedRoute("dashboardListings", locale));
   }
   const isTr = locale === "tr";
@@ -58,8 +61,8 @@ export default async function ResetPasswordPage({
           </h1>
           <p className="text-xs sm:text-sm text-[var(--color-text-secondary)] leading-relaxed">
             {isTr
-              ? "En az 8 karakter, bir büyük harf ve bir rakam içeren güçlü bir şifre seçiniz."
-              : "Choose a strong password containing at least 8 characters, one uppercase letter, and one number."}
+              ? "En az 12 karakter, bir büyük harf ve bir rakam içeren güçlü bir şifre seçiniz."
+              : "Choose a strong password containing at least 12 characters, one uppercase letter, and one number."}
           </p>
         </header>
 

@@ -47,6 +47,14 @@ vi.mock("@/src/lib/db", () => {
           }),
         }),
       }),
+      update: () => ({
+        set: () => ({
+          where: () => Promise.resolve([{ id: "mock-updated-id" }]),
+        }),
+      }),
+      insert: () => ({
+        values: () => Promise.resolve([{ id: "mock-inserted-id" }]),
+      }),
       transaction: async (fn: (tx: unknown) => unknown) => {
         return fn({
           insert: () => ({
@@ -78,6 +86,8 @@ vi.mock("@/src/lib/db", () => {
       listings: "listings",
       offers: "offers",
       offerRevisions: "offer_revisions",
+      offerTemplates: "offer_templates",
+      idempotencyKeys: "idempotency_keys",
       blocks: "blocks",
       profiles: "profiles",
     },

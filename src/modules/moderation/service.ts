@@ -2,6 +2,8 @@ import { and, desc, eq, or } from "drizzle-orm";
 import { getDb, schema } from "@/src/lib/db";
 import { z } from "zod";
 import { mockAbuseEvents } from "@/src/modules/admin/service";
+import { inMemoryListings } from "@/src/modules/listings/service";
+import { inMemorySentOffers } from "@/src/modules/offers/service";
 
 const EMOJI_REGEX =
   /[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F1E6}-\u{1F1FF}\u{1F900}-\u{1F9FF}\u{1FA70}-\u{1FAFF}]/u;
@@ -114,8 +116,53 @@ export class ModerationService {
     const isReporterUuid =
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(reporterUserId);
 
+    let offenderUserId: string | undefined;
+    let offenderDisplayName: string | undefined;
+
+    if (input.targetType === "profile" || input.targetType === "general") {
+      offenderUserId = input.targetId;
+    } else if (input.targetType === "listing") {
+      const memListing = inMemoryListings.find((l) => l.id === input.targetId);
+      if (memListing) {
+        offenderUserId = memListing.ownerUserId;
+        offenderDisplayName =
+          (memListing as unknown as { ownerDisplayName?: string }).ownerDisplayName || "İlan Sahibi";
+      }
+    } else if (input.targetType === "offer") {
+      const memOffer = inMemorySentOffers.find((s) => s.offer.id === input.targetId);
+      if (memOffer) {
+        offenderUserId = memOffer.offer.offerorUserId;
+        offenderDisplayName = "Teklif Sahibi";
+      }
+    }
+
     if (isReporterUuid && isTargetUuid) {
       try {
+        if (input.targetType === "listing" && !offenderUserId) {
+          const [l] = await db
+            .select({ ownerUserId: schema.listings.ownerUserId })
+            .from(schema.listings)
+            .where(eq(schema.listings.id, input.targetId))
+            .limit(1);
+          if (l) offenderUserId = l.ownerUserId;
+        } else if (input.targetType === "offer" && !offenderUserId) {
+          const [o] = await db
+            .select({ offerorUserId: schema.offers.offerorUserId })
+            .from(schema.offers)
+            .where(eq(schema.offers.id, input.targetId))
+            .limit(1);
+          if (o) offenderUserId = o.offerorUserId;
+        }
+
+        if (offenderUserId && !offenderDisplayName) {
+          const [p] = await db
+            .select({ displayName: schema.profiles.displayName })
+            .from(schema.profiles)
+            .where(eq(schema.profiles.userId, offenderUserId))
+            .limit(1);
+          if (p?.displayName) offenderDisplayName = p.displayName;
+        }
+
         const [report] = await db
           .insert(schema.reports)
           .values({
@@ -133,6 +180,8 @@ export class ModerationService {
             id: report.id,
             reporterUserId,
             reporterDisplayName: "Kullanıcı",
+            offenderUserId,
+            offenderDisplayName: offenderDisplayName || "Kullanıcı",
             targetType:
               input.targetType === "general"
                 ? "profile"
@@ -169,6 +218,8 @@ export class ModerationService {
       id: mockReport.id,
       reporterUserId,
       reporterDisplayName: "Kullanıcı",
+      offenderUserId,
+      offenderDisplayName: offenderDisplayName || "Kullanıcı",
       targetType:
         input.targetType === "general"
           ? "profile"

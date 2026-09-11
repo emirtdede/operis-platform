@@ -209,7 +209,7 @@ export default async function NewListingPage({ params }: { params: Promise<{ loc
 
       {/* Wizard Form */}
       <section aria-label={isTr ? "İlan Oluşturma Sihirbazı" : "Listing Creation Wizard"}>
-        <ListingWizardForm categories={categories} locale={locale} />
+        <ListingWizardForm categories={categories} locale={locale} userId={session.userId} />
       </section>
     </main>
   );

@@ -178,6 +178,13 @@ export function MatchDetailsView({
             ? "Her iki taraf da tamamlanmayı onayladı! Proje artık profilinizde tamamlanmış iş olarak görünecektir."
             : "Both parties have confirmed completion! This project will now appear on your public profile."
         );
+      } else if (data.disputed) {
+        setCurrentStatus("DISPUTED");
+        setFeedback(
+          isTr
+            ? "Tamamlama itirazı mevcut. Durumu karşı tarafla doğrudan iletişim kurarak çözebilirsiniz."
+            : "A completion dispute exists. Please coordinate directly with your counterparty."
+        );
       } else {
         setCurrentStatus("COMPLETION_PENDING");
         setFeedback(

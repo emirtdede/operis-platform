@@ -11,8 +11,21 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminOffersPage() {
-  const result = await AdminService.getOffersPaginated({ limit: 50 });
+export default async function AdminOffersPage(props: {
+  searchParams?: Promise<{ page?: string; limit?: string; search?: string; status?: string }>;
+}) {
+  const sp = await props.searchParams;
+  const page = sp?.page ? parseInt(sp.page, 10) : 1;
+  const limit = sp?.limit ? parseInt(sp.limit, 10) : 50;
+  const search = sp?.search || undefined;
+  const status = sp?.status || undefined;
+
+  const result = await AdminService.getOffersPaginated({
+    page: isNaN(page) ? 1 : page,
+    limit: isNaN(limit) ? 50 : limit,
+    search,
+    status,
+  });
 
   return (
     <div className="space-y-6">

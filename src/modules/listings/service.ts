@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { eq, and, desc, sql, or, ilike } from "drizzle-orm";
+import { eq, and, desc, sql, or, ilike, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/src/lib/db";
 import {
   ListingWizardInput,
@@ -203,11 +203,18 @@ export class ListingService {
     const now = new Date();
     const activeUntil = new Date(now.getTime() + SEVEN_DAYS_MS);
     const slug = generateSlug(input.title);
+    const combinedAnswers = {
+      ...(input.answers || {}),
+      projectType: input.projectType,
+      projectStage: input.projectStage,
+      workPreference: input.workPreference,
+      preferredLanguage: input.preferredLanguage,
+    };
 
     try {
       const db = getDb();
 
-      // Check email verification in production
+      // Check email and phone verification in production
       if (process.env.NODE_ENV === "production") {
         const userRows = await db
           .select({ emailVerified: schema.users.emailVerified })
@@ -218,6 +225,18 @@ export class ListingService {
         if (userRows[0] && !userRows[0].emailVerified) {
           throw new Error(
             "İlan yayınlamak için önce e-posta adresinizi doğrulamanız gerekmektedir."
+          );
+        }
+
+        const identityRows = await db
+          .select({ phoneVerifiedAt: schema.userPrivateIdentity.phoneVerifiedAt })
+          .from(schema.userPrivateIdentity)
+          .where(eq(schema.userPrivateIdentity.userId, userId))
+          .limit(1);
+
+        if (!identityRows[0]?.phoneVerifiedAt) {
+          throw new Error(
+            "İlan yayınlamak için önce cep telefonu numaranızı doğrulamanız gerekmektedir."
           );
         }
       }
@@ -247,7 +266,7 @@ export class ListingService {
             title: input.title,
             summary: input.summary,
             scope: input.scope,
-            answersJson: input.answers,
+            answersJson: combinedAnswers,
             tags: input.tags,
             budgetMode: input.budgetMode,
             budgetCurrency: input.budgetCurrency,
@@ -303,7 +322,7 @@ export class ListingService {
         title: input.title,
         summary: input.summary,
         scope: input.scope,
-        answersJson: input.answers,
+        answersJson: combinedAnswers,
         tags: input.tags,
         budgetMode: input.budgetMode,
         budgetCurrency: input.budgetCurrency,
@@ -452,7 +471,7 @@ export class ListingService {
       const newSeq = listing.activationSeq + 1;
 
       await db.transaction(async (tx) => {
-        await tx
+        const [reactivated] = await tx
           .update(schema.listings)
           .set({
             status: "ACTIVE",
@@ -462,7 +481,19 @@ export class ListingService {
             updatedAt: now,
             // Note: firstPublishedAt is NOT modified
           })
-          .where(eq(schema.listings.id, listingId));
+          .where(
+            and(
+              eq(schema.listings.id, listingId),
+              eq(schema.listings.ownerUserId, userId),
+              or(eq(schema.listings.status, "INACTIVE_EXPIRED"), eq(schema.listings.status, "INACTIVE_OWNER")),
+              eq(schema.listings.activationSeq, listing.activationSeq)
+            )
+          )
+          .returning();
+
+        if (!reactivated) {
+          throw new Error(`Cannot reactivate listing in ${listing.status} status or activation sequence has drifted.`);
+        }
 
         await tx.insert(schema.listingStatusEvents).values({
           listingId,
@@ -566,13 +597,24 @@ export class ListingService {
       let pendingOffers: Array<{ id: string; offerorUserId: string; locale: string | null }> = [];
 
       await db.transaction(async (tx) => {
-        await tx
+        const updateResult = await tx
           .update(schema.listings)
           .set({
             status: "INACTIVE_OWNER",
             updatedAt: now,
           })
-          .where(eq(schema.listings.id, listingId));
+          .where(
+            and(
+              eq(schema.listings.id, listingId),
+              eq(schema.listings.ownerUserId, userId),
+              eq(schema.listings.status, "ACTIVE")
+            )
+          )
+          .returning({ id: schema.listings.id });
+
+        if (updateResult.length === 0) {
+          throw new Error("Listing cannot be deactivated because its status has changed or you are not authorized.");
+        }
 
         // Query pending offers before expiring them
         pendingOffers = await tx
@@ -752,13 +794,31 @@ export class ListingService {
             and(eq(schema.offers.listingId, listingId), eq(schema.offers.status, "PENDING"))
           );
 
-        await tx
+        const updateResult = await tx
           .update(schema.listings)
           .set({
             status: "DELETED",
             updatedAt: now,
           })
-          .where(eq(schema.listings.id, listingId));
+          .where(
+            and(
+              eq(schema.listings.id, listingId),
+              eq(schema.listings.ownerUserId, userId),
+              inArray(schema.listings.status, [
+                "DRAFT",
+                "ACTIVE",
+                "INACTIVE_EXPIRED",
+                "INACTIVE_OWNER",
+              ])
+            )
+          )
+          .returning({ id: schema.listings.id });
+
+        if (updateResult.length === 0) {
+          throw new Error(
+            "Listing cannot be deleted because its status has changed or you are not authorized."
+          );
+        }
 
         // Conclude any pending offers on this deleted listing
         await tx
@@ -914,7 +974,14 @@ export class ListingService {
               status: "INACTIVE_EXPIRED",
               updatedAt: referenceTime,
             })
-            .where(and(eq(schema.listings.id, item.id), eq(schema.listings.status, "ACTIVE")))
+            .where(
+              and(
+                eq(schema.listings.id, item.id),
+                eq(schema.listings.status, "ACTIVE"),
+                eq(schema.listings.activationSeq, item.seq),
+                sql`${schema.listings.activeUntil} <= ${referenceTime}`
+              )
+            )
             .returning({ id: schema.listings.id });
 
           if (updated.length > 0) {
@@ -1088,6 +1155,56 @@ export class ListingService {
   }
 
   /**
+   * Scans for active listings expiring in the next 24 hours and sends a warning notification.
+   */
+  static async notifyExpiringListings(referenceTime: Date = new Date()): Promise<number> {
+    try {
+      const db = getDb();
+      const next24h = new Date(referenceTime.getTime() + 24 * 60 * 60 * 1000);
+
+      const expiringSoon = await db
+        .select({
+          id: schema.listings.id,
+          title: schema.listings.title,
+          slug: schema.listings.slug,
+          ownerUserId: schema.listings.ownerUserId,
+          activeUntil: schema.listings.activeUntil,
+        })
+        .from(schema.listings)
+        .where(
+          and(
+            eq(schema.listings.status, "ACTIVE"),
+            sql`${schema.listings.activeUntil} > ${referenceTime}`,
+            sql`${schema.listings.activeUntil} <= ${next24h}`
+          )
+        );
+
+      let notifiedCount = 0;
+      for (const item of expiringSoon) {
+        try {
+          await NotificationService.createNotification(
+            item.ownerUserId,
+            "LISTING_EXPIRING_SOON",
+            "listing",
+            item.id,
+            {
+              title: "İlanınızın Süresi Dolmak Üzere",
+              message: `"${item.title}" başlıklı ilanınızın 7 günlük yayın süresi 24 saat içerisinde dolacaktır. Gerekirse ilanınızı tazeleyebilirsiniz.`,
+              actionUrl: `/tr/ilanlar/${item.slug}`,
+            }
+          );
+          notifiedCount++;
+        } catch {
+          // ignore individual notification failure
+        }
+      }
+      return notifiedCount;
+    } catch {
+      return 0;
+    }
+  }
+
+  /**
    * Fetches listings owned by a user, filtered by status tab for the dashboard.
    */
   static async getOwnerListings(userId: string, statusTab?: string) {
@@ -1183,27 +1300,33 @@ export class ListingService {
     if (isListingUuid) {
       try {
         const db = getDb();
-        const listingRows = await db
-          .select()
-          .from(schema.listings)
-          .where(and(eq(schema.listings.id, listingId), eq(schema.listings.ownerUserId, userId)))
-          .limit(1);
 
-        if (listingRows.length === 0) {
-          throw new Error("Listing not found or unauthorized.");
-        }
+        await db.transaction(async (tx) => {
+          let listingQuery = tx
+            .select()
+            .from(schema.listings)
+            .where(and(eq(schema.listings.id, listingId), eq(schema.listings.ownerUserId, userId)))
+            .limit(1);
 
-      const listing = listingRows[0]!;
-      if (
-        listing.status === "MATCHED" ||
-        listing.status === "COMPLETED" ||
-        listing.status === "DELETED"
-      ) {
-        throw new Error("Cannot edit matched, completed or deleted listing.");
-      }
+          if ("for" in listingQuery && typeof (listingQuery as unknown as Record<string, unknown>).for === "function") {
+            listingQuery = (listingQuery as unknown as { for: (clause: string) => typeof listingQuery }).for("update");
+          }
 
-      await db.transaction(async (tx) => {
-        const [maxRevRow] = await tx
+          const listingRows = await listingQuery;
+          if (listingRows.length === 0) {
+            throw new Error("Listing not found or unauthorized.");
+          }
+
+          const listing = listingRows[0]!;
+          if (
+            listing.status === "MATCHED" ||
+            listing.status === "COMPLETED" ||
+            listing.status === "DELETED"
+          ) {
+            throw new Error("Cannot edit matched, completed or deleted listing.");
+          }
+
+          const [maxRevRow] = await tx
           .select({ maxRev: sql<number>`coalesce(max(${schema.listingRevisions.revisionNo}), 0)` })
           .from(schema.listingRevisions)
           .where(eq(schema.listingRevisions.listingId, listing.id));

@@ -64,9 +64,9 @@ export const listingWizardSchema = z
     // Step 2: Core Outcomes
     title: z
       .string()
+      .trim()
       .min(20, "Title must be at least 20 characters")
       .max(120, "Title cannot exceed 120 characters")
-      .trim()
       .refine((val) => !EMOJI_REGEX.test(val), "Title cannot contain emojis")
       .refine(validateNoCapsSpam, "Title cannot be all uppercase letters")
       .refine(
@@ -75,9 +75,9 @@ export const listingWizardSchema = z
       ),
     summary: z
       .string()
+      .trim()
       .min(80, "Summary must be at least 80 characters")
       .max(280, "Summary cannot exceed 280 characters")
-      .trim()
       .refine((val) => !EMOJI_REGEX.test(val), "Summary cannot contain emojis")
       .refine(
         (val) => validateContentAppropriateness(val).isValid,
@@ -85,9 +85,9 @@ export const listingWizardSchema = z
       ),
     scope: z
       .string()
+      .trim()
       .min(200, "Scope must be at least 200 characters to provide sufficient project detail")
       .max(6000, "Scope cannot exceed 6000 characters")
-      .trim()
       .refine((val) => !EMOJI_REGEX.test(val), "Scope cannot contain emojis")
       .refine(
         (val) => validateContentAppropriateness(val).isValid,
@@ -171,9 +171,9 @@ export type ListingWizardInput = z.infer<typeof listingWizardSchema>;
 export const updateListingInputSchema = z.object({
   title: z
     .string()
+    .trim()
     .min(20, "Title must be at least 20 characters")
     .max(120, "Title cannot exceed 120 characters")
-    .trim()
     .refine((val) => !EMOJI_REGEX.test(val), "Title cannot contain emojis")
     .refine(validateNoCapsSpam, "Title cannot be all uppercase letters")
     .refine(
@@ -183,9 +183,9 @@ export const updateListingInputSchema = z.object({
     .optional(),
   summary: z
     .string()
+    .trim()
     .min(80, "Summary must be at least 80 characters")
     .max(280, "Summary cannot exceed 280 characters")
-    .trim()
     .refine((val) => !EMOJI_REGEX.test(val), "Summary cannot contain emojis")
     .refine(
       (val) => validateContentAppropriateness(val).isValid,
@@ -194,9 +194,9 @@ export const updateListingInputSchema = z.object({
     .optional(),
   scope: z
     .string()
+    .trim()
     .min(200, "Scope must be at least 200 characters to provide sufficient project detail")
     .max(6000, "Scope cannot exceed 6000 characters")
-    .trim()
     .refine((val) => !EMOJI_REGEX.test(val), "Scope cannot contain emojis")
     .refine(
       (val) => validateContentAppropriateness(val).isValid,

@@ -80,3 +80,52 @@ describe("Cryptographic Stateless Password Reset Engine", () => {
     expect(payload?.pwh).not.toBe(getPasswordHashFingerprint(updatedPasswordHash));
   });
 });
+
+describe("Verification and Token Isolation (B01, B06, B07)", () => {
+  it("strictly isolates session tokens from email verification and reset tokens", async () => {
+    const { createEmailVerificationToken, verifyEmailVerificationToken } = await import(
+      "@/src/modules/auth/verification"
+    );
+    const { verifySessionToken } = await import("@/src/modules/auth/session");
+
+    const userId = "11111111-1111-1111-1111-111111111111";
+    const email = "isolation@operis.pro";
+
+    const emailToken = createEmailVerificationToken(userId, email);
+    const verifiedPayload = verifyEmailVerificationToken(emailToken);
+    expect(verifiedPayload).not.toBeNull();
+    expect(verifiedPayload?.userId).toBe(userId);
+    expect(verifiedPayload?.email).toBe(email);
+
+    // Cross-token attack: passing email token to session verifier must return null
+    const asSession = await verifySessionToken(emailToken);
+    expect(asSession).toBeNull();
+  });
+
+  it("handles phone OTP verification lifecycle without premature consumption (B07)", async () => {
+    const { storePhoneOtp, verifyPhoneOtp, consumePhoneOtp } = await import(
+      "@/src/modules/auth/verification"
+    );
+
+    const userId = "22222222-2222-2222-2222-222222222222";
+    const code = "987654";
+
+    storePhoneOtp(userId, code);
+
+    // Verify without consuming (consume = false)
+    const valid1 = verifyPhoneOtp(userId, code, false);
+    expect(valid1).toBe(true);
+
+    // Should still be verifiable because it wasn't consumed
+    const valid2 = verifyPhoneOtp(userId, code, false);
+    expect(valid2).toBe(true);
+
+    // Explicit consumption
+    consumePhoneOtp(userId);
+
+    // Now it should be consumed
+    const valid3 = verifyPhoneOtp(userId, code, false);
+    expect(valid3).toBe(false);
+  });
+});
+

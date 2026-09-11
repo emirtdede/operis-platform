@@ -19,6 +19,7 @@ export const submitOfferSchema = z
     listingId: z.string().min(1, "Invalid listing ID"),
     message: z
       .string()
+      .trim()
       .min(50, "Offer message must be at least 50 characters")
       .max(3000, "Offer message cannot exceed 3000 characters")
       .refine((val) => !EMOJI_REGEX.test(val), {
@@ -62,6 +63,7 @@ export const updateOfferSchema = z
     offerId: z.string().min(1, "Invalid offer ID"),
     message: z
       .string()
+      .trim()
       .min(50, "Offer message must be at least 50 characters")
       .max(3000, "Offer message cannot exceed 3000 characters")
       .refine((val) => !EMOJI_REGEX.test(val), {
@@ -177,6 +179,7 @@ export const offerTemplateSchema = z
     id: z.string().optional(),
     name: z
       .string()
+      .trim()
       .min(2, "Şablon adı en az 2 karakter olmalıdır")
       .max(50, "Şablon adı en fazla 50 karakter olabilir")
       .refine((val) => !EMOJI_REGEX.test(val), {
@@ -184,6 +187,7 @@ export const offerTemplateSchema = z
       }),
     message: z
       .string()
+      .trim()
       .min(50, "Şablon mesajı en az 50 karakter olmalıdır")
       .max(3000, "Şablon mesajı 3000 karakteri geçemez")
       .refine((val) => !EMOJI_REGEX.test(val), {

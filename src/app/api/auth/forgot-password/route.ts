@@ -108,6 +108,7 @@ export async function POST(req: Request) {
           : "Şifre sıfırlama talimatları e-posta adresinize gönderildi.",
         email: cleanEmail,
         ...(resetToken &&
+        process.env.NODE_ENV !== "production" &&
         (process.env.EXPOSE_DEV_RESET_TOKEN === "true" ||
           process.env.VITEST !== undefined ||
           process.env.NODE_ENV === "test")

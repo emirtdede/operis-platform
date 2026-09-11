@@ -2,6 +2,8 @@ import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { createSessionToken, SESSION_COOKIE_NAME, getSession } from "@/src/modules/auth/session";
 
+import { checkRateLimit, getClientIp, rateLimitExceededResponse } from "@/src/lib/security/rate-limit";
+
 export async function GET() {
   const session = await getSession();
   return NextResponse.json({
@@ -11,6 +13,15 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const ip = getClientIp(request);
+  const limitCheck = checkRateLimit(`auth:admin-session:${ip}`, 5, 15 * 60 * 1000);
+  if (!limitCheck.success) {
+    return rateLimitExceededResponse(
+      limitCheck.reset,
+      "Çok fazla yönetici girişi denemesi yapıldı. Lütfen 15 dakika sonra tekrar deneyiniz."
+    );
+  }
+
   try {
     const body = await request.json().catch(() => ({}));
     const {
@@ -18,6 +29,7 @@ export async function POST(request: NextRequest) {
       role: requestedRole,
       email: requestedEmail,
       displayName: requestedName,
+      totpCode,
     } = body;
 
     const configuredKey =
@@ -57,8 +69,9 @@ export async function POST(request: NextRequest) {
       ? requestedRole
       : "ADMIN";
     let userId = "usr_admin_authorized";
+    let dbUserFound = false;
 
-    // Re-verify against database users if available
+    // Re-verify against database users
     try {
       const { getDb, schema } = await import("@/src/lib/db");
       const { eq } = await import("drizzle-orm");
@@ -68,25 +81,63 @@ export async function POST(request: NextRequest) {
           id: schema.users.id,
           role: schema.users.role,
           status: schema.users.status,
+          twoFactorEnabled: schema.users.twoFactorEnabled,
+          twoFactorSecret: schema.users.twoFactorSecret,
         })
         .from(schema.users)
         .where(eq(schema.users.email, email))
         .limit(1);
 
       if (existingUser) {
+        dbUserFound = true;
         if (existingUser.status !== "ACTIVE") {
           return NextResponse.json(
             { error: "Yönetici hesabı askıya alınmış veya silinmiş." },
             { status: 403 }
           );
         }
-        userId = existingUser.id;
-        if (validRoles.includes(existingUser.role as (typeof validRoles)[number])) {
-          targetRole = existingUser.role as (typeof validRoles)[number];
+        if (!validRoles.includes(existingUser.role as (typeof validRoles)[number])) {
+          return NextResponse.json(
+            { error: "Bu kullanıcının yönetici paneline erişim yetkisi bulunmamaktadır." },
+            { status: 403 }
+          );
         }
+
+        // Verify 2FA TOTP if admin user has 2FA enabled
+        if (existingUser.twoFactorEnabled && existingUser.twoFactorSecret) {
+          const code = (totpCode || "").trim();
+          if (!code) {
+            return NextResponse.json(
+              { error: "İki aşamalı doğrulama kodu (TOTP) gereklidir.", requires2FA: true },
+              { status: 401 }
+            );
+          }
+          const { verifyTotpCode } = await import("@/src/modules/auth/totp");
+          if (!verifyTotpCode(existingUser.twoFactorSecret, code)) {
+            return NextResponse.json(
+              { error: "Geçersiz 2FA doğrulama kodu." },
+              { status: 401 }
+            );
+          }
+        }
+
+        userId = existingUser.id;
+        targetRole = existingUser.role as (typeof validRoles)[number];
       }
     } catch {
-      // In offline / fallback mode, retain default admin assignment
+      if (process.env.NODE_ENV === "production") {
+        return NextResponse.json(
+          { error: "Veritabanı bağlantı hatası nedeniyle yönetici oturumu açılamadı." },
+          { status: 500 }
+        );
+      }
+    }
+
+    if (!dbUserFound && process.env.NODE_ENV === "production") {
+      return NextResponse.json(
+        { error: "Belirtilen e-posta adresine ait yetkili yönetici hesabı bulunamadı." },
+        { status: 404 }
+      );
     }
 
     const displayName =

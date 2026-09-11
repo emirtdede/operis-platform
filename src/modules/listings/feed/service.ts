@@ -161,7 +161,7 @@ export class FeedService {
         conditions.push(inArray(schema.listings.categoryId, targetCategoryIds));
       }
 
-      // Search query
+      // Search query (including tags)
       if (params.search && params.search.trim().length > 0) {
         const sanitized = params.search.trim().slice(0, 100);
         const pattern = `%${sanitized}%`;
@@ -169,7 +169,8 @@ export class FeedService {
           or(
             ilike(schema.listings.title, pattern),
             ilike(schema.listings.summary, pattern),
-            ilike(schema.listings.scope, pattern)
+            ilike(schema.listings.scope, pattern),
+            sql`array_to_string(${schema.listings.tags}, ' ') ILIKE ${pattern}`
           )!
         );
       }
@@ -326,7 +327,10 @@ export class FeedService {
       if (params.search) {
         const q = params.search.toLowerCase();
         filteredInMem = filteredInMem.filter(
-          (l) => l.title.toLowerCase().includes(q) || l.summary.toLowerCase().includes(q)
+          (l) =>
+            l.title.toLowerCase().includes(q) ||
+            l.summary.toLowerCase().includes(q) ||
+            (Array.isArray(l.tags) && l.tags.some((t) => t.toLowerCase().includes(q)))
         );
       }
 

@@ -982,6 +982,7 @@ export class AdminService {
         id: r.id,
         reporterUserId: r.reporterUserId,
         reporterDisplayName: r.reporterDisplayName || "Kullanici",
+        offenderUserId: r.targetType === "profile" ? r.targetId : undefined,
         targetType: (r.targetType as "listing" | "profile" | "offer" | "message") || "listing",
         targetId: r.targetId,
         reasonCode: r.reasonCode,
@@ -993,7 +994,15 @@ export class AdminService {
       // In-memory fallback
     }
 
-    let all = dbReports.length > 0 ? [...dbReports, ...mockAbuseEvents] : [...mockAbuseEvents];
+    const seenIds = new Set<string>();
+    const combined = [...dbReports, ...mockAbuseEvents];
+    let all: AdminAbuseItem[] = [];
+    for (const item of combined) {
+      if (!seenIds.has(item.id)) {
+        seenIds.add(item.id);
+        all.push(item);
+      }
+    }
     if (params.status && params.status !== "ALL") {
       all = all.filter((a) => a.status === params.status);
     }
@@ -1059,12 +1068,21 @@ export class AdminService {
         return await db.transaction(async (tx) => {
           let updatedUser;
 
+          const [existing] = await tx
+            .select()
+            .from(schema.users)
+            .where(eq(schema.users.id, targetUserId));
+
+          if (!existing) {
+            throw new Error("Target user not found");
+          }
+
+          if (existing.status === "DELETED") {
+            throw new Error("Cannot modify status of a deleted account");
+          }
+
           if (action === "WARN") {
             // Do NOT alter user status on WARN
-            const [existing] = await tx
-              .select()
-              .from(schema.users)
-              .where(eq(schema.users.id, targetUserId));
             updatedUser = existing;
 
             await tx
@@ -1131,18 +1149,24 @@ export class AdminService {
 
           return updatedUser;
         });
-      } catch {
-        // Fall through to in-memory fallback
+      } catch (err) {
+        if (process.env.NODE_ENV === "production") {
+          throw err;
+        }
       }
     }
 
     // In-memory fallback
+    const u = mockUsers.find((user) => user.id === targetUserId);
+    if (u && u.status === "DELETED") {
+      throw new Error("Cannot modify status of a deleted account");
+    }
+
     if (action !== "WARN") {
       if (targetUserId === DEFAULT_USER.id) {
         DEFAULT_USER.status = action === "SUSPEND" ? "SUSPENDED" : "ACTIVE";
       }
     }
-    const u = mockUsers.find((user) => user.id === targetUserId);
     if (u && action !== "WARN") {
       u.status = action === "SUSPEND" ? "SUSPENDED" : "ACTIVE";
     }
@@ -1209,6 +1233,16 @@ export class AdminService {
             throw new Error("Listing not found");
           }
 
+          if (
+            currentListing.status === "MATCHED" ||
+            currentListing.status === "COMPLETED" ||
+            currentListing.status === "DELETED"
+          ) {
+            throw new Error(
+              "Cannot moderate or unhide a listing that is matched, completed or deleted."
+            );
+          }
+
           let computedStatus: (typeof schema.listings.$inferSelect)["status"] =
             action === "HIDE"
               ? "HIDDEN_MODERATION"
@@ -1227,14 +1261,31 @@ export class AdminService {
             }
           }
 
+          const now = new Date();
           const [updatedListing] = await tx
             .update(schema.listings)
             .set({
               status: computedStatus,
-              updatedAt: new Date(),
+              updatedAt: now,
             })
             .where(eq(schema.listings.id, listingId))
             .returning();
+
+          if (action === "HIDE" || action === "DEACTIVATE") {
+            await tx
+              .update(schema.offers)
+              .set({
+                status: "EXPIRED_LISTING_INACTIVE",
+                resolvedAt: now,
+                updatedAt: now,
+              })
+              .where(
+                and(
+                  eq(schema.offers.listingId, listingId),
+                  eq(schema.offers.status, "PENDING")
+                )
+              );
+          }
 
           await tx.insert(schema.listingStatusEvents).values({
             listingId,
@@ -1268,6 +1319,10 @@ export class AdminService {
     }
 
     const l = inMemoryListings.find((item) => item.id === listingId);
+    if (l && (l.status === "MATCHED" || l.status === "COMPLETED" || l.status === "DELETED")) {
+      throw new Error("Cannot moderate or unhide a listing that is matched, completed or deleted.");
+    }
+
     let targetStatus: (typeof schema.listings.$inferSelect)["status"] =
       action === "HIDE"
         ? "HIDDEN_MODERATION"
@@ -1290,11 +1345,21 @@ export class AdminService {
     for (const s of inMemorySentOffers) {
       if (s.listing.id === listingId) {
         s.listing.status = targetStatus;
+        if ((action === "HIDE" || action === "DEACTIVATE") && s.offer.status === "PENDING") {
+          s.offer.status = "EXPIRED_LISTING_INACTIVE";
+          s.offer.resolvedAt = new Date();
+          s.offer.updatedAt = new Date();
+        }
       }
     }
     for (const r of inMemoryReceivedOffers) {
       if (r.listing.id === listingId) {
         r.listing.status = targetStatus;
+        if ((action === "HIDE" || action === "DEACTIVATE") && r.offer.status === "PENDING") {
+          r.offer.status = "EXPIRED_LISTING_INACTIVE";
+          r.offer.resolvedAt = new Date();
+          r.offer.updatedAt = new Date();
+        }
       }
     }
 
@@ -1368,8 +1433,10 @@ export class AdminService {
             resolvedAt: new Date(),
           })
           .where(eq(schema.reports.id, reportId));
-      } catch {
-        // In-memory fallback
+      } catch (err) {
+        if (process.env.NODE_ENV === "production") {
+          throw err;
+        }
       }
     }
 

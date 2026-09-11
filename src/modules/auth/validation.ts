@@ -52,14 +52,14 @@ export function calculateAge(dob: Date): number {
 }
 
 function createCleanStringSchema(fieldName: string, minLength?: number, maxLength?: number) {
-  let s = z.string();
+  let s = z.string().trim();
   if (minLength !== undefined) {
     s = s.min(minLength, `${fieldName} must be at least ${minLength} characters`);
   }
   if (maxLength !== undefined) {
     s = s.max(maxLength, `${fieldName} cannot exceed ${maxLength} characters`);
   }
-  return s.trim().refine((val) => !EMOJI_REGEX.test(val), {
+  return s.refine((val) => !EMOJI_REGEX.test(val), {
     message: `${fieldName} cannot contain emojis or pictographic symbols.`,
   });
 }

@@ -201,13 +201,25 @@ export class AuthService {
     // F. Send signed email verification token outside of DB transaction
     try {
       const emailToken = createEmailVerificationToken(result.user.id, input.email);
-      await emailProvider.send({
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:8000";
+      const verificationUrl = `${appUrl}/api/auth/verify-email?token=${emailToken}`;
+      const emailRes = await emailProvider.send({
         to: input.email,
         template: "verify_email",
         locale: input.locale === "en" ? "en" : "tr",
-        variables: { token: emailToken },
+        variables: {
+          token: emailToken,
+          verificationUrl,
+          subject: input.locale === "en" ? "Verify your Operis email" : "Operis e-posta adresinizi doğrulayın",
+          body: input.locale === "en"
+            ? `Please verify your email by clicking: ${verificationUrl}`
+            : `Lütfen e-posta adresinizi doğrulamak için tıklayın: ${verificationUrl}`,
+        },
         idempotencyKey: `email_verify_${result.user.id}`,
       });
+      if (!emailRes.success) {
+        console.error("Email verification delivery failure:", emailRes.error);
+      }
     } catch (emailErr) {
       console.error("Non-blocking email verification delivery failure:", emailErr);
     }
@@ -216,12 +228,15 @@ export class AuthService {
     try {
       const otpCode = generateOtpCode();
       storePhoneOtp(result.user.id, otpCode);
-      await smsProvider.sendOtp({
+      const smsRes = await smsProvider.sendOtp({
         phoneE164: input.phone,
         code: otpCode,
         locale: input.locale === "en" ? "en" : "tr",
         idempotencyKey: `sms_otp_${result.user.id}`,
       });
+      if (!smsRes.success) {
+        console.error("SMS OTP delivery failure:", smsRes.error);
+      }
     } catch (smsErr) {
       console.error("Non-blocking SMS OTP delivery failure:", smsErr);
     }

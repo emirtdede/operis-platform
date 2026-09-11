@@ -9,12 +9,25 @@ interface RateLimitRecord {
 const rateLimitStore = new Map<string, RateLimitRecord>();
 export const blockedIpSet = new Set<string>();
 
+const IPV4_REGEX = /^(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$/;
+const IPV6_REGEX = /^(?:[a-fA-F0-9]{1,4}:){7}[a-fA-F0-9]{1,4}$|^::1$|^[a-fA-F0-9:]+$/;
+
+export function isValidIp(ip: string): boolean {
+  const trimmed = ip.trim();
+  if (!trimmed) return false;
+  return IPV4_REGEX.test(trimmed) || (IPV6_REGEX.test(trimmed) && trimmed.includes(":"));
+}
+
 export function isIpBlocked(ip: string): boolean {
-  return blockedIpSet.has(ip);
+  const trimmed = ip.trim();
+  return blockedIpSet.has(trimmed);
 }
 
 export function blockIpAddress(ip: string): void {
-  blockedIpSet.add(ip.trim());
+  const trimmed = ip.trim();
+  if (trimmed && isValidIp(trimmed)) {
+    blockedIpSet.add(trimmed);
+  }
 }
 
 export function unblockIpAddress(ip: string): void {
@@ -68,15 +81,15 @@ export interface RateLimitResult {
  * @param windowMs Window duration in milliseconds
  */
 export function checkRateLimit(key: string, limit: number, windowMs: number): RateLimitResult {
-  for (const blocked of blockedIpSet) {
-    if (key.includes(blocked)) {
-      return {
-        success: false,
-        limit,
-        remaining: 0,
-        reset: 86400,
-      };
-    }
+  const tokens = key.split(":");
+  const isBlocked = blockedIpSet.has(key) || tokens.some((t) => blockedIpSet.has(t));
+  if (isBlocked) {
+    return {
+      success: false,
+      limit,
+      remaining: 0,
+      reset: 86400,
+    };
   }
 
   const now = Date.now();

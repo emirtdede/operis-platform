@@ -147,14 +147,16 @@ export function NotificationPopover({
   const handleMarkAllRead = async () => {
     setIsMarkingAll(true);
     try {
-      await fetch("/api/notifications", {
+      const res = await fetch("/api/notifications", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-locale": locale },
         body: JSON.stringify({ action: "markAllRead", locale }),
       });
-      const nowIso = new Date().toISOString();
-      setNotifications((prev) => prev.map((n) => ({ ...n, readAt: n.readAt ?? nowIso })));
-      setUnreadCount(0);
+      if (res.ok) {
+        const nowIso = new Date().toISOString();
+        setNotifications((prev) => prev.map((n) => ({ ...n, readAt: n.readAt ?? nowIso })));
+        setUnreadCount(0);
+      }
     } catch {
       // Fallback
     } finally {
@@ -165,15 +167,17 @@ export function NotificationPopover({
   const handleNotificationClick = async (item: NotificationItem) => {
     if (!item.readAt) {
       try {
-        await fetch("/api/notifications", {
+        const res = await fetch("/api/notifications", {
           method: "POST",
           headers: { "Content-Type": "application/json", "x-locale": locale },
           body: JSON.stringify({ notificationId: item.id, locale }),
         });
-        setNotifications((prev) =>
-          prev.map((n) => (n.id === item.id ? { ...n, readAt: new Date().toISOString() } : n))
-        );
-        setUnreadCount((prev) => Math.max(prev - 1, 0));
+        if (res.ok) {
+          setNotifications((prev) =>
+            prev.map((n) => (n.id === item.id ? { ...n, readAt: new Date().toISOString() } : n))
+          );
+          setUnreadCount((prev) => Math.max(prev - 1, 0));
+        }
       } catch {
         // Continue navigation anyway
       }

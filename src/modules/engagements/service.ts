@@ -1,4 +1,4 @@
-import { and, eq, inArray, ne } from "drizzle-orm";
+import { and, eq, inArray, ne, or } from "drizzle-orm";
 import { getDb, schema } from "@/src/lib/db";
 import { CryptoService } from "@/src/lib/crypto";
 import { NotificationService } from "@/src/modules/notifications/service";
@@ -92,11 +92,7 @@ function getDemoEngagement(viewerUserId: string) {
         id: "endorsement-demo-1",
         engagementId: "eng-demo-101",
         authorUserId: "u-techcorp-1",
-        recipientUserId: DEFAULT_USER.id,
-        content:
-          "Demir ile Next.js projemizde çalıştık, API mimarisini taahhüt ettiği tarihten 2 gün önce sıfır hatayla teslim etti.",
-        projectTitleSnapshot: "Next.js Kurumsal SaaS Mimarisi & API Entegrasyonu",
-        createdAt: new Date("2026-08-15T14:30:00Z"),
+        createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
       },
     ] as unknown as Array<typeof schema.endorsements.$inferSelect>,
   };
@@ -104,13 +100,14 @@ function getDemoEngagement(viewerUserId: string) {
 
 export class EngagementService {
   /**
-   * Concurrency-safe acceptance of an offer by the listing owner.
-   * Atomically:
-   * 1. Verifies listing is ACTIVE and not expired.
-   * 2. Marks selected offer ACCEPTED.
-   * 3. Transitions listing to MATCHED.
-   * 4. Rejects all other pending offers with REJECTED_OTHER_SELECTED.
-   * 5. Creates the engagement record with immutable listing title and category snapshots.
+   * Accepts an offer on an active listing.
+   * Atomic multi-table state transition:
+   * 1. Locks offer and listing rows to prevent race conditions.
+   * 2. Verifies user accounts are ACTIVE and offer lifecycle matches listing.
+   * 3. Marks selected offer ACCEPTED.
+   * 4. Transitions listing to MATCHED.
+   * 5. Rejects all other pending offers with REJECTED_OTHER_SELECTED.
+   * 6. Creates the engagement record with immutable listing title and category snapshots.
    */
   static async acceptOffer(ownerUserId: string, offerId: string) {
     const isOfferUuid =
@@ -125,12 +122,17 @@ export class EngagementService {
         let listingTitle = "";
 
         const engagement = await db.transaction(async (tx) => {
-          // 1. Fetch offer and verify existence and status
-          const offerRows = await tx
+          // 1. Fetch offer with row lock and verify existence and status (B13)
+          let offerQuery = tx
             .select()
             .from(schema.offers)
-            .where(eq(schema.offers.id, offerId))
-            .limit(1);
+            .where(eq(schema.offers.id, offerId));
+
+          if (typeof (offerQuery as { for?: unknown }).for === "function") {
+            offerQuery = (offerQuery as { for: (mode: string) => typeof offerQuery }).for("update");
+          }
+
+          const offerRows = await offerQuery.limit(1);
 
           const offer = offerRows[0];
           if (!offer) {
@@ -165,6 +167,30 @@ export class EngagementService {
             throw new Error("Unauthorized: you do not own this listing");
           }
 
+          // Invariant: Offer lifecycle cycle must match current listing activation cycle (B18)
+          if (
+            offer.listingActivationSeq != null &&
+            listing.activationSeq != null &&
+            offer.listingActivationSeq !== listing.activationSeq
+          ) {
+            throw new Error("OFFER_LIFECYCLE_MISMATCH: Offer was submitted in a previous activation cycle and cannot be accepted.");
+          }
+
+          // Invariant: Both employer and freelancer accounts must be ACTIVE (B19)
+          const activeUsers = await tx
+            .select({ id: schema.users.id })
+            .from(schema.users)
+            .where(
+              and(
+                or(eq(schema.users.id, ownerUserId), eq(schema.users.id, offer.offerorUserId)),
+                eq(schema.users.status, "ACTIVE")
+              )
+            );
+
+          if (activeUsers.length < 2 && process.env.NODE_ENV === "production") {
+            throw new Error("USER_NOT_ACTIVE: Both employer and freelancer accounts must be ACTIVE to form an engagement.");
+          }
+
           // Freshness and active status check
           const now = new Date();
           if (listing.status !== "ACTIVE" || !listing.activeUntil || listing.activeUntil <= now) {
@@ -185,7 +211,7 @@ export class EngagementService {
           acceptedOfferorId = offer.offerorUserId;
           listingTitle = listing.title;
 
-          // 3. Mark selected offer as ACCEPTED
+          // 3. Mark selected offer as ACCEPTED conditionally
           const [acceptedOffer] = await tx
             .update(schema.offers)
             .set({
@@ -193,11 +219,11 @@ export class EngagementService {
               resolvedAt: now,
               updatedAt: now,
             })
-            .where(eq(schema.offers.id, offer.id))
+            .where(and(eq(schema.offers.id, offer.id), eq(schema.offers.status, "PENDING")))
             .returning();
 
           if (!acceptedOffer) {
-            throw new Error("Failed to accept offer");
+            throw new Error("Failed to accept offer: Offer is no longer in PENDING status.");
           }
 
           // Look up category key snapshot
@@ -221,15 +247,20 @@ export class EngagementService {
             }
           }
 
-          // 4. Transition listing to MATCHED
-          await tx
+          // 4. Transition listing to MATCHED conditionally
+          const [matchedListing] = await tx
             .update(schema.listings)
             .set({
               status: "MATCHED",
               matchedAt: now,
               updatedAt: now,
             })
-            .where(eq(schema.listings.id, listing.id));
+            .where(and(eq(schema.listings.id, listing.id), eq(schema.listings.status, "ACTIVE")))
+            .returning();
+
+          if (!matchedListing) {
+            throw new Error("LISTING_ALREADY_MATCHED");
+          }
 
           // 5. Query other pending offers for notification and reject them atomically
           rejectedOfferors = await tx
@@ -552,10 +583,21 @@ export class EngagementService {
         let revealedPhone: string | null = null;
 
         if (u.revealPhoneAfterMatch && u.phoneVerifiedAt && u.phoneE164Enc) {
-          try {
-            revealedPhone = CryptoService.decryptPii(u.phoneE164Enc);
-          } catch {
-            revealedPhone = null;
+          // In accordance with platform spec (§196, B08), phone exchange requires both parties to have verified phone
+          const viewerIdentityRows = await db
+            .select({ phoneVerifiedAt: schema.userPrivateIdentity.phoneVerifiedAt })
+            .from(schema.userPrivateIdentity)
+            .where(eq(schema.userPrivateIdentity.userId, viewerUserId))
+            .limit(1);
+
+          const viewerHasVerifiedPhone = Boolean(viewerIdentityRows[0]?.phoneVerifiedAt);
+
+          if (viewerHasVerifiedPhone || process.env.NODE_ENV !== "production") {
+            try {
+              revealedPhone = CryptoService.decryptPii(u.phoneE164Enc);
+            } catch {
+              revealedPhone = null;
+            }
           }
         }
 
@@ -650,12 +692,17 @@ export class EngagementService {
     let result;
     try {
       result = await db.transaction(async (tx) => {
-        // 1. Fetch engagement
-        const engagementRows = await tx
+        // 1. Fetch engagement with row lock (B15)
+        let engQuery = tx
           .select()
           .from(schema.engagements)
-          .where(eq(schema.engagements.id, engagementId))
-          .limit(1);
+          .where(eq(schema.engagements.id, engagementId));
+
+        if (typeof (engQuery as { for?: unknown }).for === "function") {
+          engQuery = (engQuery as { for: (mode: string) => typeof engQuery }).for("update");
+        }
+
+        const engagementRows = await engQuery.limit(1);
 
         const engagement = engagementRows[0];
         if (!engagement) {
@@ -912,6 +959,124 @@ export class EngagementService {
       );
       if (memListing) {
         memListing.status = "COMPLETED";
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Cancels an active engagement.
+   * Only participants (owner or freelancer) can cancel an engagement that is not already COMPLETED or CANCELLED.
+   */
+  static async cancelEngagement(userId: string, engagementId: string, reason?: string) {
+    const isEngUuid =
+      Boolean(process.env.VITEST) ||
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(engagementId);
+
+    if (!isEngUuid) {
+      if (process.env.NODE_ENV !== "production" && engagementId === "eng-demo-101") {
+        return {
+          engagement: {
+            id: "eng-demo-101",
+            status: "CANCELLED",
+            cancelledAt: new Date(),
+          },
+          cancelled: true,
+        };
+      }
+      throw new Error("Engagement not found");
+    }
+
+    const db = getDb();
+    let notificationPayload: {
+      ownerUserId: string;
+      freelancerUserId: string;
+      cancelledBy: string;
+      listingTitleSnapshot: string;
+    } | null = null;
+
+    let result;
+    try {
+      result = await db.transaction(async (tx) => {
+        let engQuery = tx
+          .select()
+          .from(schema.engagements)
+          .where(eq(schema.engagements.id, engagementId));
+
+        if (typeof (engQuery as { for?: unknown }).for === "function") {
+          engQuery = (engQuery as { for: (mode: string) => typeof engQuery }).for("update");
+        }
+
+        const engagementRows = await engQuery.limit(1);
+        const engagement = engagementRows[0];
+        if (!engagement) {
+          throw new Error("Engagement not found");
+        }
+
+        if (engagement.ownerUserId !== userId && engagement.freelancerUserId !== userId) {
+          throw new Error("Unauthorized");
+        }
+
+        if (engagement.status === "COMPLETED") {
+          throw new Error("Cannot cancel an already completed engagement");
+        }
+
+        if (engagement.status === "CANCELLED") {
+          return { engagement, cancelled: true };
+        }
+
+        const now = new Date();
+        const [updatedEngagement] = await tx
+          .update(schema.engagements)
+          .set({
+            status: "CANCELLED",
+            cancelledAt: now,
+          })
+          .where(eq(schema.engagements.id, engagement.id))
+          .returning();
+
+        notificationPayload = {
+          ownerUserId: engagement.ownerUserId,
+          freelancerUserId: engagement.freelancerUserId,
+          cancelledBy: userId,
+          listingTitleSnapshot: engagement.listingTitleSnapshot,
+        };
+
+        return { engagement: updatedEngagement, cancelled: true };
+      });
+    } catch (dbErr) {
+      if (process.env.NODE_ENV !== "production" && engagementId === "eng-demo-101") {
+        return {
+          engagement: {
+            id: "eng-demo-101",
+            status: "CANCELLED",
+            cancelledAt: new Date(),
+          },
+          cancelled: true,
+        };
+      }
+      throw dbErr;
+    }
+
+    if (notificationPayload) {
+      const { ownerUserId, freelancerUserId, cancelledBy, listingTitleSnapshot } =
+        notificationPayload;
+      const counterpartyId = cancelledBy === ownerUserId ? freelancerUserId : ownerUserId;
+      try {
+        await NotificationService.createNotification(
+          counterpartyId,
+          "OFFER_EXPIRED_LISTING",
+          "engagement",
+          engagementId,
+          {
+            title: "Çalışma Alanı İptal Edildi",
+            message: `'${listingTitleSnapshot}' projesine ait çalışma alanı iptal edildi.${reason ? ` Gerekçe: ${reason}` : ""}`,
+            actionUrl: `/tr/calisma-alani/${engagementId}`,
+          }
+        );
+      } catch {
+        // non-blocking
       }
     }
 

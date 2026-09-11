@@ -26,6 +26,8 @@ export type NotificationType =
   | "ENDORSEMENT_RECEIVED"
   | "OFFER_WITHDRAWN";
 
+type TransactionContext = Parameters<Parameters<ReturnType<typeof getDb>["transaction"]>[0]>[0];
+
 export class NotificationService {
   /**
    * Creates an in-app notification and queues an idempotent outbox event for delivery.
@@ -35,41 +37,46 @@ export class NotificationService {
     type: NotificationType,
     aggregateType: string,
     aggregateId: string,
-    payload: Record<string, unknown>
+    payload: Record<string, unknown>,
+    txContext?: unknown
   ) {
-    try {
-      const db = getDb();
-
-      return await db.transaction(async (tx) => {
-        const [notification] = await tx
-          .insert(schema.notifications)
-          .values({
-            userId,
-            type,
-            payloadJson: payload,
-          })
-          .returning();
-
-        if (!notification) {
-          throw new Error("Failed to create notification");
-        }
-
-        await tx.insert(schema.outboxEvents).values({
+    const execute = async (tx: TransactionContext) => {
+      const [notification] = await tx
+        .insert(schema.notifications)
+        .values({
+          userId,
           type,
-          aggregateType,
-          aggregateId,
-          payloadJson: {
-            ...payload,
-            recipientUserId: userId,
-            notificationId: notification.id,
-          },
-          status: "PENDING",
-          attemptCount: 0,
-          nextAttemptAt: new Date(),
-        });
+          payloadJson: payload,
+        })
+        .returning();
 
-        return notification;
+      if (!notification) {
+        throw new Error("Failed to create notification");
+      }
+
+      await tx.insert(schema.outboxEvents).values({
+        type,
+        aggregateType,
+        aggregateId,
+        payloadJson: {
+          ...payload,
+          recipientUserId: userId,
+          notificationId: notification.id,
+        },
+        status: "PENDING",
+        attemptCount: 0,
+        nextAttemptAt: new Date(),
       });
+
+      return notification;
+    };
+
+    try {
+      if (txContext && typeof (txContext as Record<string, unknown>).insert === "function") {
+        return await execute(txContext as TransactionContext);
+      }
+      const db = getDb();
+      return await db.transaction(execute);
     } catch (err) {
       if (process.env.NODE_ENV === "production") {
         throw err;

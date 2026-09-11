@@ -76,11 +76,19 @@ class NetgsmSmsProvider implements SmsProvider {
         }),
       });
 
-      if (!res.ok) {
-        return { success: false, error: "Netgsm dispatch failed" };
+      const responseText = (await res.text()).trim();
+      const firstToken = responseText.split(/\s+/)[0] || "";
+      const errorCodes = new Set(["20", "30", "40", "50", "51", "70", "80", "85"]);
+
+      if (!res.ok || errorCodes.has(firstToken)) {
+        return {
+          success: false,
+          error: `Netgsm delivery rejected with code: ${firstToken || responseText}`,
+        };
       }
 
-      return { success: true, messageId: `netgsm_${Date.now()}` };
+      const jobId = responseText.startsWith("00") ? responseText.slice(3).trim() : responseText;
+      return { success: true, messageId: `netgsm_${jobId || Date.now()}` };
     } catch (err: unknown) {
       return {
         success: false,
@@ -95,10 +103,13 @@ function createSmsProvider(): SmsProvider {
   if (providerType === "netgsm") {
     return new NetgsmSmsProvider();
   }
-  if (providerType === "twilio" && process.env.NODE_ENV === "production") {
-    console.error(
-      "Critical: SMS_PROVIDER=twilio is configured but Twilio transport is not initialized. Using fallback provider."
-    );
+  if (providerType === "twilio") {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error(
+        "SMS_PROVIDER=twilio is configured but Twilio client transport is not implemented in production."
+      );
+    }
+    console.error("Warning: SMS_PROVIDER=twilio is not implemented. Using mock in non-production.");
   }
   return new MockSmsProvider();
 }

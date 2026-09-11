@@ -12,6 +12,7 @@ import { getDb, schema } from "../src/lib/db";
 import { getEnv } from "../src/config/env";
 import { encryptPii, decryptPii } from "../src/lib/crypto";
 import { eq } from "drizzle-orm";
+import { pathToFileURL } from "node:url";
 
 async function main() {
   console.info("[KeyRotation] Initializing PII Key Rotation Job...");
@@ -19,10 +20,12 @@ async function main() {
   let env;
   try {
     env = getEnv();
-  } catch {
-    console.warn("[KeyRotation] Non-production environment detected, using simulated rotation.");
-    console.info("[KeyRotation] Verified AES-256-GCM cipher and dual-key decryption readiness.");
-    console.info("[KeyRotation] SUCCESS: Key rotation framework is fully functional.");
+  } catch (err) {
+    if (process.env.NODE_ENV === "production") {
+      console.error("[KeyRotation] FATAL: Invalid or missing environment configuration.", err);
+      process.exit(1);
+    }
+    console.warn("[KeyRotation] Non-production environment detected, skipping real rotation.");
     return;
   }
 
@@ -75,12 +78,15 @@ async function main() {
 
   console.info(`[KeyRotation] Successfully rotated ${rotatedCount} records.`);
   if (skippedCount > 0) {
-    console.warn(`[KeyRotation] Skipped ${skippedCount} records due to decryption errors.`);
+    console.error(`[KeyRotation] FATAL: Skipped ${skippedCount} records due to decryption errors.`);
+    process.exit(1);
   }
   console.info("[KeyRotation] Key rotation completed safely.");
 }
 
-main().catch((err) => {
-  console.error("[KeyRotation] FATAL:", err);
-  process.exit(1);
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((err) => {
+    console.error("[KeyRotation] FATAL:", err);
+    process.exit(1);
+  });
+}

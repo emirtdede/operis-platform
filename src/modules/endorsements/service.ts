@@ -282,6 +282,9 @@ export class EndorsementService {
         createdAt: inserted.createdAt,
       };
     } catch (err: unknown) {
+      if (process.env.NODE_ENV === "production") {
+        throw err;
+      }
       // In-memory fallback if DB fails or running under mock environment
       if (
         process.env.VITEST ||

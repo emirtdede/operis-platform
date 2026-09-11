@@ -45,6 +45,7 @@ export async function GET(req: Request) {
 
   try {
     const expiredCount = await ListingService.expireListingsJob();
+    const expiringSoonNotified = await ListingService.notifyExpiringListings();
     const outboxProcessed = await NotificationService.processOutboxBatch(50);
 
     return NextResponse.json(
@@ -52,6 +53,7 @@ export async function GET(req: Request) {
         success: true,
         executedAt: new Date().toISOString(),
         expiredListingsCount: expiredCount,
+        expiringSoonNotifiedCount: expiringSoonNotified,
         outboxProcessedCount: outboxProcessed,
       },
       { status: 200 }

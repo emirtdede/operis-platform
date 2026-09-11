@@ -48,20 +48,43 @@ export function UsersTableClient({ initialUsers, total }: UsersTableClientProps)
       return 0;
     });
 
-  const handleToggleSuspend = (targetUser: AdminUserItem) => {
-    const newStatus = targetUser.status === "ACTIVE" ? "SUSPENDED" : "ACTIVE";
-    startTransition(() => {
-      setUsers((prev) =>
-        prev.map((u) => (u.id === targetUser.id ? { ...u, status: newStatus } : u))
-      );
-      if (selectedUser?.id === targetUser.id) {
-        setSelectedUser((prev) => (prev ? { ...prev, status: newStatus } : null));
+  const handleToggleSuspend = async (targetUser: AdminUserItem) => {
+    const action = targetUser.status === "ACTIVE" ? "SUSPEND" : "ACTIVATE";
+    const newStatus = action === "SUSPEND" ? "SUSPENDED" : "ACTIVE";
+
+    try {
+      const res = await fetch("/api/admin/users/status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          targetUserId: targetUser.id,
+          action,
+          reason: `Admin UI: ${action === "SUSPEND" ? "Kullanıcı askıya alındı" : "Askı kaldırıldı"}`,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "İşlem başarısız oldu");
       }
-      setActionSuccess(
-        `Kullanıcı @${targetUser.handle} durumu '${newStatus === "SUSPENDED" ? "ASKIYA ALINDI" : "AKTİF"}' olarak güncellendi.`
-      );
-      setTimeout(() => setActionSuccess(null), 4000);
-    });
+
+      startTransition(() => {
+        setUsers((prev) =>
+          prev.map((u) => (u.id === targetUser.id ? { ...u, status: newStatus } : u))
+        );
+        if (selectedUser?.id === targetUser.id) {
+          setSelectedUser((prev) => (prev ? { ...prev, status: newStatus } : null));
+        }
+        setActionSuccess(
+          `Kullanıcı @${targetUser.handle} durumu '${newStatus === "SUSPENDED" ? "ASKIYA ALINDI" : "AKTİF"}' olarak güncellendi.`
+        );
+        setTimeout(() => setActionSuccess(null), 4000);
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Güncelleme başarısız oldu.";
+      setActionSuccess(`Hata: ${msg}`);
+      setTimeout(() => setActionSuccess(null), 5000);
+    }
   };
 
   const toggleSort = (field: "createdAt" | "email" | "displayName") => {

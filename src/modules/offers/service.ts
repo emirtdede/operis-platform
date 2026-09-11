@@ -26,6 +26,7 @@ export interface SentOfferDto {
     status: string;
     activeUntil: Date | null;
   };
+  engagementId?: string | null;
 }
 
 export interface ReceivedOfferDto {
@@ -184,7 +185,7 @@ export class OfferService {
       throw new Error("Listing is not currently active for offers");
     }
 
-    // Verify offeror email verification in production
+    // Verify offeror email and phone verification in production
     if (process.env.NODE_ENV === "production") {
       const userRows = await db
         .select({ emailVerified: schema.users.emailVerified })
@@ -195,6 +196,18 @@ export class OfferService {
       if (userRows[0] && !userRows[0].emailVerified) {
         throw new Error(
           "Teklif verebilmek için önce e-posta adresinizi doğrulamanız gerekmektedir."
+        );
+      }
+
+      const identityRows = await db
+        .select({ phoneVerifiedAt: schema.userPrivateIdentity.phoneVerifiedAt })
+        .from(schema.userPrivateIdentity)
+        .where(eq(schema.userPrivateIdentity.userId, offerorUserId))
+        .limit(1);
+
+      if (!identityRows[0]?.phoneVerifiedAt) {
+        throw new Error(
+          "Teklif verebilmek için önce cep telefonu numaranızı doğrulamanız gerekmektedir."
         );
       }
     }
@@ -273,12 +286,38 @@ export class OfferService {
     if (isListingUuid) {
       try {
         newOffer = await db.transaction(async (tx) => {
+          // Re-verify and row-lock listing row to prevent race against matching/expiration (B14)
+          let lQuery = tx
+            .select({
+              id: schema.listings.id,
+              status: schema.listings.status,
+              activeUntil: schema.listings.activeUntil,
+              activationSeq: schema.listings.activationSeq,
+              ownerUserId: schema.listings.ownerUserId,
+            })
+            .from(schema.listings)
+            .where(eq(schema.listings.id, listing.id));
+
+          if (typeof (lQuery as { for?: unknown }).for === "function") {
+            lQuery = (lQuery as { for: (mode: string) => typeof lQuery }).for("update");
+          }
+
+          const [lockedListing] = await lQuery.limit(1);
+          if (
+            !lockedListing ||
+            lockedListing.status !== "ACTIVE" ||
+            !lockedListing.activeUntil ||
+            lockedListing.activeUntil <= new Date()
+          ) {
+            throw new Error("Listing is not currently active for offers");
+          }
+
           const [insertedOffer] = await tx
             .insert(schema.offers)
             .values({
-              listingId: listing.id,
+              listingId: lockedListing.id,
               offerorUserId,
-              listingActivationSeq: listing.activationSeq,
+              listingActivationSeq: lockedListing.activationSeq,
               status: "PENDING",
               message: input.message,
               budgetCurrency: input.budgetCurrency ?? null,
@@ -577,13 +616,22 @@ export class OfferService {
       try {
         const db = getDb();
 
-        const offerRows = await db
-          .select()
-          .from(schema.offers)
-          .where(eq(schema.offers.id, offerId))
-          .limit(1);
+        const withdrawn = await db.transaction(async (tx) => {
+          let oQuery = tx
+            .select()
+            .from(schema.offers)
+            .where(eq(schema.offers.id, offerId));
 
-        if (offerRows.length > 0) {
+          if (typeof (oQuery as { for?: unknown }).for === "function") {
+            oQuery = (oQuery as { for: (mode: string) => typeof oQuery }).for("update");
+          }
+
+          const offerRows = await oQuery.limit(1);
+
+          if (offerRows.length === 0) {
+            throw new Error("Offer not found");
+          }
+
           const offer = offerRows[0]!;
 
           if (offer.offerorUserId !== offerorUserId) {
@@ -594,51 +642,57 @@ export class OfferService {
             throw new Error("Only pending offers can be withdrawn");
           }
 
-          const [withdrawn] = await db
+          const [withdrawnRecord] = await tx
             .update(schema.offers)
             .set({
               status: "WITHDRAWN",
               resolvedAt: new Date(),
               updatedAt: new Date(),
             })
-            .where(eq(schema.offers.id, offerId))
+            .where(and(eq(schema.offers.id, offerId), eq(schema.offers.status, "PENDING")))
             .returning();
 
-          if (withdrawn) {
-            try {
-              const [listingData] = await db
-                .select({
-                  ownerUserId: schema.listings.ownerUserId,
-                  title: schema.listings.title,
-                  locale: schema.profiles.locale,
-                })
-                .from(schema.listings)
-                .leftJoin(schema.profiles, eq(schema.listings.ownerUserId, schema.profiles.userId))
-                .where(eq(schema.listings.id, offer.listingId))
-                .limit(1);
-
-              if (listingData) {
-                const isEn = listingData.locale === "en";
-                await NotificationService.createNotification(
-                  listingData.ownerUserId,
-                  "OFFER_WITHDRAWN",
-                  "offer",
-                  offer.id,
-                  {
-                    title: isEn ? "Proposal Withdrawn" : "Teklif Geri Çekildi",
-                    message: isEn
-                      ? `A proposal on your project "${listingData.title}" was withdrawn.`
-                      : `"${listingData.title}" projenizdeki bir teklif geri çekildi.`,
-                    actionUrl: isEn ? "/en/dashboard/offers/received" : "/tr/panel/teklifler/gelen",
-                  }
-                );
-              }
-            } catch {
-              // non-blocking
-            }
+          if (!withdrawnRecord) {
+            throw new Error("Only pending offers can be withdrawn");
           }
 
-          return withdrawn;
+          return { withdrawn: withdrawnRecord, offer };
+        });
+
+        if (withdrawn?.withdrawn) {
+          try {
+            const [listingData] = await db
+              .select({
+                ownerUserId: schema.listings.ownerUserId,
+                title: schema.listings.title,
+                locale: schema.profiles.locale,
+              })
+              .from(schema.listings)
+              .leftJoin(schema.profiles, eq(schema.listings.ownerUserId, schema.profiles.userId))
+              .where(eq(schema.listings.id, withdrawn.offer.listingId))
+              .limit(1);
+
+            if (listingData) {
+              const isEn = listingData.locale === "en";
+              await NotificationService.createNotification(
+                listingData.ownerUserId,
+                "OFFER_WITHDRAWN",
+                "offer",
+                withdrawn.offer.id,
+                {
+                  title: isEn ? "Proposal Withdrawn" : "Teklif Geri Çekildi",
+                  message: isEn
+                    ? `A proposal on your project "${listingData.title}" was withdrawn.`
+                    : `"${listingData.title}" projenizdeki bir teklif geri çekildi.`,
+                  actionUrl: isEn ? "/en/dashboard/offers/received" : "/tr/panel/teklifler/gelen",
+                }
+              );
+            }
+          } catch {
+            // non-blocking
+          }
+
+          return withdrawn.withdrawn;
         }
       } catch (err) {
         if (process.env.NODE_ENV === "production") {
@@ -706,44 +760,58 @@ export class OfferService {
       try {
         const db = getDb();
 
-        const offerRows = await db
-          .select({
-            offer: schema.offers,
-            listing: schema.listings,
-          })
-          .from(schema.offers)
-          .innerJoin(schema.listings, eq(schema.offers.listingId, schema.listings.id))
-          .where(eq(schema.offers.id, input.offerId))
-          .limit(1);
+        const rejectedResult = await db.transaction(async (tx) => {
+          let oQuery = tx
+            .select({
+              offer: schema.offers,
+              listing: schema.listings,
+            })
+            .from(schema.offers)
+            .innerJoin(schema.listings, eq(schema.offers.listingId, schema.listings.id))
+            .where(eq(schema.offers.id, input.offerId));
 
-        const firstRow = offerRows[0];
-        if (!firstRow) {
-          throw new Error("Offer not found");
-        }
+          if (typeof (oQuery as { for?: unknown }).for === "function") {
+            oQuery = (oQuery as { for: (mode: string) => typeof oQuery }).for("update");
+          }
 
-        const { offer, listing } = firstRow;
+          const offerRows = await oQuery.limit(1);
 
-        if (listing.ownerUserId !== listingOwnerUserId) {
-          throw new Error("Unauthorized to reject offers for this listing");
-        }
+          const firstRow = offerRows[0];
+          if (!firstRow) {
+            throw new Error("Offer not found");
+          }
 
-        if (offer.status !== "PENDING") {
-          throw new Error("Only pending offers can be rejected");
-        }
+          const { offer, listing } = firstRow;
 
-        const [rejected] = await db
-          .update(schema.offers)
-          .set({
-            status: "REJECTED",
-            rejectionCode: input.rejectionCode ?? null,
-            rejectionNote: input.rejectionNote ?? null,
-            resolvedAt: new Date(),
-            updatedAt: new Date(),
-          })
-          .where(eq(schema.offers.id, input.offerId))
-          .returning();
+          if (listing.ownerUserId !== listingOwnerUserId) {
+            throw new Error("Unauthorized to reject offers for this listing");
+          }
 
-        if (rejected) {
+          if (offer.status !== "PENDING") {
+            throw new Error("Only pending offers can be rejected");
+          }
+
+          const [rejectedRecord] = await tx
+            .update(schema.offers)
+            .set({
+              status: "REJECTED",
+              rejectionCode: input.rejectionCode ?? null,
+              rejectionNote: input.rejectionNote ?? null,
+              resolvedAt: new Date(),
+              updatedAt: new Date(),
+            })
+            .where(and(eq(schema.offers.id, input.offerId), eq(schema.offers.status, "PENDING")))
+            .returning();
+
+          if (!rejectedRecord) {
+            throw new Error("Only pending offers can be rejected");
+          }
+
+          return { rejected: rejectedRecord, offer, listing };
+        });
+
+        if (rejectedResult?.rejected) {
+          const { rejected, offer, listing } = rejectedResult;
           try {
             const [offerorProfile] = await db
               .select({ locale: schema.profiles.locale })
@@ -770,7 +838,7 @@ export class OfferService {
           }
         }
 
-        return rejected;
+        return rejectedResult.rejected;
       } catch (err) {
         if (process.env.NODE_ENV === "production") {
           throw err;
@@ -835,9 +903,11 @@ export class OfferService {
             status: schema.listings.status,
             activeUntil: schema.listings.activeUntil,
           },
+          engagementId: schema.engagements.id,
         })
         .from(schema.offers)
         .innerJoin(schema.listings, eq(schema.offers.listingId, schema.listings.id))
+        .leftJoin(schema.engagements, eq(schema.offers.id, schema.engagements.acceptedOfferId))
         .where(eq(schema.offers.offerorUserId, offerorUserId))
         .orderBy(desc(schema.offers.createdAt));
 
@@ -855,7 +925,12 @@ export class OfferService {
     }
 
     // In-memory fallback
-    const rows = inMemorySentOffers.filter((o) => o.offer.offerorUserId === offerorUserId);
+    const rows = inMemorySentOffers
+      .filter((o) => o.offer.offerorUserId === offerorUserId)
+      .map((item) => ({
+        ...item,
+        engagementId: item.offer.status === "ACCEPTED" ? "eng-demo-101" : null,
+      }));
 
     if (!statusFilter || statusFilter === "all") return rows;
     return rows.filter((r) => r.offer.status.toLowerCase() === statusFilter.toLowerCase());
@@ -998,6 +1073,58 @@ export class OfferService {
       }
     }
 
+    const isUserUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(offerorUserId);
+    const dbKey = input.idempotencyKey ? `batch:offers:${offerorUserId}:${input.idempotencyKey}` : null;
+
+    if (dbKey && isUserUuid) {
+      try {
+        const db = getDb();
+        const existingKey = await db
+          .select()
+          .from(schema.idempotencyKeys)
+          .where(eq(schema.idempotencyKeys.key, dbKey))
+          .limit(1);
+
+        if (existingKey[0]) {
+          if (existingKey[0].responseJson) {
+            return existingKey[0].responseJson as BatchOfferResponse;
+          }
+          throw new Error(
+            isEn
+              ? "A batch submission with this idempotency key is currently processing."
+              : "Bu idempotency anahtarıyla bir toplu teklif işlemi şu anda yürütülüyor."
+          );
+        }
+
+        const now = new Date();
+        const expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+        await db.insert(schema.idempotencyKeys).values({
+          key: dbKey,
+          userId: offerorUserId,
+          action: "BATCH_SUBMIT_OFFERS",
+          responseJson: null,
+          createdAt: now,
+          expiresAt,
+        });
+      } catch (err: unknown) {
+        if (
+          err instanceof Error &&
+          (err.message.includes("currently processing") ||
+            err.message.includes("şu anda yürütülüyor"))
+        ) {
+          throw err;
+        }
+        if (err && typeof err === "object" && "code" in err && (err as { code: string }).code === "23505") {
+          throw new Error(
+            isEn
+              ? "A batch submission with this idempotency key is already in progress or completed."
+              : "Bu idempotency anahtarıyla bir toplu teklif işlemi zaten yürütülüyor veya tamamlandı.",
+            { cause: err }
+          );
+        }
+      }
+    }
+
     const batchId = crypto.randomUUID();
     const results: BatchOfferResultItem[] = [];
 
@@ -1086,6 +1213,18 @@ export class OfferService {
 
     if (input.idempotencyKey) {
       inMemoryBatchIdempotencyStore.set(`${offerorUserId}:${input.idempotencyKey}`, response);
+    }
+
+    if (dbKey && isUserUuid) {
+      try {
+        const db = getDb();
+        await db
+          .update(schema.idempotencyKeys)
+          .set({ responseJson: response })
+          .where(eq(schema.idempotencyKeys.key, dbKey));
+      } catch (err) {
+        console.error("Non-blocking idempotency update error:", err);
+      }
     }
 
     return response;
@@ -1200,63 +1339,110 @@ export class OfferService {
   }
 
   /**
-   * Saves or updates a quick offer template with database persistence.
+   * Saves or updates a quick offer template with database persistence and strict ownership validation.
    */
   static async saveOfferTemplateAsync(userId: string, rawInput: OfferTemplateInput): Promise<OfferTemplateDto> {
-    const template = OfferService.saveOfferTemplate(userId, rawInput);
     const isUserUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
+    const inputId = rawInput.id;
+    const isInputUuid =
+      typeof inputId === "string" &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(inputId);
+
+    // If templateId is a starter id like "default-1", generate a new UUID for persistence
+    const templateId = isInputUuid ? inputId : crypto.randomUUID();
+
     if (isUserUuid) {
+      const db = getDb();
+
+      if (isInputUuid) {
+        // Verify ownership if updating an existing UUID template (B10)
+        const existing = await db
+          .select({ id: schema.offerTemplates.id, userId: schema.offerTemplates.userId })
+          .from(schema.offerTemplates)
+          .where(eq(schema.offerTemplates.id, inputId))
+          .limit(1);
+
+        if (existing[0] && existing[0].userId !== userId) {
+          throw new Error("You do not have permission to modify this template.");
+        }
+      }
+
       try {
-        const db = getDb();
         await db
           .insert(schema.offerTemplates)
           .values({
-            id: template.id,
+            id: templateId,
             userId,
-            name: template.name,
-            message: template.message,
-            budgetCurrency: template.budgetCurrency,
-            budgetMin: template.budgetMin,
-            budgetMax: template.budgetMax,
-            estimatedDurationValue: template.estimatedDurationValue,
-            estimatedDurationUnit: template.estimatedDurationUnit,
+            name: rawInput.name,
+            message: rawInput.message,
+            budgetCurrency: rawInput.budgetCurrency ?? null,
+            budgetMin: rawInput.budgetMin ?? null,
+            budgetMax: rawInput.budgetMax ?? null,
+            estimatedDurationValue: rawInput.estimatedDurationValue ?? null,
+            estimatedDurationUnit: rawInput.estimatedDurationUnit ?? null,
           })
           .onConflictDoUpdate({
             target: schema.offerTemplates.id,
             set: {
-              name: template.name,
-              message: template.message,
-              budgetCurrency: template.budgetCurrency,
-              budgetMin: template.budgetMin,
-              budgetMax: template.budgetMax,
-              estimatedDurationValue: template.estimatedDurationValue,
-              estimatedDurationUnit: template.estimatedDurationUnit,
+              name: rawInput.name,
+              message: rawInput.message,
+              budgetCurrency: rawInput.budgetCurrency ?? null,
+              budgetMin: rawInput.budgetMin ?? null,
+              budgetMax: rawInput.budgetMax ?? null,
+              estimatedDurationValue: rawInput.estimatedDurationValue ?? null,
+              estimatedDurationUnit: rawInput.estimatedDurationUnit ?? null,
               updatedAt: new Date(),
             },
+            where: eq(schema.offerTemplates.userId, userId),
           });
-      } catch {
-        // in-memory fallback already set
+      } catch (dbErr) {
+        if (process.env.NODE_ENV === "production") {
+          throw new Error(
+            dbErr instanceof Error ? dbErr.message : "Failed to persist template to database.",
+            { cause: dbErr }
+          );
+        }
       }
     }
+
+    const template = OfferService.saveOfferTemplate(userId, { ...rawInput, id: templateId });
     return template;
   }
 
   /**
-   * Deletes a quick offer template from the database and memory.
+   * Deletes a quick offer template from the database and memory with accurate result representation.
    */
   static async deleteOfferTemplateAsync(userId: string, templateId: string): Promise<boolean> {
-    const deleted = OfferService.deleteOfferTemplate(userId, templateId);
     const isUserUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
-    if (isUserUuid) {
+    const isTemplateUuid =
+      typeof templateId === "string" &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(templateId);
+
+    let dbDeleted = false;
+    if (isUserUuid && isTemplateUuid) {
       try {
         const db = getDb();
-        await db
+        const deletedRows = await db
           .delete(schema.offerTemplates)
-          .where(and(eq(schema.offerTemplates.id, templateId), eq(schema.offerTemplates.userId, userId)));
-      } catch {
-        // in-memory fallback already set
+          .where(
+            and(
+              eq(schema.offerTemplates.id, templateId),
+              eq(schema.offerTemplates.userId, userId)
+            )
+          )
+          .returning({ id: schema.offerTemplates.id });
+        dbDeleted = deletedRows.length > 0;
+      } catch (dbErr) {
+        if (process.env.NODE_ENV === "production") {
+          throw new Error(
+            dbErr instanceof Error ? dbErr.message : "Failed to delete template from database.",
+            { cause: dbErr }
+          );
+        }
       }
     }
-    return deleted;
+
+    const memDeleted = OfferService.deleteOfferTemplate(userId, templateId);
+    return dbDeleted || memDeleted;
   }
 }

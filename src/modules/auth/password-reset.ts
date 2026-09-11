@@ -2,12 +2,17 @@ import crypto from "node:crypto";
 import { getEnv } from "@/src/config/env";
 
 export interface PasswordResetPayload {
+  type: "PASSWORD_RESET";
   email: string;
   pwh: string;
   expiresAt: number;
 }
 
 const TOKEN_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
+
+function getPasswordResetKey(secret: string): Buffer {
+  return crypto.createHmac("sha256", secret).update("operis_password_reset_token_v1").digest();
+}
 
 /**
  * Derives a secure 16-character fingerprint from a password hash.
@@ -28,13 +33,15 @@ export function createPasswordResetToken(email: string, currentPasswordHash: str
   const pwh = getPasswordHashFingerprint(currentPasswordHash);
 
   const payload: PasswordResetPayload = {
+    type: "PASSWORD_RESET",
     email: email.toLowerCase().trim(),
     pwh,
     expiresAt,
   };
 
   const payloadB64 = Buffer.from(JSON.stringify(payload)).toString("base64url");
-  const signature = crypto.createHmac("sha256", env.AUTH_SECRET).update(payloadB64).digest("hex");
+  const signingKey = getPasswordResetKey(env.AUTH_SECRET);
+  const signature = crypto.createHmac("sha256", signingKey).update(payloadB64).digest("hex");
 
   return `${payloadB64}.${signature}`;
 }
@@ -51,8 +58,9 @@ export function verifyPasswordResetToken(token: string): PasswordResetPayload | 
     if (!payloadB64 || !signature) return null;
 
     const env = getEnv();
+    const signingKey = getPasswordResetKey(env.AUTH_SECRET);
     const expectedSignature = crypto
-      .createHmac("sha256", env.AUTH_SECRET)
+      .createHmac("sha256", signingKey)
       .update(payloadB64)
       .digest("hex");
 
@@ -66,7 +74,12 @@ export function verifyPasswordResetToken(token: string): PasswordResetPayload | 
     const payloadJson = Buffer.from(payloadB64, "base64url").toString("utf-8");
     const payload = JSON.parse(payloadJson) as PasswordResetPayload;
 
-    if (!payload.email || !payload.expiresAt || !payload.pwh) {
+    if (
+      payload.type !== "PASSWORD_RESET" ||
+      !payload.email ||
+      !payload.expiresAt ||
+      !payload.pwh
+    ) {
       return null;
     }
 

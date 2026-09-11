@@ -111,10 +111,13 @@ function createEmailProvider(): TransactionalEmailProvider {
   if (providerType === "resend") {
     return new ResendEmailProvider();
   }
-  if (providerType === "smtp" && process.env.NODE_ENV === "production") {
-    console.error(
-      "Critical: EMAIL_PROVIDER=smtp is configured but SMTP direct transport is not initialized. Using fallback provider."
-    );
+  if (providerType === "smtp") {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error(
+        "EMAIL_PROVIDER=smtp is configured but SMTP direct transport is not implemented in production."
+      );
+    }
+    console.error("Warning: EMAIL_PROVIDER=smtp is not implemented. Using mock in non-production.");
   }
   return new MockEmailProvider();
 }

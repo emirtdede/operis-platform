@@ -2,8 +2,8 @@ import { z } from "zod";
 
 const hexKeySchema = z
   .string()
-  .min(64, "Key must be at least 64 hex characters (32 bytes)")
-  .regex(/^[0-9a-fA-F]+$/, "Key must be valid hexadecimal");
+  .length(64, "Key must be exactly 64 hex characters (32 bytes)")
+  .regex(/^[0-9a-fA-F]{64}$/, "Key must be valid 64-character hexadecimal");
 
 export const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),

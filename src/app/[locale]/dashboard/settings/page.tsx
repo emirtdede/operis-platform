@@ -47,6 +47,30 @@ export default async function DashboardSettingsPage({
 
   const profile = await ProfileService.getProfileByUserId(session.userId);
 
+  let emailVerified = false;
+  let phoneVerified = false;
+
+  try {
+    const { getDb, schema } = await import("@/src/lib/db");
+    const { eq } = await import("drizzle-orm");
+    const db = getDb();
+    const [user] = await db
+      .select({ emailVerified: schema.users.emailVerified })
+      .from(schema.users)
+      .where(eq(schema.users.id, session.userId))
+      .limit(1);
+    if (user) emailVerified = user.emailVerified;
+
+    const [identity] = await db
+      .select({ phoneVerifiedAt: schema.userPrivateIdentity.phoneVerifiedAt })
+      .from(schema.userPrivateIdentity)
+      .where(eq(schema.userPrivateIdentity.userId, session.userId))
+      .limit(1);
+    if (identity) phoneVerified = Boolean(identity.phoneVerifiedAt);
+  } catch {
+    // Non-blocking fallback to session state
+  }
+
   const initialProfile = {
     displayName: profile?.displayName || "Demir Yıldız",
     handle: profile?.handle || "demir-yildiz",
@@ -54,6 +78,9 @@ export default async function DashboardSettingsPage({
     avatarUrl: profile?.avatarUrl || "",
     showLocation: profile?.showLocation ?? true,
     revealPhoneAfterMatch: profile?.revealPhoneAfterMatch ?? false,
+    emailVerified,
+    phoneVerified,
+    email: session.email || "",
     links: (profile?.links || []).map((l) => ({
       type: l.type,
       label: l.label,

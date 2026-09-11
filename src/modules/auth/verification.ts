@@ -20,6 +20,10 @@ interface StoredOtpRecord {
 
 const otpStore = new Map<string, StoredOtpRecord>();
 
+function getEmailVerifyKey(secret: string): Buffer {
+  return crypto.createHmac("sha256", secret).update("operis_email_verify_token_v1").digest();
+}
+
 /**
  * Creates a cryptographically signed, stateless email verification token.
  */
@@ -36,7 +40,8 @@ export function createEmailVerificationToken(userId: string, email: string): str
   };
 
   const payloadB64 = Buffer.from(JSON.stringify(payload)).toString("base64url");
-  const signature = crypto.createHmac("sha256", env.AUTH_SECRET).update(payloadB64).digest("hex");
+  const signingKey = getEmailVerifyKey(env.AUTH_SECRET);
+  const signature = crypto.createHmac("sha256", signingKey).update(payloadB64).digest("hex");
 
   return `${payloadB64}.${signature}`;
 }
@@ -55,8 +60,9 @@ export function verifyEmailVerificationToken(
     if (!payloadB64 || !signature) return null;
 
     const env = getEnv();
+    const signingKey = getEmailVerifyKey(env.AUTH_SECRET);
     const expectedSignature = crypto
-      .createHmac("sha256", env.AUTH_SECRET)
+      .createHmac("sha256", signingKey)
       .update(payloadB64)
       .digest("hex");
 
@@ -107,9 +113,17 @@ export function storePhoneOtp(userId: string, code: string): void {
 }
 
 /**
- * Verifies a 6-digit phone OTP code for a user with brute-force protection (max 5 attempts).
+ * Explicitly consumes a phone OTP after successful verification and database persistence.
  */
-export function verifyPhoneOtp(userId: string, code: string): boolean {
+export function consumePhoneOtp(userId: string): void {
+  otpStore.delete(userId);
+}
+
+/**
+ * Verifies a 6-digit phone OTP code for a user with brute-force protection (max 5 attempts).
+ * By default does not consume the code immediately so that database transactions can complete.
+ */
+export function verifyPhoneOtp(userId: string, code: string, autoConsume = false): boolean {
   const allowDemoOtp =
     (process.env.ALLOW_DEMO_CREDENTIALS === "true" ||
       process.env.ENABLE_DEMO_LOGIN === "true" ||
@@ -118,7 +132,7 @@ export function verifyPhoneOtp(userId: string, code: string): boolean {
     process.env.NODE_ENV !== "production";
 
   if (allowDemoOtp && code.trim() === "123456") {
-    otpStore.delete(userId);
+    if (autoConsume) otpStore.delete(userId);
     return true;
   }
 
@@ -143,7 +157,9 @@ export function verifyPhoneOtp(userId: string, code: string): boolean {
   const expectedBuf = Buffer.from(record.codeHash, "hex");
 
   if (inputBuf.length === expectedBuf.length && crypto.timingSafeEqual(inputBuf, expectedBuf)) {
-    otpStore.delete(userId);
+    if (autoConsume) {
+      otpStore.delete(userId);
+    }
     return true;
   }
 

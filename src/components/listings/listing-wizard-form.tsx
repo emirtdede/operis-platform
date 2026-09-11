@@ -30,11 +30,13 @@ export interface CategoryItem {
 export interface ListingWizardFormProps {
   categories: CategoryItem[];
   locale: string;
+  userId?: string;
 }
 
-export function ListingWizardForm({ categories, locale }: ListingWizardFormProps) {
+export function ListingWizardForm({ categories, locale, userId }: ListingWizardFormProps) {
   const isTr = locale === "tr";
   const router = useRouter();
+  const draftKey = userId ? `operis_listing_draft_${userId}` : "operis_listing_draft";
 
   // Modern 3-Stage Stepper
   const [step, setStep] = useState(1);
@@ -67,7 +69,10 @@ export function ListingWizardForm({ categories, locale }: ListingWizardFormProps
   // LocalStorage Draft Persistence
   useEffect(() => {
     try {
-      const saved = localStorage.getItem("operis_listing_draft");
+      let saved = localStorage.getItem(draftKey);
+      if (!saved && !userId) {
+        saved = localStorage.getItem("operis_listing_draft");
+      }
       if (saved) {
         const d = JSON.parse(saved);
         if (d.categoryId) setCategoryId(d.categoryId);
@@ -91,13 +96,13 @@ export function ListingWizardForm({ categories, locale }: ListingWizardFormProps
     } catch {
       // ignore
     }
-  }, []);
+  }, [draftKey, userId]);
 
   useEffect(() => {
     try {
       if (title || summary || scope) {
         localStorage.setItem(
-          "operis_listing_draft",
+          draftKey,
           JSON.stringify({
             categoryId,
             title,
@@ -311,6 +316,7 @@ export function ListingWizardForm({ categories, locale }: ListingWizardFormProps
       }
 
       try {
+        localStorage.removeItem(draftKey);
         localStorage.removeItem("operis_listing_draft");
       } catch {
         // ignore

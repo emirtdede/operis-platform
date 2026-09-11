@@ -6,12 +6,17 @@ export const SESSION_COOKIE_NAME = "fp_session";
 const SESSION_EXPIRY_DAYS = 7;
 
 export interface SessionPayload {
+  type: "SESSION";
   userId: string;
   email: string;
   role: string;
   status: string;
   createdAt: number;
   expiresAt: number;
+}
+
+function getSessionKey(secret: string): Buffer {
+  return crypto.createHmac("sha256", secret).update("operis_session_token_v1").digest();
 }
 
 /**
@@ -28,6 +33,7 @@ export function createSessionToken(user: {
   const expiresAt = now + SESSION_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
 
   const payload: SessionPayload = {
+    type: "SESSION",
     userId: user.id,
     email: user.email,
     role: user.role,
@@ -37,13 +43,15 @@ export function createSessionToken(user: {
   };
 
   const payloadB64 = Buffer.from(JSON.stringify(payload)).toString("base64url");
-  const signature = crypto.createHmac("sha256", env.AUTH_SECRET).update(payloadB64).digest("hex");
+  const signingKey = getSessionKey(env.AUTH_SECRET);
+  const signature = crypto.createHmac("sha256", signingKey).update(payloadB64).digest("hex");
 
   return `${payloadB64}.${signature}`;
 }
 
 /**
  * Verifies a signed session token and returns the payload if valid and not expired.
+ * Strictly verifies token type === "SESSION" and dedicated derived signing key.
  */
 export function verifySessionToken(token: string): SessionPayload | null {
   try {
@@ -51,22 +59,28 @@ export function verifySessionToken(token: string): SessionPayload | null {
     if (parts.length !== 2) return null;
 
     const [payloadB64, signature] = parts;
-    const env = getEnv();
+    if (!payloadB64 || !signature) return null;
 
+    const env = getEnv();
+    const signingKey = getSessionKey(env.AUTH_SECRET);
     const expectedSignature = crypto
-      .createHmac("sha256", env.AUTH_SECRET)
-      .update(payloadB64!)
+      .createHmac("sha256", signingKey)
+      .update(payloadB64)
       .digest("hex");
 
-    const sigBuf = Buffer.from(signature!, "hex");
+    const sigBuf = Buffer.from(signature, "hex");
     const expectedBuf = Buffer.from(expectedSignature, "hex");
     if (sigBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(sigBuf, expectedBuf)) {
       return null;
     }
 
     const payload: SessionPayload = JSON.parse(
-      Buffer.from(payloadB64!, "base64url").toString("utf8")
+      Buffer.from(payloadB64, "base64url").toString("utf8")
     );
+
+    if (payload.type !== "SESSION" || !payload.userId || !payload.expiresAt) {
+      return null;
+    }
 
     if (Date.now() > payload.expiresAt) {
       return null;
@@ -96,7 +110,11 @@ export async function getVerifiedSession(): Promise<SessionPayload | null> {
     const { eq } = await import("drizzle-orm");
     const db = getDb();
     const userRows = await db
-      .select({ status: schema.users.status, role: schema.users.role })
+      .select({
+        status: schema.users.status,
+        role: schema.users.role,
+        updatedAt: schema.users.updatedAt,
+      })
       .from(schema.users)
       .where(eq(schema.users.id, session.userId))
       .limit(1);
@@ -119,6 +137,14 @@ export async function getVerifiedSession(): Promise<SessionPayload | null> {
 
     const dbUser = userRows[0]!;
     if (dbUser.status !== "ACTIVE") return null;
+
+    // Invalidate session if credentials or status updated after token was created (B03)
+    if (dbUser.updatedAt) {
+      const userUpdatedTime = new Date(dbUser.updatedAt).getTime();
+      if (session.createdAt < userUpdatedTime - 2000) {
+        return null;
+      }
+    }
 
     return {
       ...session,

@@ -25,6 +25,7 @@ export function ListingsTableClient({ initialListings, total: _total }: Listings
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const [modifyingListing, setModifyingListing] = useState<AdminListingItem | null>(null);
   const [moderationReason, setModerationReason] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const filtered = listings.filter((l) => {
     if (statusFilter !== "ALL" && l.status !== statusFilter) return false;
@@ -40,21 +41,46 @@ export function ListingsTableClient({ initialListings, total: _total }: Listings
     return true;
   });
 
-  const handleApplyModeration = () => {
-    if (!modifyingListing || !moderationReason.trim()) return;
+  const handleApplyModeration = async () => {
+    if (!modifyingListing || !moderationReason.trim() || isSubmitting) return;
 
-    const newStatus = modifyingListing.status === "ACTIVE" ? "HIDDEN_MODERATION" : "ACTIVE";
+    const action = modifyingListing.status === "ACTIVE" ? "HIDE" : "UNHIDE";
+    const newStatus = action === "HIDE" ? "HIDDEN_MODERATION" : "ACTIVE";
+    setIsSubmitting(true);
 
-    setListings((prev) =>
-      prev.map((l) => (l.id === modifyingListing.id ? { ...l, status: newStatus } : l))
-    );
+    try {
+      const res = await fetch("/api/admin/listings/status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          listingId: modifyingListing.id,
+          action,
+          reason: moderationReason.trim(),
+        }),
+      });
 
-    setActionSuccess(
-      `'${modifyingListing.title}' ilanı '${newStatus === "HIDDEN_MODERATION" ? "YAYINDAN KALDIRILDI" : "AKTİF"}' olarak işaretlendi.`
-    );
-    setModifyingListing(null);
-    setModerationReason("");
-    setTimeout(() => setActionSuccess(null), 4000);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "İşlem başarısız oldu");
+      }
+
+      setListings((prev) =>
+        prev.map((l) => (l.id === modifyingListing.id ? { ...l, status: newStatus } : l))
+      );
+
+      setActionSuccess(
+        `'${modifyingListing.title}' ilanı '${newStatus === "HIDDEN_MODERATION" ? "YAYINDAN KALDIRILDI" : "AKTİF"}' olarak işaretlendi.`
+      );
+      setModifyingListing(null);
+      setModerationReason("");
+      setTimeout(() => setActionSuccess(null), 4000);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Güncelleme başarısız oldu.";
+      setActionSuccess(`Hata: ${msg}`);
+      setTimeout(() => setActionSuccess(null), 5000);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -251,10 +277,10 @@ export function ListingsTableClient({ initialListings, total: _total }: Listings
               <button
                 type="button"
                 onClick={handleApplyModeration}
-                disabled={!moderationReason.trim()}
+                disabled={!moderationReason.trim() || isSubmitting}
                 className="px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-50 text-xs font-bold text-white transition-colors"
               >
-                Aksiyonu Onayla ve İşle
+                {isSubmitting ? "İşleniyor..." : "Aksiyonu Onayla ve İşle"}
               </button>
             </div>
           </div>
