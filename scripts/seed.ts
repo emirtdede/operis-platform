@@ -174,6 +174,14 @@ export async function runSeed(customConnectionString?: string) {
     }
     console.info("Categories and translations seeded successfully!");
 
+    const withDemo = process.argv.includes("--demo") || process.env.SEED_DEMO_DATA === "true";
+    if (!withDemo) {
+      console.info(
+        "Official taxonomy (10 sectors, 60 categories) verified & synced. Skipping demo data (mock users, listings, offers) for production readiness. (Use --demo to include mock data)."
+      );
+      return;
+    }
+
     // 2. Users, Profiles, and Private Identities
     console.info(`2. Seeding ${SEED_USERS.length} demo users & profiles...`);
     for (const u of SEED_USERS) {
