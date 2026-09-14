@@ -13,10 +13,12 @@ export async function generateMetadata({
   const { locale } = await params;
   const isTr = locale === "tr";
 
-  const title = isTr ? "Teknoloji Alanları & Kategori Keşfi" : "Explore Tech Domains & Categories";
+  const title = isTr
+    ? "Freelance Sektörler & Uzmanlık Kategorileri | Operis"
+    : "Freelance Sectors & Expertise Categories | Operis";
   const description = isTr
-    ? "Yazılım, bulut, mobil, veri ve yapay zeka alanlarındaki kategorileri keşfedin, takip edin ve doğrudan projelere ulaşın."
-    : "Discover and follow categories across software engineering, cloud, mobile, and AI to customize your direct project feed.";
+    ? "Yazılım, tasarım, pazarlama, yapay zeka, video, finans ve hukuk alanlarındaki kategorileri keşfedin, takip edin ve doğrudan projelere ulaşın."
+    : "Discover and follow categories across software engineering, design, marketing, AI, video, finance, and legal to customize your direct project feed.";
 
   return {
     title,
@@ -120,12 +122,12 @@ export default async function CategoriesPage({ params }: { params: Promise<{ loc
       {/* Header */}
       <header className="border-b border-[var(--color-border-subtle)] pb-8 space-y-3">
         <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-[var(--color-text-primary)]">
-          {isTr ? "Teknoloji Kategorileri" : "Technology Categories"}
+          {isTr ? "Sektörler ve Uzmanlık Kategorileri" : "Sectors & Expertise Categories"}
         </h1>
         <p className="text-sm sm:text-base text-[var(--color-text-secondary)] max-w-2xl leading-relaxed">
           {isTr
-            ? "İlgi duyduğunuz alanları takip ederek proje akışınızı kişiselleştirin. Takip ettiğiniz kategoriler gizlidir ve profilinizde asla görünmez."
-            : "Follow your areas of expertise to customize your direct project feed. Followed categories are strictly private."}
+            ? "Yazılım, tasarım, pazarlama, yapay zeka, finans ve hukuk gibi 10 ana sektördeki kategorileri takip ederek proje akışınızı kişiselleştirin. Takip tercihleriniz tamamen gizlidir."
+            : "Follow categories across 10 major industry sectors to customize your direct project feed. Your follow choices are strictly private."}
         </p>
       </header>
 

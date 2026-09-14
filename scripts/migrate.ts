@@ -181,6 +181,36 @@ export async function migrateDatabase(options: MigrateDatabaseOptions): Promise<
       await client.query(`SET search_path TO "${targetSchema}", public;`);
     }
 
+    // Ensure standard compatibility roles (anon, authenticated, service_role) exist for Postgres environments (CI / local Docker / non-Supabase)
+    await client.query(`
+      DO $$
+      BEGIN
+        BEGIN
+          IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+            CREATE ROLE anon NOLOGIN;
+          END IF;
+        EXCEPTION WHEN duplicate_object OR insufficient_privilege THEN
+          NULL;
+        END;
+
+        BEGIN
+          IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+            CREATE ROLE authenticated NOLOGIN;
+          END IF;
+        EXCEPTION WHEN duplicate_object OR insufficient_privilege THEN
+          NULL;
+        END;
+
+        BEGIN
+          IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
+            CREATE ROLE service_role NOLOGIN;
+          END IF;
+        EXCEPTION WHEN duplicate_object OR insufficient_privilege THEN
+          NULL;
+        END;
+      END $$;
+    `);
+
     const history = await inspectMigrationHistory(client, targetSchema);
     const appliedTimestamps = history.appliedTimestamps;
     const appliedHashes = history.appliedHashes;

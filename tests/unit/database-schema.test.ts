@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { SEED_CATEGORIES } from "@/db/seeds/categories";
+import { SEED_CATEGORIES, SEED_SECTORS } from "@/db/seeds/categories";
 import * as schema from "@/db/schema";
 import { getTableConfig } from "drizzle-orm/pg-core";
 import fs from "node:fs";
@@ -7,15 +7,20 @@ import path from "node:path";
 
 describe("Database Foundation & Schema Invariants", () => {
   describe("Seed Taxonomy Validation", () => {
-    it("contains exactly 20 official technology categories", () => {
-      expect(SEED_CATEGORIES.length).toBe(20);
+    it("contains 10 official sectors and 60 categories", () => {
+      expect(SEED_SECTORS.length).toBe(10);
+      expect(SEED_CATEGORIES.length).toBe(60);
     });
 
-    it("ensures each category has unique keys and valid TR and EN translations", () => {
+    it("ensures each category has unique keys, valid parent sector and TR/EN translations", () => {
+      const sectorKeys = new Set(SEED_SECTORS.map((s) => s.key));
       const keys = new Set<string>();
+
       for (const cat of SEED_CATEGORIES) {
         expect(keys.has(cat.key)).toBe(false);
         keys.add(cat.key);
+
+        expect(sectorKeys.has(cat.sectorKey)).toBe(true);
 
         expect(cat.translations.tr.name).toBeDefined();
         expect(cat.translations.tr.description).toBeDefined();

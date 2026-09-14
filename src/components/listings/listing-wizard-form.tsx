@@ -27,12 +27,14 @@ import { DraftRecoveryBar } from "../ui/draft-recovery-bar";
 import { ListingCard } from "./listing-card";
 import { getLocalizedListingPath } from "@/src/lib/i18n/routes";
 import type { ListingWizardInput } from "@/src/modules/listings/wizard/schema";
+import { SEED_SECTORS } from "@/db/seeds/categories";
 
 export interface CategoryItem {
   id: string;
   key: string;
   slug: string;
   name: string;
+  sectorKey?: string;
 }
 
 export interface ListingWizardFormProps {
@@ -620,10 +622,18 @@ export function ListingWizardForm({ categories, locale, userId }: ListingWizardF
               <Select
                 value={categoryId}
                 onChange={(e) => setCategoryId(e.target.value)}
-                options={categories.map((c) => ({
-                  value: c.id,
-                  label: c.name,
-                }))}
+                options={categories.map((c) => {
+                  const sector = SEED_SECTORS.find((s) => s.key === c.sectorKey);
+                  const sectorName = sector
+                    ? isTr
+                      ? sector.translations.tr.name
+                      : sector.translations.en.name
+                    : "";
+                  return {
+                    value: c.id,
+                    label: sectorName ? `${sectorName} › ${c.name}` : c.name,
+                  };
+                })}
               />
               {selectedCategory && (
                 <div className="text-[11px] text-blue-400 flex items-center gap-1.5 pt-0.5">

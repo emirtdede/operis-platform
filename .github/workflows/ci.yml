@@ -78,8 +78,11 @@ jobs:
       - name: 3. Zero-Emoji Compliance Audit
         run: pnpm audit:emoji
 
-      - name: 4. Dual-Language (TR/EN) Parity Audit
+      - name: Dual-Language (TR/EN) Parity Audit
         run: pnpm audit:i18n
+
+      - name: Credential Leak & Secret Scanning Audit
+        run: pnpm audit:secrets
 
       - name: 5. Database Migrations Validation
         run: pnpm db:migrate

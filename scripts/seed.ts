@@ -11,7 +11,7 @@ import pg from "pg";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { and, eq } from "drizzle-orm";
 import * as schema from "@/db/schema";
-import { SEED_CATEGORIES } from "@/db/seeds/categories";
+import { SEED_CATEGORIES, SEED_SECTORS } from "@/db/seeds/categories";
 import { SEED_USERS } from "@/db/seeds/users";
 import { SEED_LISTINGS } from "@/db/seeds/listings";
 import { SEED_OFFERS } from "@/db/seeds/offers";
@@ -37,11 +37,79 @@ export async function runSeed(customConnectionString?: string) {
   const db = drizzle(pool, { schema });
 
   try {
-    // 1. Categories & Translations
-    console.info(`1. Seeding ${SEED_CATEGORIES.length} official technology categories...`);
+    // 1. Sectors & Translations
+    console.info(`1. Seeding ${SEED_SECTORS.length} official industry sectors...`);
+    const sectorMap = new Map<string, string>(); // key -> id
+
+    for (const sec of SEED_SECTORS) {
+      const existing = await db
+        .select()
+        .from(schema.categories)
+        .where(eq(schema.categories.key, sec.key))
+        .limit(1);
+
+      let sectorId: string;
+      if (existing.length === 0) {
+        const [inserted] = await db
+          .insert(schema.categories)
+          .values({
+            key: sec.key,
+            sortOrder: sec.sortOrder,
+            parentId: null,
+            isActive: true,
+          })
+          .returning({ id: schema.categories.id });
+        sectorId = inserted!.id;
+      } else {
+        sectorId = existing[0]!.id;
+        await db
+          .update(schema.categories)
+          .set({ sortOrder: sec.sortOrder, parentId: null, isActive: true })
+          .where(eq(schema.categories.id, sectorId));
+      }
+
+      sectorMap.set(sec.key, sectorId);
+
+      for (const locale of ["tr", "en"] as const) {
+        const trans = sec.translations[locale];
+        const existingTrans = await db
+          .select()
+          .from(schema.categoryTranslations)
+          .where(
+            and(
+              eq(schema.categoryTranslations.categoryId, sectorId),
+              eq(schema.categoryTranslations.locale, locale)
+            )
+          )
+          .limit(1);
+
+        if (existingTrans.length === 0) {
+          await db.insert(schema.categoryTranslations).values({
+            categoryId: sectorId,
+            locale,
+            name: trans.name,
+            description: trans.description,
+          });
+        } else {
+          await db
+            .update(schema.categoryTranslations)
+            .set({ name: trans.name, description: trans.description })
+            .where(
+              and(
+                eq(schema.categoryTranslations.categoryId, sectorId),
+                eq(schema.categoryTranslations.locale, locale)
+              )
+            );
+        }
+      }
+    }
+
+    // 2. Categories & Translations
+    console.info(`2. Seeding ${SEED_CATEGORIES.length} official categories under sectors...`);
     const categoryMap = new Map<string, string>(); // key -> id
 
     for (const cat of SEED_CATEGORIES) {
+      const parentId = sectorMap.get(cat.sectorKey) || null;
       const existing = await db
         .select()
         .from(schema.categories)
@@ -56,6 +124,7 @@ export async function runSeed(customConnectionString?: string) {
           .values({
             key: cat.key,
             sortOrder: cat.sortOrder,
+            parentId,
             isActive: true,
           })
           .returning({ id: schema.categories.id });
@@ -64,7 +133,7 @@ export async function runSeed(customConnectionString?: string) {
         categoryId = existing[0]!.id;
         await db
           .update(schema.categories)
-          .set({ sortOrder: cat.sortOrder, isActive: true })
+          .set({ sortOrder: cat.sortOrder, parentId, isActive: true })
           .where(eq(schema.categories.id, categoryId));
       }
 

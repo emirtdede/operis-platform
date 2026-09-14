@@ -36,7 +36,7 @@
 - **Sonuç:** 39 test dosyası, 5.298 test başarılı (0 hata).
 
 ### D. Sürüm 18 Özel Denetim Testleri
-- **Komut:** `$env:TEST_DATABASE_URL = "postgresql://ozlem_user:ozlem_secure_pass_2026@localhost:5432/operis_test_ci"; npx vitest run tests/integration/export-v18-audit.test.ts --config vitest.integration.config.ts`
+- **Komut:** `$env:TEST_DATABASE_URL = "postgresql://operis_ci:operis_ci_password@localhost:5432/operis_test_ci"; npx vitest run tests/integration/export-v18-audit.test.ts --config vitest.integration.config.ts`
 - **Çıkış Kodu:** `0`
 - **Sonuç:** 14 testin 14'ü de başarılı:
   1. `B25-ENTRY: fails closed when TEST_DATABASE_URL is missing or empty at config load` (PASSED)

@@ -183,9 +183,9 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
 
-      {/* 1. Expansive Hero Section */}
-      <section className="relative flex flex-col justify-center items-center w-full px-4 sm:px-6 lg:px-8 text-center py-8 sm:py-16 snap-start scroll-mt-16">
-        <div className="mx-auto max-w-6xl w-full space-y-8 sm:space-y-10">
+      {/* 1. Expansive Hero Section (Full Viewport Height & Centered) */}
+      <section className="relative flex flex-col justify-center items-center w-full min-h-[calc(100dvh-4rem)] px-4 sm:px-6 lg:px-8 text-center py-10 sm:py-16 snap-start">
+        <div className="mx-auto max-w-6xl w-full space-y-8 sm:space-y-10 my-auto">
           {/* Display Typography with Masked Gradients */}
           <div className="space-y-4 sm:space-y-6">
             <h1 className="text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight text-[var(--color-text-primary)] max-w-5xl mx-auto leading-[1.1]">
@@ -268,11 +268,13 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
               </div>
             </div>
           </div>
+        </div>
+      </section>
 
-          {/* Interactive Live Card & Encrypted Proposal Simulator */}
-          <div className="pt-6 sm:pt-10 w-full">
-            <HeroInteractivePreview isTr={isTr} />
-          </div>
+      {/* 2. Interactive Live Card & Encrypted Proposal Simulator */}
+      <section className="relative flex flex-col justify-center items-center w-full px-4 sm:px-6 lg:px-8 py-14 sm:py-20 snap-start scroll-mt-16 border-t border-[var(--color-border-subtle)]/40">
+        <div className="mx-auto max-w-6xl w-full">
+          <HeroInteractivePreview isTr={isTr} />
         </div>
       </section>
 

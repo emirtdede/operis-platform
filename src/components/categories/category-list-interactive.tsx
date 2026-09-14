@@ -29,39 +29,143 @@ import {
   Blocks,
   Compass,
   Code2,
+  TrendingUp,
+  Video,
+  PenTool,
+  Briefcase,
+  Scale,
+  Box,
+  Headphones,
+  Bot,
+  Sparkles,
+  BarChart3,
+  Layers,
+  Share2,
+  Feather,
+  Package,
+  Presentation,
+  Megaphone,
+  Mail,
+  ShoppingBag,
+  Film,
+  Clapperboard,
+  Mic,
+  FileCode,
+  FileText,
+  FileSignature,
+  Building,
+  Home,
+  CheckSquare,
+  Coins,
+  Calculator,
+  Receipt,
   LogIn,
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { SpotlightCard } from "../ui/spotlight-card";
+import { SEED_SECTORS } from "@/db/seeds/categories";
+
+const SECTOR_ICONS: Record<string, LucideIcon> = {
+  "sector-software-it": Code2,
+  "sector-ai-data": Cpu,
+  "sector-design-creative": Palette,
+  "sector-marketing-growth": TrendingUp,
+  "sector-video-audio": Video,
+  "sector-writing-translation": PenTool,
+  "sector-business-finance": Briefcase,
+  "sector-legal-compliance": Scale,
+  "sector-engineering-3d": Box,
+  "sector-operations-support": Headphones,
+};
 
 const CATEGORY_ICONS: Record<string, LucideIcon> = {
+  // Sektör 1: Yazılım & BT
   "web-development": Globe,
+  "frontend-ui": Layout,
+  "backend-api": Server,
   "mobile-development": Smartphone,
   "desktop-development": Monitor,
-  "backend-api": Server,
-  "frontend-ui": Layout,
-  "ai-ml": Cpu,
-  "data-engineering": Database,
   "devops-cloud": Cloud,
+  database: HardDrive,
   cybersecurity: ShieldCheck,
   "qa-testing": CheckCircle2,
-  "ui-ux-design": Palette,
-  "automation-integrations": Workflow,
-  database: HardDrive,
-  "game-development": Gamepad2,
+  blockchain: Blocks,
+  "embedded-iot": Radio,
   "it-systems-network": Network,
   "computer-hardware": Wrench,
-  "embedded-iot": Radio,
-  blockchain: Blocks,
-  "technical-consulting": Compass,
   "other-technology": Code2,
+
+  // Sektör 2: AI & Veri
+  "ai-ml": Cpu,
+  "data-engineering": Database,
+  "automation-integrations": Workflow,
+  "ai-agents-workflows": Bot,
+  "prompt-engineering": Sparkles,
+  "business-intelligence": BarChart3,
+
+  // Sektör 3: Tasarım
+  "ui-ux-design": Palette,
+  "brand-identity-logo": Feather,
+  "design-systems": Layers,
+  "social-media-design": Share2,
+  "illustration-vector": Palette,
+  "print-packaging-design": Package,
+  "presentation-deck-design": Presentation,
+
+  // Sektör 4: Pazarlama & Büyüme
+  "search-engine-optimization": TrendingUp,
+  "paid-search-sem": Megaphone,
+  "paid-social-meta": Share2,
+  "social-media-management": Megaphone,
+  "email-marketing-automation": Mail,
+  "ecommerce-growth-store": ShoppingBag,
+
+  // Sektör 5: Video & Ses
+  "short-form-video": Film,
+  "long-form-youtube": Video,
+  "motion-graphics-2d-3d": Clapperboard,
+  "voice-over-dubbing": Mic,
+  "podcast-audio-editing": Mic,
+
+  // Sektör 6: Yazı & Çeviri
+  "technical-writing": FileCode,
+  "copywriting-sales": FileText,
+  "seo-blog-writing": PenTool,
+  "translation-localization": Globe,
+  "proofreading-editing": CheckSquare,
+
+  // Sektör 7: Finans & Danışmanlık
+  "technical-consulting": Compass,
+  "financial-modeling": Calculator,
+  "accounting-bookkeeping": Receipt,
+  "tax-consulting": Coins,
+  "startup-strategy-bizdev": Briefcase,
+  "project-management-agile": Workflow,
+
+  // Sektör 8: Hukuk & Mevzuat
+  "contract-drafting-review": FileSignature,
+  "kvkk-gdpr-privacy": ShieldCheck,
+  "trademark-ip-patent": Scale,
+  "ecommerce-consumer-law": ShoppingBag,
+
+  // Sektör 9: Mühendislik & 3D
+  "game-development": Gamepad2,
+  "architectural-design-bim": Building,
+  "interior-design-rendering": Home,
+  "3d-product-modeling": Box,
+
+  // Sektör 10: Operasyon & Destek
+  "executive-virtual-assistant": Headphones,
+  "customer-support-crm": Headphones,
+  "data-entry-web-research": Search,
 };
 
 export interface CategoryItem {
   id: string;
   slug: string;
   name: string;
+  sectorKey?: string;
   description?: string | null;
   isFollowed?: boolean;
 }
@@ -80,16 +184,20 @@ export function CategoryListInteractive({
   hasSession = false,
 }: CategoryListInteractiveProps) {
   const isTr = locale === "tr";
+  const [selectedSector, setSelectedSector] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [followedIds, setFollowedIds] = useState<Set<string>>(new Set(initialFollowedIds));
   const [isLoading, setIsLoading] = useState(false);
   const [showAuthNotice, setShowAuthNotice] = useState(false);
 
-  const filteredCategories = categories.filter(
-    (c) =>
+  const filteredCategories = categories.filter((c) => {
+    const matchesSearch =
       c.name.toLowerCase().includes(searchQuery.toLowerCase().trim()) ||
-      c.slug.toLowerCase().includes(searchQuery.toLowerCase().trim())
-  );
+      c.slug.toLowerCase().includes(searchQuery.toLowerCase().trim()) ||
+      (c.description && c.description.toLowerCase().includes(searchQuery.toLowerCase().trim()));
+    const matchesSector = selectedSector === "all" || c.sectorKey === selectedSector;
+    return matchesSearch && matchesSector;
+  });
 
   const loginUrl = `${isTr ? "/tr/giris" : "/en/login"}?returnUrl=${encodeURIComponent(isTr ? "/tr/kategoriler" : "/en/categories")}`;
 
@@ -234,6 +342,62 @@ export function CategoryListInteractive({
             </Button>
           </div>
         </div>
+      </div>
+
+      {/* Horizontal Scrollable Sector Filter Pills */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+        <button
+          type="button"
+          onClick={() => setSelectedSector("all")}
+          className={`px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${
+            selectedSector === "all"
+              ? "bg-blue-600 text-white shadow-md shadow-blue-500/20"
+              : "bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-active)]"
+          }`}
+        >
+          <span>{isTr ? "Tüm Sektörler" : "All Sectors"}</span>
+          <span
+            className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${
+              selectedSector === "all"
+                ? "bg-white/20 text-white"
+                : "bg-[var(--color-surface-base)] text-[var(--color-text-tertiary)]"
+            }`}
+          >
+            {categories.length}
+          </span>
+        </button>
+
+        {SEED_SECTORS.map((sec) => {
+          const Icon = SECTOR_ICONS[sec.key] || Briefcase;
+          const isSelected = selectedSector === sec.key;
+          const count = categories.filter((c) => c.sectorKey === sec.key).length;
+          const name = isTr ? sec.translations.tr.name : sec.translations.en.name;
+
+          return (
+            <button
+              key={sec.key}
+              type="button"
+              onClick={() => setSelectedSector(sec.key)}
+              className={`px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center gap-2 border ${
+                isSelected
+                  ? "bg-blue-600 text-white border-blue-500 shadow-md shadow-blue-500/20"
+                  : "bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)] border-[var(--color-border-subtle)] hover:text-[var(--color-text-primary)] hover:border-blue-500/40"
+              }`}
+            >
+              <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>{name}</span>
+              <span
+                className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${
+                  isSelected
+                    ? "bg-white/20 text-white"
+                    : "bg-[var(--color-surface-base)] text-[var(--color-text-tertiary)]"
+                }`}
+              >
+                {count}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Empty Filter State */}

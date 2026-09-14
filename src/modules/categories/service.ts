@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import { eq, and, asc, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/src/lib/db";
 import { Locale } from "@/src/lib/i18n/config";
-import { SEED_CATEGORIES } from "@/db/seeds/categories";
+import { SEED_CATEGORIES, SEED_SECTORS } from "@/db/seeds/categories";
 
 export interface CategoryDto {
   id: string;
@@ -12,6 +12,20 @@ export interface CategoryDto {
   description: string | null;
   sortOrder: number;
   isActive: boolean;
+  sectorKey?: string;
+  parentId?: string | null;
+  isFollowed?: boolean;
+}
+
+export interface SectorDto {
+  id: string;
+  key: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  sortOrder: number;
+  icon: string;
+  categories: CategoryDto[];
   isFollowed?: boolean;
 }
 
@@ -34,6 +48,7 @@ function getFallbackCategories(locale: Locale, userId?: string): CategoryDto[] {
       id: catId,
       key: cat.key,
       slug: cat.key,
+      sectorKey: cat.sectorKey,
       name: trans.name,
       description: trans.description,
       sortOrder: cat.sortOrder,
@@ -43,7 +58,63 @@ function getFallbackCategories(locale: Locale, userId?: string): CategoryDto[] {
   });
 }
 
+function getFallbackSectors(locale: Locale, userId?: string): SectorDto[] {
+  const lang = locale === "tr" ? "tr" : "en";
+  const allCategories = getFallbackCategories(locale, userId);
+  const userFollows = userId ? inMemoryFollows.get(userId) : undefined;
+
+  return SEED_SECTORS.map((sec) => {
+    const trans = sec.translations[lang] || sec.translations.tr;
+    const secId = getDeterministicUuid(sec.key);
+    const subCategories = allCategories.filter((cat) => cat.sectorKey === sec.key);
+
+    return {
+      id: secId,
+      key: sec.key,
+      slug: sec.key,
+      name: trans.name,
+      description: trans.description,
+      sortOrder: sec.sortOrder,
+      icon: sec.icon,
+      categories: subCategories,
+      isFollowed: userFollows ? userFollows.has(secId) || userFollows.has(sec.key) : false,
+    };
+  });
+}
+
 export class CategoryService {
+  /**
+   * Returns all active categories grouped by sectors localized to the requested locale.
+   */
+  static async getSectorsWithCategories(locale: Locale, userId?: string): Promise<SectorDto[]> {
+    try {
+      const categories = await this.getCategories(locale, userId);
+      const lang = locale === "tr" ? "tr" : "en";
+      const userFollows = userId ? inMemoryFollows.get(userId) : undefined;
+
+      // Map categories under their respective sectors
+      return SEED_SECTORS.map((sec) => {
+        const trans = sec.translations[lang] || sec.translations.tr;
+        const secId = getDeterministicUuid(sec.key);
+        const subCategories = categories.filter((cat) => cat.sectorKey === sec.key);
+
+        return {
+          id: secId,
+          key: sec.key,
+          slug: sec.key,
+          name: trans.name,
+          description: trans.description,
+          sortOrder: sec.sortOrder,
+          icon: sec.icon,
+          categories: subCategories,
+          isFollowed: userFollows ? userFollows.has(secId) || userFollows.has(sec.key) : false,
+        };
+      });
+    } catch {
+      return getFallbackSectors(locale, userId);
+    }
+  }
+
   /**
    * Returns all active categories localized to the requested locale.
    * If userId is provided, attaches the private `isFollowed` status.
@@ -102,6 +173,11 @@ export class CategoryService {
           followedSet = new Set(followRows.map((f) => f.categoryId));
         }
 
+        const seedCategoryMap = new Map<string, string>();
+        for (const sc of SEED_CATEGORIES) {
+          seedCategoryMap.set(sc.key, sc.sectorKey);
+        }
+
         return categoryRows.map((cat) => {
           const trans = transMap.get(cat.id) ||
             trFallbackMap.get(cat.id) || { name: cat.key, description: null };
@@ -109,6 +185,7 @@ export class CategoryService {
             id: cat.id,
             key: cat.key,
             slug: cat.key,
+            sectorKey: seedCategoryMap.get(cat.key),
             name: trans.name,
             description: trans.description,
             sortOrder: cat.sortOrder,

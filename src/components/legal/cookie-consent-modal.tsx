@@ -148,7 +148,7 @@ export function CookieConsentModal({ locale }: CookieConsentModalProps) {
   if (view === "main") {
     return (
       <aside
-        className="fixed bottom-4 left-4 sm:bottom-6 sm:left-6 z-[950] w-[calc(100vw-2rem)] sm:w-[500px] max-w-[calc(100vw-2rem)] pt-7 transition-all duration-300 ease-out animate-in fade-in-0 slide-in-from-bottom-5"
+        className="fixed bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-[950] w-[calc(100vw-2rem)] sm:w-[500px] max-w-[calc(100vw-2rem)] pt-7 transition-all duration-300 ease-out animate-in fade-in-0 slide-in-from-bottom-5"
         role="region"
         aria-label={isTr ? "Çerez Bildirimi" : "Cookie Notice"}
       >
