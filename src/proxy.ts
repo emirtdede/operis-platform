@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextFetchEvent, NextRequest, NextResponse } from "next/server";
 import createMiddleware from "next-intl/middleware";
 import { locales } from "./lib/i18n/config";
 
@@ -174,7 +174,7 @@ const clerkHandler = clerkMiddleware(async (_auth, req) => {
   return proxy(req);
 });
 
-export default function middleware(request: NextRequest, event: any) {
+export default function middleware(request: NextRequest, event: NextFetchEvent) {
   if (process.env.CLERK_SECRET_KEY && process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY) {
     return clerkHandler(request, event);
   }
