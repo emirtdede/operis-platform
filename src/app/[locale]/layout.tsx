@@ -38,8 +38,11 @@ export async function generateMetadata({
       default: title,
       template: `%s | Operis`,
     },
-    description,
-    metadataBase: new URL("https://operis.pro"),
+    metadataBase: new URL(
+      process.env.APP_URL ||
+        process.env.NEXT_PUBLIC_APP_URL ||
+        "https://operis.vercel.app"
+    ),
     alternates: {
       canonical: `/${locale}`,
       languages: {

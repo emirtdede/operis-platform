@@ -40,3 +40,6 @@ next-env.d.ts
 
 # Postgres local data
 /pgdata/
+
+.vercel
+.env*
