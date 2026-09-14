@@ -18,7 +18,7 @@ export async function generateMetadata({
   const isTr = locale === "tr";
 
   return {
-    title: isTr ? "Takip Ettiğim Kategoriler | Operis" : "Followed Categories | Operis",
+    title: isTr ? "Takip Ettiğim Kategoriler" : "Followed Categories",
     description: isTr
       ? "Takip ettiğiniz teknoloji kategorileri ve canlı proje bildirimleri."
       : "Manage your followed technology categories and project feed preferences.",

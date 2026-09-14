@@ -14,6 +14,8 @@ import {
   Send,
   ShieldCheck,
   Quote,
+  XCircle,
+  AlertTriangle,
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
@@ -86,6 +88,10 @@ export function MatchDetailsView({
   const [feedback, setFeedback] = useState<string | null>(null);
   const [copiedField, setCopiedField] = useState<"email" | "phone" | null>(null);
   const [contractModalOpen, setContractModalOpen] = useState(false);
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [cancelFeedback, setCancelFeedback] = useState<string | null>(null);
 
   // Endorsements state
   const [endorsements, setEndorsements] = useState(initialEndorsements);
@@ -229,6 +235,45 @@ export function MatchDetailsView({
     }
   };
 
+  const handleCancelEngagement = async () => {
+    setIsCancelling(true);
+    setCancelFeedback(null);
+    try {
+      const res = await fetch(`/api/work/${engagementId}/cancel`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-locale": locale,
+        },
+        body: JSON.stringify({ reason: cancelReason.trim() || undefined }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(
+          data.error || (isTr ? "İş birliği iptal edilemedi" : "Failed to cancel engagement")
+        );
+      }
+
+      setCurrentStatus("CANCELLED");
+      setCancelModalOpen(false);
+      setFeedback(
+        isTr
+          ? "İş birliği iptal edildi. İlan 'Yayında Değil' statüsüne geçirildi; ilan sahibi panelinden ilanı yeniden yayına alabilir."
+          : "Engagement has been cancelled. The listing was moved to inactive; the owner can reactivate it from their dashboard."
+      );
+    } catch (err: unknown) {
+      setCancelFeedback(
+        err instanceof Error
+          ? err.message
+          : isTr
+            ? "İptal işleminde hata oluştu"
+            : "Error cancelling engagement"
+      );
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
   const handleSubmitEndorsement = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanText = endorsementText.trim();
@@ -276,7 +321,9 @@ export function MatchDetailsView({
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || (isTr ? "Tavsiye notu kaydedilemedi." : "Failed to record endorsement."));
+        throw new Error(
+          data.error || (isTr ? "Tavsiye notu kaydedilemedi." : "Failed to record endorsement.")
+        );
       }
 
       setEndorsements((prev) => [...prev, data.endorsement]);
@@ -310,28 +357,39 @@ export function MatchDetailsView({
               variant={
                 completed
                   ? "primary"
-                  : currentStatus === "DISPUTED"
+                  : currentStatus === "CANCELLED"
                     ? "outline"
-                    : currentStatus === "COMPLETION_PENDING"
-                      ? "secondary"
-                      : "outline"
+                    : currentStatus === "DISPUTED"
+                      ? "outline"
+                      : currentStatus === "COMPLETION_PENDING"
+                        ? "secondary"
+                        : "outline"
+              }
+              className={
+                currentStatus === "CANCELLED"
+                  ? "border-rose-500/40 text-rose-400 bg-rose-500/10"
+                  : ""
               }
             >
               {completed
                 ? isTr
                   ? "Tamamlandı"
                   : "Completed"
-                : currentStatus === "DISPUTED"
+                : currentStatus === "CANCELLED"
                   ? isTr
-                    ? "Uyuşmazlık Bildirildi"
-                    : "Disputed"
-                  : currentStatus === "COMPLETION_PENDING"
+                    ? "İptal Edildi"
+                    : "Cancelled"
+                  : currentStatus === "DISPUTED"
                     ? isTr
-                      ? "Onay Bekleniyor"
-                      : "Completion Pending"
-                    : isTr
-                      ? "Eşleşti / Aktif"
-                      : "Matched"}
+                      ? "Uyuşmazlık Bildirildi"
+                      : "Disputed"
+                    : currentStatus === "COMPLETION_PENDING"
+                      ? isTr
+                        ? "Onay Bekleniyor"
+                        : "Completion Pending"
+                      : isTr
+                        ? "Eşleşti / Aktif"
+                        : "Matched"}
             </Badge>
             <span>{matchedDateStr}</span>
           </div>
@@ -341,6 +399,23 @@ export function MatchDetailsView({
           {listingTitle}
         </h1>
       </div>
+
+      {/* Cancelled Banner */}
+      {currentStatus === "CANCELLED" && (
+        <div className="rounded-3xl border border-rose-500/30 bg-rose-500/10 p-6 sm:p-7 shadow-sm space-y-2 animate-in fade-in">
+          <div className="flex items-center gap-2.5 text-rose-400 font-bold text-sm">
+            <XCircle className="h-5 w-5 shrink-0" aria-hidden="true" />
+            <span>
+              {isTr ? "Bu İş Birliği İptal Edildi" : "This Collaboration Has Been Cancelled"}
+            </span>
+          </div>
+          <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed max-w-2xl">
+            {isTr
+              ? "Bu iş birliği taraflardan biri tarafından iptal edilmiştir. İlgili ilan 'Yayında Değil' statüsüne alınmıştır. İlan sahibi paneline girerek ilanı güncelleyebilir veya tek tıkla yeniden yayına alabilir."
+              : "This engagement was cancelled by one of the participants. The listing was moved to inactive. The listing owner can edit or reactivate the listing from their dashboard."}
+          </p>
+        </div>
+      )}
 
       {/* Bilateral Contract Draft Banner */}
       <div className="rounded-3xl border border-blue-500/25 bg-gradient-to-r from-blue-500/10 via-[var(--color-surface-base)] to-blue-500/5 p-6 sm:p-7 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-5">
@@ -689,6 +764,50 @@ export function MatchDetailsView({
         </div>
       </div>
 
+      {/* 3-Step Direct Payment & Dispute Safety Card */}
+      <div className="rounded-3xl border border-emerald-500/25 bg-emerald-500/5 backdrop-blur-xl p-6 sm:p-8 shadow-sm space-y-4">
+        <div className="flex items-center gap-2 text-sm font-bold text-emerald-400">
+          <ShieldCheck className="h-5 w-5" aria-hidden="true" />
+          <span>
+            {isTr
+              ? "Operis Komisyonsuz İş Birliği & Güvenlik Protokolü"
+              : "Zero-Commission Collaboration & Safety Protocol"}
+          </span>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
+          <div className="space-y-1.5 p-3.5 rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]">
+            <span className="text-xs font-bold text-[var(--color-text-primary)] block">
+              {isTr ? "1. Doğrudan Banka Havalesi" : "1. Direct Bank Transfer"}
+            </span>
+            <p className="text-[11px] text-[var(--color-text-secondary)] leading-relaxed">
+              {isTr
+                ? "Ödemeleri platform araya girmeden, doğrudan karşı tarafın IBAN adresine açıklama yazarak iletin."
+                : "Transfer funds directly via bank wire/IBAN without intermediary platform escrow holds."}
+            </p>
+          </div>
+          <div className="space-y-1.5 p-3.5 rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]">
+            <span className="text-xs font-bold text-[var(--color-text-primary)] block">
+              {isTr ? "2. Resmi Sözleşme Taslağı" : "2. Official Contract Draft"}
+            </span>
+            <p className="text-[11px] text-[var(--color-text-secondary)] leading-relaxed">
+              {isTr
+                ? "Haklarınızı güvenceye almak için yukarıdaki 'Sözleşme Taslağı' butonundaki yasal şablonu kullanın."
+                : "Protect your IP and deliverables using the legal draft template provided in the header."}
+            </p>
+          </div>
+          <div className="space-y-1.5 p-3.5 rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]">
+            <span className="text-xs font-bold text-[var(--color-text-primary)] block">
+              {isTr ? "3. Karşılıklı Tamamlama" : "3. Bilateral Confirmation"}
+            </span>
+            <p className="text-[11px] text-[var(--color-text-secondary)] leading-relaxed">
+              {isTr
+                ? "İş teslim edildiğinde ve ödeme alındığında aşağıdaki butondan karşılıklı tamamlama teyidi verin."
+                : "Once work is delivered and payment settled, submit bilateral completion confirmation below."}
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Bilateral Mutual Completion Section */}
       <div className="rounded-3xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/70 backdrop-blur-xl p-6 sm:p-8 shadow-sm space-y-4">
         <h2 className="text-lg font-bold text-[var(--color-text-primary)]">
@@ -701,7 +820,13 @@ export function MatchDetailsView({
           </div>
         )}
 
-        {completed ? (
+        {currentStatus === "CANCELLED" ? (
+          <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-4 text-xs text-rose-300">
+            {isTr
+              ? "İş birliği iptal edildiğinden tamamlama ve uyuşmazlık onayları devre dışı bırakılmıştır."
+              : "Completion and dispute confirmation actions are disabled because this engagement has been cancelled."}
+          </div>
+        ) : completed ? (
           <div className="rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-surface-hover)] p-4 text-xs text-[var(--color-text-secondary)]">
             {isTr
               ? "Her iki taraf da işin tamamlandığını onaylamıştır. Bu proje genel profillerinizde başarıyla tamamlanan iş olarak listelenmektedir."
@@ -752,6 +877,16 @@ export function MatchDetailsView({
                 className="text-xs text-rose-400 hover:text-rose-300"
               >
                 {isTr ? "İş Tamamlanmadı (Uyuşmazlık)" : "Work Incomplete (Dispute)"}
+              </Button>
+
+              <Button
+                variant="ghost"
+                onClick={() => setCancelModalOpen(true)}
+                disabled={isLoading}
+                className="text-xs text-[var(--color-text-tertiary)] hover:text-rose-400 gap-1.5 cursor-pointer ml-auto"
+              >
+                <XCircle className="h-3.5 w-3.5" />
+                <span>{isTr ? "İş Birliğini İptal Et" : "Cancel Engagement"}</span>
               </Button>
             </div>
           </div>
@@ -876,6 +1011,76 @@ export function MatchDetailsView({
         isOwner={ownerUserId === currentUserId}
         locale={locale}
       />
+
+      {/* Cancel Engagement Confirmation Modal */}
+      {cancelModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+          <div className="relative w-full max-w-md rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)] p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-2.5 text-rose-400 font-bold text-base">
+              <AlertTriangle className="h-5 w-5 shrink-0" />
+              <h3>{isTr ? "İş Birliğini İptal Et" : "Cancel Engagement"}</h3>
+            </div>
+            <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed">
+              {isTr
+                ? "Bu işlemi onayladığınızda iş birliği sonlandırılacak ve ilan 'Yayında Değil' statüsüne alınacaktır. İlan sahibi dilediği zaman ilanı panelinden tekrar yayına alabilir."
+                : "Confirming this will terminate the collaboration and move the listing to inactive. The listing owner can reactivate it from their dashboard at any time."}
+            </p>
+
+            {cancelFeedback && (
+              <div className="rounded-lg bg-rose-500/10 border border-rose-500/20 p-3 text-xs text-rose-300 font-medium">
+                {cancelFeedback}
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-[var(--color-text-primary)]">
+                {isTr ? "İptal Gerekçesi (Opsiyonel)" : "Cancellation Reason (Optional)"}
+              </label>
+              <textarea
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                maxLength={500}
+                rows={3}
+                placeholder={
+                  isTr
+                    ? "Örn: Zamanlama uyuşmazlığı, karşılıklı mutabakat vb."
+                    : "e.g. Timeline mismatch, mutual agreement, etc."
+                }
+                className="w-full rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-hover)] p-3 text-xs text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-rose-500/50 resize-none"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setCancelModalOpen(false);
+                  setCancelFeedback(null);
+                }}
+                disabled={isCancelling}
+              >
+                {isTr ? "Vazgeç" : "Keep Active"}
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleCancelEngagement}
+                disabled={isCancelling}
+                className="bg-rose-600 hover:bg-rose-500 border-rose-600 text-white"
+              >
+                {isCancelling
+                  ? isTr
+                    ? "İptal Ediliyor..."
+                    : "Cancelling..."
+                  : isTr
+                    ? "Evet, İptal Et"
+                    : "Confirm Cancellation"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

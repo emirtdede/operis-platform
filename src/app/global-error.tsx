@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import * as Sentry from "@sentry/nextjs";
 import { AlertTriangle, RefreshCw, Home, Copy, Check } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 import { ErrorCard } from "@/src/components/ui/error-card";
@@ -21,6 +22,7 @@ export default function GlobalError({
       setIsEn(true);
     }
     console.error("Global critical error captured:", error.message);
+    Sentry.captureException(error);
   }, [error]);
 
   const isTr = !isEn;

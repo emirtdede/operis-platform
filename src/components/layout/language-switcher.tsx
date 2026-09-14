@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname, useRouter, useParams, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useParams } from "next/navigation";
 import { locales, Locale } from "@/src/lib/i18n/config";
 
 import { getAlternateLocalePath } from "@/src/lib/i18n/routes";
@@ -15,7 +15,6 @@ export function LanguageSwitcher({
   const pathname = usePathname();
   const router = useRouter();
   const params = useParams();
-  const searchParams = useSearchParams();
   const activeLocale: Locale =
     currentLocale ||
     ((params?.locale as Locale) && locales.includes(params?.locale as Locale)
@@ -37,7 +36,10 @@ export function LanguageSwitcher({
     }
 
     const basePath = getAlternateLocalePath(pathname, newLocale);
-    const qs = searchParams ? searchParams.toString() : "";
+    const qs =
+      typeof window !== "undefined" && window.location.search
+        ? window.location.search.replace(/^\?/, "")
+        : "";
     const targetUrl = qs ? `${basePath}?${qs}` : basePath;
     router.push(targetUrl);
   };

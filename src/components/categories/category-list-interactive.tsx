@@ -297,13 +297,25 @@ export function CategoryListInteractive({
                 </div>
 
                 <div className="mt-5 flex items-center justify-between pt-4 border-t border-[var(--color-border-subtle)]/60 shrink-0">
-                  <Link
-                    href={isTr ? `/tr/akis?category=${cat.slug}` : `/en/feed?category=${cat.slug}`}
-                    className="inline-flex items-center gap-1 text-xs font-semibold text-blue-500 hover:text-blue-400 transition-colors"
-                  >
-                    <span>{isTr ? "Projeleri Gör" : "View Projects"}</span>
-                    <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
-                  </Link>
+                  <div className="flex items-center gap-2">
+                    <Link
+                      href={
+                        isTr ? `/tr/akis?category=${cat.slug}` : `/en/feed?category=${cat.slug}`
+                      }
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-blue-500 hover:text-blue-400 transition-colors"
+                    >
+                      <span>{isTr ? "Projeler" : "Projects"}</span>
+                      <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                    </Link>
+
+                    <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-medium text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
+                      <span
+                        className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse"
+                        aria-hidden="true"
+                      />
+                      <span>{isTr ? "Aktif Radar" : "Live Radar"}</span>
+                    </span>
+                  </div>
 
                   <Button
                     variant={isFollowed ? "secondary" : "primary"}

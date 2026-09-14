@@ -2,25 +2,23 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSession } from "@/src/modules/auth/session";
 import { OfferService } from "@/src/modules/offers/service";
-import {
-  checkRateLimit,
-  getClientIp,
-  rateLimitExceededResponse,
-} from "@/src/lib/security/rate-limit";
+import { evaluateSecurityAccessAsync, getClientIp } from "@/src/lib/security/rate-limit";
 
 export async function POST(req: Request) {
   const ip = getClientIp(req);
-  const limitCheck = checkRateLimit(`offer:submit:${ip}`, 25, 60 * 1000);
   const locale = req.headers.get("x-locale") || "tr";
   const isEn = locale === "en";
 
-  if (!limitCheck.success) {
-    return rateLimitExceededResponse(
-      limitCheck.reset,
-      isEn
-        ? "Too many proposals submitted. Please wait a minute."
-        : "Çok fazla teklif gönderildi. Lütfen bir dakika bekleyin."
-    );
+  const access = await evaluateSecurityAccessAsync({
+    ip,
+    purpose: "offer:submit",
+    limit: 25,
+    windowMs: 60 * 1000,
+    isEn,
+  });
+
+  if (!access.allowed) {
+    return access.response;
   }
 
   try {

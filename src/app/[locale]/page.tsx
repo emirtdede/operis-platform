@@ -10,13 +10,17 @@ import {
   Cloud,
   Cpu,
   Zap,
-  CheckCircle2,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 import { SpotlightCard } from "@/src/components/ui/spotlight-card";
 import { InteractiveArchitectureShowcase } from "@/src/components/diagrams/interactive-architecture-showcase";
 import { HowItWorksSection } from "@/src/components/onboarding/how-it-works-section";
 import { FaqAccordion } from "@/src/components/onboarding/faq-accordion";
+import { HeroInteractivePreview } from "@/src/components/landing/hero-interactive-preview";
+import { PlatformComparisonTable } from "@/src/components/landing/platform-comparison-table";
+import { PlatformTrustStrip } from "@/src/components/landing/platform-trust-strip";
+import { TestimonialsSection } from "@/src/components/landing/testimonials-section";
 
 export async function generateMetadata({
   params,
@@ -82,6 +86,7 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
       icon: Code,
       tags: ["React", "Next.js", "TypeScript", "Tailwind"],
       accent: "from-blue-500/20 to-cyan-500/20",
+      projectCount: 18,
     },
     {
       slug: "backend-api",
@@ -92,6 +97,7 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
       icon: Server,
       tags: ["Node.js", "Go", "PostgreSQL", "GraphQL"],
       accent: "from-indigo-500/20 to-blue-500/20",
+      projectCount: 24,
     },
     {
       slug: "web-development",
@@ -102,6 +108,7 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
       icon: Layers,
       tags: ["Full Stack", "SaaS", "Next.js", "System Design"],
       accent: "from-violet-500/20 to-indigo-500/20",
+      projectCount: 31,
     },
     {
       slug: "mobile-development",
@@ -112,6 +119,7 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
       icon: Smartphone,
       tags: ["React Native", "Flutter", "iOS", "Android"],
       accent: "from-cyan-500/20 to-teal-500/20",
+      projectCount: 15,
     },
     {
       slug: "devops-cloud",
@@ -122,6 +130,7 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
       icon: Cloud,
       tags: ["Kubernetes", "AWS", "Docker", "CI/CD"],
       accent: "from-sky-500/20 to-blue-500/20",
+      projectCount: 12,
     },
     {
       slug: "ai-ml",
@@ -132,6 +141,7 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
       icon: Cpu,
       tags: ["LLM", "Python", "PyTorch", "OpenAI"],
       accent: "from-purple-500/20 to-pink-500/20",
+      projectCount: 19,
     },
   ];
 
@@ -184,37 +194,50 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
       />
 
       {/* 1. Expansive Hero Section */}
-      <section className="relative flex flex-col justify-center items-center min-h-[calc(100dvh-4rem)] w-full px-4 sm:px-6 lg:px-8 text-center py-6 sm:py-8 snap-start scroll-mt-16">
-        <div className="mx-auto max-w-6xl w-full space-y-6 sm:space-y-8">
+      <section className="relative flex flex-col justify-center items-center w-full px-4 sm:px-6 lg:px-8 text-center py-8 sm:py-16 snap-start scroll-mt-16">
+        <div className="mx-auto max-w-6xl w-full space-y-8 sm:space-y-10">
+          {/* Eyebrow Modern Badge */}
+          <div className="inline-flex items-center gap-2 rounded-full border border-blue-500/30 bg-blue-500/10 px-4 py-1.5 text-xs font-semibold text-blue-400 backdrop-blur-md shadow-sm">
+            <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+            <span>
+              {isTr
+                ? "YENİ NESİL YAZILIM EKOSİSTEMİ • %0 KOMİSYON"
+                : "NEXT-GEN SOFTWARE ECOSYSTEM • 0% COMMISSION"}
+            </span>
+          </div>
+
           {/* Display Typography with Masked Gradients */}
           <div className="space-y-4 sm:space-y-6">
             <h1 className="text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight text-[var(--color-text-primary)] max-w-5xl mx-auto leading-[1.1]">
               {isTr ? (
                 <>
                   Yazılım Projelerinde{" "}
-                  <span className="text-gradient-accent">Aracısız, Doğrudan</span> ve Güvenli İş
+                  <span className="text-gradient-accent">Aracısız, Doğrudan</span> ve Komisyonsuz İş
                   Birliği
                 </>
               ) : (
                 <>
-                  Direct, Transparent & <span className="text-gradient-accent">Zero-Escrow</span>{" "}
-                  Tech Matching
+                  Direct, Transparent &{" "}
+                  <span className="text-gradient-accent">Zero-Commission</span> Software
+                  Collaboration
                 </>
               )}
             </h1>
 
-            <p className="text-lg sm:text-xl text-[var(--color-text-secondary)] max-w-3xl mx-auto leading-relaxed">
+            <p className="text-base sm:text-xl text-[var(--color-text-secondary)] max-w-3xl mx-auto leading-relaxed">
               {isTr
-                ? "Aracı komisyonu yok. Halka açık teklif savaşları yok. 7 günlük canlılık radarı ve AES-256-GCM ile şifrelenmiş birebir tekliflerle üst düzey yazılım profesyonelleriyle doğrudan eşleşin."
-                : "Zero commission cuts. Zero public bidding wars. Direct peer-to-peer collaboration protected by strict 7-day freshness guarantees and encrypted 1-to-1 proposals."}
+                ? "Geleneksel sitelerdeki %20 komisyonları ve sansürlü iletişimi geride bırakın. 7 günlük canlılık radarı ve AES-256 ile şifrelenmiş birebir tekliflerle doğrudan eşleşin."
+                : "Leave 20% platform cuts and communication bans behind. Direct peer-to-peer collaboration protected by strict 7-day freshness guarantees and encrypted 1-to-1 proposals."}
             </p>
           </div>
 
-          {/* Living Reactive CTA Buttons */}
+          {/* Living Reactive Dual-Role CTA Buttons */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-1">
             <Link href={isTr ? "/tr/akis" : "/en/feed"} className="w-full sm:w-auto">
               <Button variant="shimmer" size="lg" className="w-full sm:w-auto px-8 py-4 text-base">
-                <span>{isTr ? "İlanları Keşfet" : "Browse Projects"}</span>
+                <span>
+                  {isTr ? "Yazılımcıyım: Projeleri İncele" : "I'm a Developer: Browse Projects"}
+                </span>
                 <ArrowRight className="h-4 w-4" aria-hidden="true" />
               </Button>
             </Link>
@@ -227,7 +250,9 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
                 size="lg"
                 className="w-full sm:w-auto px-8 py-4 text-base"
               >
-                {isTr ? "Ücretsiz İlan Yayınla" : "Post a Project"}
+                <span>
+                  {isTr ? "İşverenim: Ücretsiz İlan Ver" : "I'm a Client: Post a Project"}
+                </span>
               </Button>
             </Link>
           </div>
@@ -242,16 +267,18 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
             </div>
             <div className="p-3 flex flex-col items-center justify-center text-center">
               <div className="text-2xl font-bold text-cyan-400 font-display">
-                {isTr ? "1 Hafta" : "1 Week"}
+                {isTr ? "7 Gün" : "7 Days"}
               </div>
               <div className="text-xs text-[var(--color-text-secondary)] mt-0.5">
                 {isTr ? "Maksimum İlan Canlılığı" : "Freshness Lifecycle"}
               </div>
             </div>
             <div className="p-3 flex flex-col items-center justify-center text-center">
-              <div className="text-2xl font-bold text-indigo-400 font-display">Gizli</div>
+              <div className="text-2xl font-bold text-indigo-400 font-display">
+                {isTr ? "Gizli" : "Encrypted"}
+              </div>
               <div className="text-xs text-[var(--color-text-secondary)] mt-0.5">
-                {isTr ? "Birebir Şifreli Teklif" : "Encrypted Offers"}
+                {isTr ? "Birebir Şifreli Teklif" : "1:1 Protected Bids"}
               </div>
             </div>
             <div className="p-3 flex flex-col items-center justify-center text-center">
@@ -261,24 +288,36 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
               </div>
             </div>
           </div>
+
+          {/* Interactive Live Card & Encrypted Proposal Simulator */}
+          <div className="pt-6 sm:pt-10 w-full">
+            <HeroInteractivePreview isTr={isTr} />
+          </div>
         </div>
       </section>
 
+      {/* Verified Trust & Speed Proof Strip */}
+      <PlatformTrustStrip isTr={isTr} />
+
       {/* 2. Interactive SVG Architecture Showcase */}
-      <section className="relative flex flex-col justify-center items-center min-h-[calc(100dvh-4rem)] w-full px-4 sm:px-6 lg:px-8 py-12 sm:py-16 snap-start scroll-mt-16">
+      <section className="relative flex flex-col justify-center items-center w-full px-4 sm:px-6 lg:px-8 py-10 sm:py-14 snap-start scroll-mt-16">
         <div className="mx-auto max-w-7xl w-full space-y-8">
           <div className="text-center max-w-3xl mx-auto space-y-3">
             <div className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-blue-400">
               <Zap className="h-3.5 w-3.5" aria-hidden="true" />
-              <span>{isTr ? "Temel Avantajlar" : "Key Advantages"}</span>
+              <span>
+                {isTr ? "GÜVENLİK VE KRİPTOGRAFİK MİMARİ" : "SECURITY & CRYPTOGRAPHIC ARCHITECTURE"}
+              </span>
             </div>
             <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-[var(--color-text-primary)]">
-              {isTr ? "Operis'i Farklı Kılan 3 Temel Prensip" : "3 Core Principles Powering Operis"}
+              {isTr
+                ? "Operis'i Güçlendiren 3 Kriptografik Protokol"
+                : "3 Cryptographic Protocols Powering Operis"}
             </h2>
             <p className="text-sm sm:text-base text-[var(--color-text-secondary)]">
               {isTr
-                ? "Aracısız, komisyonsuz ve tekliflerinizi rakiplerden koruyan güvenli ve bağımsız bir çalışma ekosistemi."
-                : "Direct, zero-commission, and privacy-first collaboration designed for modern tech teams and independent engineers."}
+                ? "7 günlük yaşam radarı, AES-256-GCM birebir teklif şifreleme ve aracısız doğrudan eşleşme altyapısı."
+                : "7-day freshness radar, AES-256-GCM encrypted bidding, and direct bilateral handshake protocols."}
             </p>
           </div>
 
@@ -287,7 +326,7 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
       </section>
 
       {/* 3. Dynamic Tech Category Matrix */}
-      <section className="relative flex flex-col justify-center items-center min-h-[calc(100dvh-4rem)] w-full px-4 sm:px-6 lg:px-8 py-12 sm:py-16 snap-start scroll-mt-16">
+      <section className="relative flex flex-col justify-center items-center w-full px-4 sm:px-6 lg:px-8 py-10 sm:py-14 snap-start scroll-mt-16">
         <div className="mx-auto max-w-7xl w-full space-y-8">
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-[var(--color-border-subtle)] pb-4">
             <div>
@@ -327,10 +366,18 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
                       <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500/10 to-indigo-500/10 text-blue-500 group-hover:scale-110 transition-transform">
                         <Icon className="h-6 w-6" aria-hidden="true" />
                       </div>
-                      <ArrowRight
-                        className="h-4 w-4 text-[var(--color-text-tertiary)] group-hover:text-blue-500 group-hover:translate-x-1 transition-all"
-                        aria-hidden="true"
-                      />
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 px-2.5 py-0.5 text-[11px] font-semibold text-blue-400 group-hover:border-blue-500/40 transition-colors">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                          <span>
+                            {cat.projectCount} {isTr ? "Aktif Proje" : "Active"}
+                          </span>
+                        </span>
+                        <ArrowRight
+                          className="h-4 w-4 text-[var(--color-text-tertiary)] group-hover:text-blue-500 group-hover:translate-x-1 transition-all"
+                          aria-hidden="true"
+                        />
+                      </div>
                     </div>
 
                     <h3 className="font-bold text-base text-[var(--color-text-primary)] group-hover:text-blue-400 transition-colors mb-2">
@@ -382,89 +429,29 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
         </div>
       </section>
 
-      {/* 4. Zero Escrow & Direct Guarantee Bento */}
-      <section className="relative flex flex-col justify-center items-center min-h-[calc(100dvh-4rem)] w-full px-4 sm:px-6 lg:px-8 py-12 sm:py-16 snap-start scroll-mt-16">
-        <div className="mx-auto max-w-7xl w-full">
-          <div className="rounded-3xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/70 p-8 sm:p-12 backdrop-blur-xl space-y-8">
-            <div className="max-w-3xl space-y-3">
-              <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--color-text-primary)]">
-                {isTr
-                  ? "Neden Klasik Freelance Platformları Yerine Bu Platform?"
-                  : "Why Modern Tech Teams Prefer Direct Matching?"}
-              </h2>
-              <p className="text-sm text-[var(--color-text-secondary)] leading-relaxed">
-                {isTr
-                  ? "Geleneksel siteler kullanıcıları bir emanet havuzuna hapseder, yüksek komisyonlar keser ve iletişimi sansürler. Biz bu modeli ortadan kaldırdık."
-                  : "Traditional sites trap parties in restrictive escrow locks and demand heavy commission cuts. We built a direct discovery venue instead."}
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="group relative overflow-hidden flex items-start gap-4 p-5 rounded-3xl bg-[var(--color-surface-base)]/60 border border-[var(--color-border-subtle)] backdrop-blur-xl transition-all duration-300 hover:border-emerald-500/30 hover:shadow-lg hover:shadow-emerald-500/5 hover:-translate-y-0.5">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
-                  <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
-                </div>
-                <div className="space-y-1">
-                  <div className="font-bold text-sm text-[var(--color-text-primary)]">
-                    {isTr ? "Sıfır Komisyon" : "0% Escrow Fee"}
-                  </div>
-                  <div className="text-xs text-[var(--color-text-secondary)] leading-relaxed">
-                    {isTr
-                      ? "İş veren ile yazılımcı arasındaki ödeme trafiğine karışılmaz; kazancın tamamı sizde kalır."
-                      : "No payment intermediary cuts. 100% of the negotiated budget goes to the engineer."}
-                  </div>
-                </div>
-              </div>
-
-              <div className="group relative overflow-hidden flex items-start gap-4 p-5 rounded-3xl bg-[var(--color-surface-base)]/60 border border-[var(--color-border-subtle)] backdrop-blur-xl transition-all duration-300 hover:border-blue-500/30 hover:shadow-lg hover:shadow-blue-500/5 hover:-translate-y-0.5">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400">
-                  <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
-                </div>
-                <div className="space-y-1">
-                  <div className="font-bold text-sm text-[var(--color-text-primary)]">
-                    {isTr ? "Fiyat Kırma Savaşlarına Son" : "No Public Price Wars"}
-                  </div>
-                  <div className="text-xs text-[var(--color-text-secondary)] leading-relaxed">
-                    {isTr
-                      ? "Teklifler gizlidir; rakipler fiyatınızı göremez ve emeğinizin değeri korunur."
-                      : "Private blind offers prevent destructive race-to-the-bottom undercut bidding."}
-                  </div>
-                </div>
-              </div>
-
-              <div className="group relative overflow-hidden flex items-start gap-4 p-5 rounded-3xl bg-[var(--color-surface-base)]/60 border border-[var(--color-border-subtle)] backdrop-blur-xl transition-all duration-300 hover:border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/5 hover:-translate-y-0.5">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400">
-                  <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
-                </div>
-                <div className="space-y-1">
-                  <div className="font-bold text-sm text-[var(--color-text-primary)]">
-                    {isTr ? "Doğrudan Sözleşme Özgürlüğü" : "Direct Commercial Autonomy"}
-                  </div>
-                  <div className="text-xs text-[var(--color-text-secondary)] leading-relaxed">
-                    {isTr
-                      ? "Eşleşme sağlandıktan sonra istediğiniz sözleşme ve ödeme yöntemiyle doğrudan çalışın."
-                      : "Choose any payment milestone, legal contract, or invoicing mechanism directly."}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
+      {/* 4. Comprehensive Platform Comparison Table */}
+      <PlatformComparisonTable isTr={isTr} locale={locale} />
 
       {/* 5. Interactive Dual-Role Onboarding (How It Works) */}
       <HowItWorksSection locale={locale} />
 
-      {/* 6. Frequently Asked Questions (FAQ) */}
+      {/* 6. Verified Community Testimonials & Social Proof */}
+      <TestimonialsSection isTr={isTr} />
+
+      {/* 7. Frequently Asked Questions (FAQ) */}
       <FaqAccordion locale={locale} />
 
-      {/* 7. Legal & Final Closing CTA */}
-      <section className="relative flex flex-col justify-center items-center min-h-[calc(100dvh-4rem)] w-full px-4 sm:px-6 lg:px-8 py-12 sm:py-16 snap-start scroll-mt-16">
+      {/* 8. Legal & Final Closing CTA */}
+      <section className="relative flex flex-col justify-center items-center w-full px-4 sm:px-6 lg:px-8 py-10 sm:py-16 snap-start scroll-mt-16">
         <div className="mx-auto max-w-5xl w-full space-y-8">
           {/* Final High-Impact CTA Card */}
-          <div className="relative overflow-hidden rounded-3xl border border-blue-500/30 bg-gradient-to-br from-blue-950/40 via-[var(--color-surface-base)]/80 to-indigo-950/30 p-8 sm:p-12 text-center space-y-6 backdrop-blur-xl shadow-2xl shadow-blue-500/10">
+          <div className="relative overflow-hidden rounded-3xl cta-card-surface p-8 sm:p-12 text-center space-y-6 transition-all duration-300">
             <div
-              className="pointer-events-none absolute -top-32 -right-32 w-64 h-64 rounded-full bg-blue-500/10 blur-3xl"
+              className="pointer-events-none absolute -top-32 -right-32 w-64 h-64 rounded-full bg-[var(--cta-card-aura)] blur-3xl"
+              aria-hidden="true"
+            />
+            <div
+              className="pointer-events-none absolute -bottom-32 -left-32 w-64 h-64 rounded-full bg-[var(--cta-card-aura)] blur-3xl"
               aria-hidden="true"
             />
             <h2 className="text-3xl sm:text-4xl font-extrabold text-[var(--color-text-primary)]">
@@ -493,7 +480,7 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
                 <Button
                   variant="secondary"
                   size="lg"
-                  className="w-full sm:w-auto px-8 py-4 text-base"
+                  className="w-full sm:w-auto px-8 py-4 text-base cta-button-secondary shadow-sm transition-all"
                 >
                   {isTr ? "Ücretsiz İlan Yayınla" : "Post a Project"}
                 </Button>
@@ -501,19 +488,19 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
             </div>
           </div>
 
-          {/* Platform Operation Notice */}
-          <div className="relative overflow-hidden rounded-3xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/60 p-6 sm:p-8 text-xs text-[var(--color-text-tertiary)] leading-relaxed space-y-2 backdrop-blur-xl shadow-sm">
-            <div
-              className="pointer-events-none absolute -top-24 -left-24 w-52 h-52 rounded-full bg-blue-500/5 blur-3xl"
-              aria-hidden="true"
-            />
-            <p className="font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider text-[11px]">
-              {isTr ? "Platform İşleyiş Duyurusu & Şeffaflık" : "Platform Operation Notice"}
-            </p>
+          {/* Subtle Integrated Platform Transparency Notice */}
+          <div className="text-center max-w-3xl mx-auto px-4 text-xs text-[var(--color-text-tertiary)] leading-relaxed space-y-1.5 pt-2">
+            <div className="inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">
+              <span>
+                {isTr
+                  ? "Platform İşleyiş Duyurusu & Şeffaflık İlkesi"
+                  : "Platform Operation & Transparency Principle"}
+              </span>
+            </div>
             <p>
               {isTr
-                ? "Yürürlükteki mevzuatın izin verdiği azami ölçüde, bu platform yalnızca bir keşif ve eşleştirme ortamıdır. Platform üzerinde ödeme alınmaz, emanet (escrow) sistemi işletilmez, kullanıcılar adına fatura düzenlenmez ve taraflar arasındaki ticari veya sözleşmesel uyuşmazlıklarda hakemlik yapılmaz."
-                : "To the maximum extent permitted by applicable law, this platform operates strictly as a discovery and matching venue. The platform does not process payments, hold escrow funds, issue client invoices, or resolve commercial or contractual disputes between parties."}
+                ? "Yürürlükteki mevzuatın izin verdiği azami ölçüde, Operis bağımsız bir keşif ve eşleştirme ağıdır. Platform üzerinde ödeme alınmaz, emanet (escrow) sistemi işletilmez, kullanıcılar adına fatura düzenlenmez ve taraflar kendi doğrudan sözleşmeleriyle çalışır."
+                : "To the maximum extent permitted by applicable law, Operis operates strictly as an autonomous discovery venue without third-party escrow or commission lock-in."}
             </p>
           </div>
         </div>

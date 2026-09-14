@@ -2,22 +2,26 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/src/modules/auth/session";
 import { ListingService } from "@/src/modules/listings/service";
 import {
-  checkRateLimit,
+  evaluateSecurityAccessAsync,
   getClientIp,
-  rateLimitExceededResponse,
+  normalizeIp,
 } from "@/src/lib/security/rate-limit";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const ip = getClientIp(req);
-  const limitCheck = checkRateLimit(`listing:action:${ip}`, 30, 60 * 1000);
   const locale = req.headers.get("x-locale") || "tr";
   const isEn = locale === "en";
 
-  if (!limitCheck.success) {
-    return rateLimitExceededResponse(
-      limitCheck.reset,
-      isEn ? "Too many requests. Please wait." : "Çok fazla işlem yapıldı. Lütfen bekleyin."
-    );
+  const access = await evaluateSecurityAccessAsync({
+    ip,
+    purpose: "listing:action",
+    subject: normalizeIp(ip),
+    limit: 30,
+    windowMs: 60 * 1000,
+    isEn,
+  });
+  if (!access.allowed) {
+    return access.response;
   }
 
   try {
@@ -35,11 +39,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ success: true }, { status: 200 });
   } catch (err: unknown) {
     let message =
-      err instanceof Error
-        ? err.message
-        : isEn
-          ? "Failed to delete listing"
-          : "İlan silinemedi";
+      err instanceof Error ? err.message : isEn ? "Failed to delete listing" : "İlan silinemedi";
 
     if (!isEn) {
       if (message.includes("Listing not found") || message.includes("not authorized")) {

@@ -1,27 +1,36 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { and, eq } from "drizzle-orm";
+import { and, eq, or, sql } from "drizzle-orm";
 import { getDb, schema } from "@/src/lib/db";
-import { hashPassword } from "@/src/lib/crypto";
+import { hashPassword, hashEmailBlindIndex } from "@/src/lib/crypto";
 import {
   verifyPasswordResetToken,
   getPasswordHashFingerprint,
 } from "@/src/modules/auth/password-reset";
-import {
-  checkRateLimit,
-  getClientIp,
-  rateLimitExceededResponse,
-} from "@/src/lib/security/rate-limit";
+import { evaluateSecurityAccessAsync, getClientIp } from "@/src/lib/security/rate-limit";
 import { DEFAULT_USER } from "@/src/modules/auth/demo-user";
+import { SecurityAuditService } from "@/src/modules/security/audit-service";
+import { verifyTurnstileToken } from "@/src/lib/security/turnstile";
 
 const createResetPasswordSchema = (isEn: boolean) =>
   z.object({
     token: z.string().min(1, isEn ? "Reset token is missing." : "Sıfırlama anahtarı eksik."),
     password: z
       .string()
-      .min(12, isEn ? "Password must be at least 12 characters." : "Şifre en az 12 karakter olmalıdır.")
-      .regex(/[A-Z]/, isEn ? "Password must contain at least one uppercase letter." : "Şifre en az bir büyük harf içermelidir.")
-      .regex(/[0-9]/, isEn ? "Password must contain at least one number." : "Şifre en az bir rakam içermelidir."),
+      .min(
+        12,
+        isEn ? "Password must be at least 12 characters." : "Şifre en az 12 karakter olmalıdır."
+      )
+      .regex(
+        /[A-Z]/,
+        isEn
+          ? "Password must contain at least one uppercase letter."
+          : "Şifre en az bir büyük harf içermelidir."
+      )
+      .regex(
+        /[0-9]/,
+        isEn ? "Password must contain at least one number." : "Şifre en az bir rakam içermelidir."
+      ),
     locale: z.enum(["tr", "en"]).optional(),
   });
 
@@ -30,20 +39,37 @@ export async function POST(req: Request) {
   const headerLocale = req.headers.get("x-locale");
   const isEnHeader = headerLocale === "en";
 
-  const limitCheck = checkRateLimit(`auth:reset:${ip}`, 5, 15 * 60 * 1000);
-  if (!limitCheck.success) {
-    return rateLimitExceededResponse(
-      limitCheck.reset,
-      isEnHeader
-        ? "Too many password reset attempts. Please wait 15 minutes."
-        : "Çok fazla şifre sıfırlama denemesi yapıldı. Lütfen 15 dakika bekleyin."
-    );
+  const access = await evaluateSecurityAccessAsync({
+    ip,
+    purpose: "auth:reset",
+    limit: 5,
+    windowMs: 15 * 60 * 1000,
+    isEn: isEnHeader,
+  });
+  if (!access.allowed) {
+    return access.response;
   }
 
   let isEn = isEnHeader;
   try {
     const body = await req.json();
     isEn = body?.locale === "en" || isEnHeader;
+
+    // Verify Cloudflare Turnstile token (fail-open in dev/testing)
+    const turnstileResult = await verifyTurnstileToken(body?.turnstileToken, ip);
+    if (!turnstileResult.success) {
+      return NextResponse.json(
+        {
+          error:
+            turnstileResult.error ||
+            (isEn
+              ? "Bot verification failed. Please refresh."
+              : "Bot doğrulaması başarısız oldu. Lütfen yenileyiniz."),
+        },
+        { status: 403 }
+      );
+    }
+
     const schemaValidator = createResetPasswordSchema(isEn);
     const { token, password } = schemaValidator.parse(body);
 
@@ -63,13 +89,14 @@ export async function POST(req: Request) {
 
     try {
       const db = getDb();
+      const emailHmac = hashEmailBlindIndex(payload.email.toLowerCase().trim());
       const [user] = await db
         .select({
           id: schema.users.id,
           passwordHash: schema.users.passwordHash,
         })
         .from(schema.users)
-        .where(eq(schema.users.email, payload.email))
+        .where(or(eq(schema.users.emailHmac, emailHmac), eq(schema.users.email, payload.email)))
         .limit(1);
 
       if (user && user.passwordHash) {
@@ -90,13 +117,11 @@ export async function POST(req: Request) {
           .update(schema.users)
           .set({
             passwordHash: newPasswordHash,
+            authVersion: sql`${schema.users.authVersion} + 1`,
             updatedAt: new Date(),
           })
           .where(
-            and(
-              eq(schema.users.id, user.id),
-              eq(schema.users.passwordHash, user.passwordHash)
-            )
+            and(eq(schema.users.id, user.id), eq(schema.users.passwordHash, user.passwordHash))
           )
           .returning({ id: schema.users.id });
 
@@ -112,6 +137,14 @@ export async function POST(req: Request) {
         }
 
         userFound = true;
+
+        SecurityAuditService.logEvent({
+          userId: user.id,
+          eventType: "PASSWORD_RESET",
+          ipAddress: ip,
+          userAgent: req.headers.get("user-agent") || null,
+          riskMetadata: { email: payload.email },
+        }).catch(() => {});
       }
     } catch {
       // Offline fallback in non-production

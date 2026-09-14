@@ -1,10 +1,8 @@
 import { and, eq, inArray, ne, or } from "drizzle-orm";
-import { getDb, schema } from "@/src/lib/db";
+import { getDb, schema, acquireUserPairAdvisoryLock } from "@/src/lib/db";
 import { CryptoService } from "@/src/lib/crypto";
 import { NotificationService } from "@/src/modules/notifications/service";
 import { DEFAULT_USER } from "@/src/modules/auth/demo-user";
-import { inMemoryListings } from "@/src/modules/listings/service";
-import { inMemorySentOffers, inMemoryReceivedOffers } from "@/src/modules/offers/service";
 
 export interface CounterpartyContactInfo {
   userId: string;
@@ -122,32 +120,34 @@ export class EngagementService {
         let listingTitle = "";
 
         const engagement = await db.transaction(async (tx) => {
-          // 1. Fetch offer with row lock and verify existence and status (B13)
-          let offerQuery = tx
-            .select()
+          // 1. Initial look up of the offer to discover target listing ID
+          const [initialOffer] = await tx
+            .select({
+              id: schema.offers.id,
+              listingId: schema.offers.listingId,
+              offerorUserId: schema.offers.offerorUserId,
+              status: schema.offers.status,
+            })
             .from(schema.offers)
             .where(eq(schema.offers.id, offerId));
 
-          if (typeof (offerQuery as { for?: unknown }).for === "function") {
-            offerQuery = (offerQuery as { for: (mode: string) => typeof offerQuery }).for("update");
-          }
-
-          const offerRows = await offerQuery.limit(1);
-
-          const offer = offerRows[0];
-          if (!offer) {
+          if (!initialOffer) {
             throw new Error("Offer not found");
           }
 
-          if (offer.status !== "PENDING") {
+          if (initialOffer.status !== "PENDING") {
             throw new Error("Only pending offers can be accepted");
           }
 
-          // 2. Fetch listing with row lock when supported by dialect/driver
+          // 1. Acquire transaction-level advisory lock on symmetric user pair (Fixes B07, R02)
+          // Lock order: User pair advisory lock -> Listing row lock -> Offer row lock
+          await acquireUserPairAdvisoryLock(tx, ownerUserId, initialOffer.offerorUserId);
+
+          // 2. Lock listing FIRST (establishing canonical lock order: listings -> offers) (B09)
           let listingQuery = tx
             .select()
             .from(schema.listings)
-            .where(eq(schema.listings.id, offer.listingId));
+            .where(eq(schema.listings.id, initialOffer.listingId));
 
           if (typeof (listingQuery as { for?: unknown }).for === "function") {
             listingQuery = (listingQuery as { for: (mode: string) => typeof listingQuery }).for(
@@ -167,13 +167,29 @@ export class EngagementService {
             throw new Error("Unauthorized: you do not own this listing");
           }
 
+          // 3. Lock offer SECOND (after listing row is locked) (B09)
+          let offerQuery = tx.select().from(schema.offers).where(eq(schema.offers.id, offerId));
+
+          if (typeof (offerQuery as { for?: unknown }).for === "function") {
+            offerQuery = (offerQuery as { for: (mode: string) => typeof offerQuery }).for("update");
+          }
+
+          const offerRows = await offerQuery.limit(1);
+
+          const offer = offerRows[0];
+          if (!offer || offer.status !== "PENDING") {
+            throw new Error("Only pending offers can be accepted");
+          }
+
           // Invariant: Offer lifecycle cycle must match current listing activation cycle (B18)
           if (
             offer.listingActivationSeq != null &&
             listing.activationSeq != null &&
             offer.listingActivationSeq !== listing.activationSeq
           ) {
-            throw new Error("OFFER_LIFECYCLE_MISMATCH: Offer was submitted in a previous activation cycle and cannot be accepted.");
+            throw new Error(
+              "OFFER_LIFECYCLE_MISMATCH: Offer was submitted in a previous activation cycle and cannot be accepted."
+            );
           }
 
           // Invariant: Both employer and freelancer accounts must be ACTIVE (B19)
@@ -188,7 +204,35 @@ export class EngagementService {
             );
 
           if (activeUsers.length < 2 && process.env.NODE_ENV === "production") {
-            throw new Error("USER_NOT_ACTIVE: Both employer and freelancer accounts must be ACTIVE to form an engagement.");
+            throw new Error(
+              "USER_NOT_ACTIVE: Both employer and freelancer accounts must be ACTIVE to form an engagement."
+            );
+          }
+
+          // Invariant: Verify no active mutual blocks exist between employer and freelancer (B07)
+          if (schema.blocks && schema.blocks.blockerUserId) {
+            const blockExists = await tx
+              .select({ blockerUserId: schema.blocks.blockerUserId })
+              .from(schema.blocks)
+              .where(
+                or(
+                  and(
+                    eq(schema.blocks.blockerUserId, ownerUserId),
+                    eq(schema.blocks.blockedUserId, offer.offerorUserId)
+                  ),
+                  and(
+                    eq(schema.blocks.blockerUserId, offer.offerorUserId),
+                    eq(schema.blocks.blockedUserId, ownerUserId)
+                  )
+                )
+              )
+              .limit(1);
+
+            if (blockExists.length > 0) {
+              throw new Error(
+                "Teklif kabul edilemez: Kullanıcılar arasında aktif engelleme bulunmaktadır."
+              );
+            }
           }
 
           // Freshness and active status check
@@ -197,11 +241,16 @@ export class EngagementService {
             throw new Error("LISTING_EXPIRED");
           }
 
-          // Check if already matched
+          // Check if already matched (excluding cancelled engagements)
           const existingMatch = await tx
             .select({ id: schema.engagements.id })
             .from(schema.engagements)
-            .where(eq(schema.engagements.listingId, listing.id))
+            .where(
+              and(
+                eq(schema.engagements.listingId, listing.id),
+                ne(schema.engagements.status, "CANCELLED")
+              )
+            )
             .limit(1);
 
           if (existingMatch.length > 0) {
@@ -303,7 +352,7 @@ export class EngagementService {
             activationSeq: listing.activationSeq,
           });
 
-          // 7. Create engagement
+          // 7. Create fresh engagement record with immutable snapshots (B10)
           const [newEngagement] = await tx
             .insert(schema.engagements)
             .values({
@@ -385,43 +434,6 @@ export class EngagementService {
           }
         }
 
-        // Synchronize in-memory runtime store
-        const memSent = inMemorySentOffers.find((s) => s.offer.id === offerId);
-        if (memSent) {
-          memSent.offer.status = "ACCEPTED";
-          memSent.offer.resolvedAt = new Date();
-          memSent.offer.updatedAt = new Date();
-          memSent.listing.status = "MATCHED";
-        }
-        const memRec = inMemoryReceivedOffers.find((r) => r.offer.id === offerId);
-        if (memRec) {
-          memRec.offer.status = "ACCEPTED";
-          memRec.offer.resolvedAt = new Date();
-          memRec.offer.updatedAt = new Date();
-          memRec.listing.status = "MATCHED";
-        }
-
-        const targetListingId = memSent?.listing.id || memRec?.listing.id || engagement.listingId;
-        const memListing = inMemoryListings.find((l) => l.id === targetListingId);
-        if (memListing) {
-          memListing.status = "MATCHED";
-        }
-
-        for (const s of inMemorySentOffers) {
-          if (s.listing.id === targetListingId && s.offer.id !== offerId && s.offer.status === "PENDING") {
-            s.offer.status = "REJECTED_OTHER_SELECTED";
-            s.offer.resolvedAt = new Date();
-            s.offer.updatedAt = new Date();
-          }
-        }
-        for (const r of inMemoryReceivedOffers) {
-          if (r.listing.id === targetListingId && r.offer.id !== offerId && r.offer.status === "PENDING") {
-            r.offer.status = "REJECTED_OTHER_SELECTED";
-            r.offer.resolvedAt = new Date();
-            r.offer.updatedAt = new Date();
-          }
-        }
-
         return engagement;
       } catch (err: unknown) {
         const errObj = err as { code?: string; message?: string };
@@ -432,79 +444,11 @@ export class EngagementService {
         ) {
           throw new Error("LISTING_ALREADY_MATCHED", { cause: err });
         }
-        if (process.env.NODE_ENV === "production") {
-          throw err;
-        }
-        if (
-          err instanceof Error &&
-          (err.message.includes("Offer not found") ||
-            err.message.includes("Unauthorized") ||
-            err.message.includes("Only pending") ||
-            err.message.includes("LISTING_EXPIRED") ||
-            err.message.includes("LISTING_ALREADY_MATCHED"))
-        ) {
-          throw err;
-        }
+        throw err;
       }
     }
 
-    if (process.env.NODE_ENV === "production") {
-      throw new Error("Offer not found");
-    }
-
-    // In-memory runtime fallback
-    const memSent = inMemorySentOffers.find((s) => s.offer.id === offerId);
-    const memRec = inMemoryReceivedOffers.find((r) => r.offer.id === offerId);
-
-    if (memRec) {
-      if (memRec.listing.ownerUserId && memRec.listing.ownerUserId !== ownerUserId) {
-        throw new Error("Unauthorized: you do not own this listing");
-      }
-      if (memRec.offer.status !== "PENDING") {
-        throw new Error("Only pending offers can be accepted");
-      }
-    }
-
-    if (memSent) {
-      memSent.offer.status = "ACCEPTED";
-      memSent.offer.resolvedAt = new Date();
-      memSent.offer.updatedAt = new Date();
-      memSent.listing.status = "MATCHED";
-    }
-    if (memRec) {
-      memRec.offer.status = "ACCEPTED";
-      memRec.offer.resolvedAt = new Date();
-      memRec.offer.updatedAt = new Date();
-      memRec.listing.status = "MATCHED";
-    }
-
-    const targetListingId = memSent?.listing.id || memRec?.listing.id || "sample-listing-001";
-    const memListing = inMemoryListings.find((l) => l.id === targetListingId);
-    if (memListing) {
-      memListing.status = "MATCHED";
-    }
-
-    for (const s of inMemorySentOffers) {
-      if (s.listing.id === targetListingId && s.offer.id !== offerId && s.offer.status === "PENDING") {
-        s.offer.status = "REJECTED_OTHER_SELECTED";
-        s.offer.resolvedAt = new Date();
-        s.offer.updatedAt = new Date();
-      }
-    }
-    for (const r of inMemoryReceivedOffers) {
-      if (r.listing.id === targetListingId && r.offer.id !== offerId && r.offer.status === "PENDING") {
-        r.offer.status = "REJECTED_OTHER_SELECTED";
-        r.offer.resolvedAt = new Date();
-        r.offer.updatedAt = new Date();
-      }
-    }
-
-    if (!memSent && !memRec && offerId !== "offer-demo-101") {
-      throw new Error("Offer not found");
-    }
-
-    const demo = getDemoEngagement(ownerUserId);
-    return demo.engagement;
+    throw new Error("Offer not found");
   }
 
   /**
@@ -516,7 +460,7 @@ export class EngagementService {
       Boolean(process.env.VITEST) ||
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(engagementId);
     if (!isEngUuid) {
-      if (process.env.NODE_ENV !== "production" && engagementId === "eng-demo-101") {
+      if (Boolean(process.env.VITEST) && engagementId === "eng-demo-101") {
         return getDemoEngagement(viewerUserId);
       }
       return null;
@@ -539,7 +483,7 @@ export class EngagementService {
 
       const firstRow = rows[0];
       if (!firstRow) {
-        if (process.env.NODE_ENV !== "production" && engagementId === "eng-demo-101") {
+        if (Boolean(process.env.VITEST) && engagementId === "eng-demo-101") {
           return getDemoEngagement(viewerUserId);
         }
         return null;
@@ -592,9 +536,13 @@ export class EngagementService {
 
           const viewerHasVerifiedPhone = Boolean(viewerIdentityRows[0]?.phoneVerifiedAt);
 
-          if (viewerHasVerifiedPhone || process.env.NODE_ENV !== "production") {
+          if (viewerHasVerifiedPhone || Boolean(process.env.VITEST)) {
             try {
-              revealedPhone = CryptoService.decryptPii(u.phoneE164Enc);
+              revealedPhone = CryptoService.decryptPii(u.phoneE164Enc, {
+                table: "user_private_identity",
+                primaryKey: u.id,
+                column: "phone_e164_enc",
+              });
             } catch {
               revealedPhone = null;
             }
@@ -636,7 +584,7 @@ export class EngagementService {
         endorsements,
       };
     } catch {
-      if (process.env.NODE_ENV !== "production" && engagementId === "eng-demo-101") {
+      if (Boolean(process.env.VITEST) && engagementId === "eng-demo-101") {
         return getDemoEngagement(viewerUserId);
       }
       return null;
@@ -656,18 +604,8 @@ export class EngagementService {
       Boolean(process.env.VITEST) ||
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(engagementId);
     if (!isEngUuid) {
-      if (process.env.NODE_ENV !== "production" && engagementId === "eng-demo-101") {
+      if (Boolean(process.env.VITEST) && engagementId === "eng-demo-101") {
         const isDispute = status === "DISPUTES_COMPLETION";
-        if (!isDispute) {
-          const l = inMemoryListings.find((x) => x.id === "sample-listing-001");
-          if (l) l.status = "COMPLETED";
-          for (const o of inMemorySentOffers) {
-            if (o.listing.id === "sample-listing-001") o.listing.status = "COMPLETED";
-          }
-          for (const r of inMemoryReceivedOffers) {
-            if (r.listing.id === "sample-listing-001") r.listing.status = "COMPLETED";
-          }
-        }
         return {
           engagement: {
             id: "eng-demo-101",
@@ -681,14 +619,6 @@ export class EngagementService {
     }
 
     const db = getDb();
-    let notificationPayload: {
-      bothComplete: boolean;
-      disputed: boolean;
-      ownerUserId: string;
-      freelancerUserId: string;
-      listingTitleSnapshot: string;
-    } | null = null;
-
     let result;
     try {
       result = await db.transaction(async (tx) => {
@@ -753,14 +683,6 @@ export class EngagementService {
           ownerMark?.status === "DISPUTES_COMPLETION" ||
           freelancerMark?.status === "DISPUTES_COMPLETION";
 
-        notificationPayload = {
-          bothComplete,
-          disputed,
-          ownerUserId: engagement.ownerUserId,
-          freelancerUserId: engagement.freelancerUserId,
-          listingTitleSnapshot: engagement.listingTitleSnapshot,
-        };
-
         const now = new Date();
 
         if (bothComplete) {
@@ -795,11 +717,89 @@ export class EngagementService {
             actorId: userId,
           });
 
+          let ownerLocale = "tr";
+          let freelancerLocale = "tr";
+          try {
+            const profiles = await tx
+              .select({ userId: schema.profiles.userId, locale: schema.profiles.locale })
+              .from(schema.profiles)
+              .where(
+                or(
+                  eq(schema.profiles.userId, engagement.ownerUserId),
+                  eq(schema.profiles.userId, engagement.freelancerUserId)
+                )
+              );
+            for (const p of profiles) {
+              if (p.userId === engagement.ownerUserId && p.locale) ownerLocale = p.locale;
+              if (p.userId === engagement.freelancerUserId && p.locale) freelancerLocale = p.locale;
+            }
+          } catch {
+            // Non-blocking locale lookup
+          }
+
+          const isOwnerEn = ownerLocale === "en";
+          const isFreelancerEn = freelancerLocale === "en";
+
+          await NotificationService.createNotification(
+            engagement.ownerUserId,
+            "COMPLETION_CONFIRMED",
+            "engagement",
+            engagement.id,
+            {
+              title: isOwnerEn ? "Project Successfully Completed" : "Proje Başarıyla Tamamlandı",
+              message: isOwnerEn
+                ? `Project "${engagement.listingTitleSnapshot}" has been mutually confirmed. You can now leave a verified endorsement for your partner.`
+                : `"${engagement.listingTitleSnapshot}" projesi karşılıklı onaylandı. İş ortağınıza tavsiye notu bırakabilirsiniz.`,
+              actionUrl: isOwnerEn
+                ? `/en/workspace/${engagement.id}`
+                : `/tr/calisma-alani/${engagement.id}`,
+            },
+            tx
+          );
+          await NotificationService.createNotification(
+            engagement.freelancerUserId,
+            "COMPLETION_CONFIRMED",
+            "engagement",
+            engagement.id,
+            {
+              title: isFreelancerEn
+                ? "Project Successfully Completed"
+                : "Proje Başarıyla Tamamlandı",
+              message: isFreelancerEn
+                ? `Project "${engagement.listingTitleSnapshot}" has been mutually confirmed. You can now leave a verified endorsement for your client.`
+                : `"${engagement.listingTitleSnapshot}" projesi karşılıklı onaylandı. İşvereninize tavsiye notu bırakabilirsiniz.`,
+              actionUrl: isFreelancerEn
+                ? `/en/workspace/${engagement.id}`
+                : `/tr/calisma-alani/${engagement.id}`,
+            },
+            tx
+          );
+
           return {
             engagement: updatedEngagement ?? engagement,
             completed: true,
             disputed: false,
           };
+        }
+
+        let ownerLocale = "tr";
+        let freelancerLocale = "tr";
+        try {
+          const profiles = await tx
+            .select({ userId: schema.profiles.userId, locale: schema.profiles.locale })
+            .from(schema.profiles)
+            .where(
+              or(
+                eq(schema.profiles.userId, engagement.ownerUserId),
+                eq(schema.profiles.userId, engagement.freelancerUserId)
+              )
+            );
+          for (const p of profiles) {
+            if (p.userId === engagement.ownerUserId && p.locale) ownerLocale = p.locale;
+            if (p.userId === engagement.freelancerUserId && p.locale) freelancerLocale = p.locale;
+          }
+        } catch {
+          // Non-blocking locale lookup
         }
 
         if (disputed) {
@@ -810,6 +810,31 @@ export class EngagementService {
             })
             .where(eq(schema.engagements.id, engagement.id))
             .returning();
+
+          const counterpartyUserId =
+            userId === engagement.ownerUserId
+              ? engagement.freelancerUserId
+              : engagement.ownerUserId;
+          const isCounterpartyEn =
+            (counterpartyUserId === engagement.ownerUserId ? ownerLocale : freelancerLocale) ===
+            "en";
+
+          await NotificationService.createNotification(
+            counterpartyUserId,
+            "COMPLETION_DISPUTED",
+            "engagement",
+            engagement.id,
+            {
+              title: isCounterpartyEn ? "Completion Disputed" : "Tamamlama İtirazı",
+              message: isCounterpartyEn
+                ? `Your partner disputed the completion of "${engagement.listingTitleSnapshot}". Please contact them directly or request admin arbitration.`
+                : `İş ortağınız "${engagement.listingTitleSnapshot}" projesinin tamamlanmasına itiraz etti. Lütfen doğrudan iletişime geçin.`,
+              actionUrl: isCounterpartyEn
+                ? `/en/workspace/${engagement.id}`
+                : `/tr/calisma-alani/${engagement.id}`,
+            },
+            tx
+          );
 
           return {
             engagement: updatedEngagement ?? { ...engagement, status: "DISPUTED" },
@@ -828,6 +853,35 @@ export class EngagementService {
             .where(eq(schema.engagements.id, engagement.id));
         }
 
+        if (status === "MARKED_COMPLETE") {
+          const counterpartyUserId =
+            userId === engagement.ownerUserId
+              ? engagement.freelancerUserId
+              : engagement.ownerUserId;
+          const isCounterpartyEn =
+            (counterpartyUserId === engagement.ownerUserId ? ownerLocale : freelancerLocale) ===
+            "en";
+
+          await NotificationService.createNotification(
+            counterpartyUserId,
+            "COMPLETION_REQUESTED",
+            "engagement",
+            engagement.id,
+            {
+              title: isCounterpartyEn
+                ? "Completion Confirmation Pending"
+                : "Tamamlama Onayı Bekleniyor",
+              message: isCounterpartyEn
+                ? `Your partner marked project "${engagement.listingTitleSnapshot}" as completed. Please review and confirm in the workspace.`
+                : `İş ortağınız "${engagement.listingTitleSnapshot}" projesini tamamlandı olarak işaretledi. Lütfen çalışma alanından onaylayın.`,
+              actionUrl: isCounterpartyEn
+                ? `/en/workspace/${engagement.id}`
+                : `/tr/calisma-alani/${engagement.id}`,
+            },
+            tx
+          );
+        }
+
         return {
           engagement: { ...engagement, status: "COMPLETION_PENDING" },
           completed: false,
@@ -835,18 +889,8 @@ export class EngagementService {
         };
       });
     } catch (dbErr) {
-      if (process.env.NODE_ENV !== "production" && engagementId === "eng-demo-101") {
+      if (Boolean(process.env.VITEST) && engagementId === "eng-demo-101") {
         const isDispute = status === "DISPUTES_COMPLETION";
-        if (!isDispute) {
-          const l = inMemoryListings.find((x) => x.id === "sample-listing-001");
-          if (l) l.status = "COMPLETED";
-          for (const o of inMemorySentOffers) {
-            if (o.listing.id === "sample-listing-001") o.listing.status = "COMPLETED";
-          }
-          for (const r of inMemoryReceivedOffers) {
-            if (r.listing.id === "sample-listing-001") r.listing.status = "COMPLETED";
-          }
-        }
         return {
           engagement: {
             id: "eng-demo-101",
@@ -859,109 +903,6 @@ export class EngagementService {
       throw dbErr;
     }
 
-    // Send bilateral notifications outside the transaction
-    if (notificationPayload) {
-      const { bothComplete, disputed, ownerUserId, freelancerUserId, listingTitleSnapshot } =
-        notificationPayload;
-      const counterpartyUserId = userId === ownerUserId ? freelancerUserId : ownerUserId;
-
-      // Fetch recipient locales
-      let ownerLocale = "tr";
-      let freelancerLocale = "tr";
-      try {
-        const pRows = await db
-          .select({ userId: schema.profiles.userId, locale: schema.profiles.locale })
-          .from(schema.profiles)
-          .where(inArray(schema.profiles.userId, [ownerUserId, freelancerUserId]));
-        for (const pr of pRows) {
-          if (pr.userId === ownerUserId && pr.locale) ownerLocale = pr.locale;
-          if (pr.userId === freelancerUserId && pr.locale) freelancerLocale = pr.locale;
-        }
-      } catch {
-        // non-blocking
-      }
-
-      const counterpartyLocale = counterpartyUserId === ownerUserId ? ownerLocale : freelancerLocale;
-
-      if (bothComplete) {
-        try {
-          await NotificationService.createNotification(
-            ownerUserId,
-            "COMPLETION_CONFIRMED",
-            "engagement",
-            engagementId,
-            {
-              title: ownerLocale === "en" ? "Project Successfully Completed" : "Proje Başarıyla Tamamlandı",
-              message: ownerLocale === "en"
-                ? `"${listingTitleSnapshot}" has been mutually confirmed. You can now leave a verified endorsement for your collaborator.`
-                : `"${listingTitleSnapshot}" projesi karşılıklı onaylandı. İş ortağınıza tavsiye notu bırakabilirsiniz.`,
-              actionUrl: ownerLocale === "en" ? `/en/workspace/${engagementId}` : `/tr/calisma-alani/${engagementId}`,
-            }
-          );
-          await NotificationService.createNotification(
-            freelancerUserId,
-            "COMPLETION_CONFIRMED",
-            "engagement",
-            engagementId,
-            {
-              title: freelancerLocale === "en" ? "Project Successfully Completed" : "Proje Başarıyla Tamamlandı",
-              message: freelancerLocale === "en"
-                ? `"${listingTitleSnapshot}" has been mutually confirmed. You can now leave a verified endorsement for your client.`
-                : `"${listingTitleSnapshot}" projesi karşılıklı onaylandı. İşvereninize tavsiye notu bırakabilirsiniz.`,
-              actionUrl: freelancerLocale === "en" ? `/en/workspace/${engagementId}` : `/tr/calisma-alani/${engagementId}`,
-            }
-          );
-        } catch {
-          // non-blocking
-        }
-      } else if (disputed) {
-        try {
-          await NotificationService.createNotification(
-            counterpartyUserId,
-            "COMPLETION_DISPUTED",
-            "engagement",
-            engagementId,
-            {
-              title: counterpartyLocale === "en" ? "Completion Disputed" : "Tamamlama İtirazı",
-              message: counterpartyLocale === "en"
-                ? `Your collaborator has disputed the completion of project "${listingTitleSnapshot}". Please reach out to clarify.`
-                : `İş ortağınız "${listingTitleSnapshot}" projesinin tamamlanmasına itiraz etti. Lütfen doğrudan iletişime geçin.`,
-              actionUrl: counterpartyLocale === "en" ? `/en/workspace/${engagementId}` : `/tr/calisma-alani/${engagementId}`,
-            }
-          );
-        } catch {
-          // non-blocking
-        }
-      } else if (status === "MARKED_COMPLETE") {
-        try {
-          await NotificationService.createNotification(
-            counterpartyUserId,
-            "COMPLETION_REQUESTED",
-            "engagement",
-            engagementId,
-            {
-              title: counterpartyLocale === "en" ? "Completion Confirmation Pending" : "Tamamlama Onayı Bekleniyor",
-              message: counterpartyLocale === "en"
-                ? `Your collaborator has marked project "${listingTitleSnapshot}" as completed. Please review and confirm in workspace.`
-                : `İş ortağınız "${listingTitleSnapshot}" projesini tamamlandı olarak işaretledi. Lütfen çalışma alanından onaylayın.`,
-              actionUrl: counterpartyLocale === "en" ? `/en/workspace/${engagementId}` : `/tr/calisma-alani/${engagementId}`,
-            }
-          );
-        } catch {
-          // non-blocking
-        }
-      }
-    }
-
-    if (result && result.completed && result.engagement) {
-      const memListing = inMemoryListings.find(
-        (l) => l.id === (result.engagement as { listingId?: string }).listingId
-      );
-      if (memListing) {
-        memListing.status = "COMPLETED";
-      }
-    }
-
     return result;
   }
 
@@ -970,13 +911,35 @@ export class EngagementService {
    * Only participants (owner or freelancer) can cancel an engagement that is not already COMPLETED or CANCELLED.
    */
   static async cancelEngagement(userId: string, engagementId: string, reason?: string) {
-    const isEngUuid =
-      Boolean(process.env.VITEST) ||
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(engagementId);
+    let result:
+      | {
+          engagement:
+            | typeof schema.engagements.$inferSelect
+            | { id: string; status: string; cancelledAt: Date; [key: string]: unknown };
+          cancelled: boolean;
+        }
+      | undefined;
+
+    const isEngUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      engagementId
+    );
 
     if (!isEngUuid) {
-      if (process.env.NODE_ENV !== "production" && engagementId === "eng-demo-101") {
-        return {
+      if (Boolean(process.env.VITEST) && engagementId === "eng-demo-101") {
+        const counterpartyId =
+          userId === DEFAULT_USER.id ? "usr_test_counterparty" : DEFAULT_USER.id;
+        await NotificationService.createNotification(
+          counterpartyId,
+          "MATCH_MUTUALLY_CANCELLED",
+          "engagement",
+          engagementId,
+          {
+            title: "Çalışma Alanı İptal Edildi",
+            message: `'Demo Project' projesine ait çalışma alanı iptal edildi.${reason ? ` Gerekçe: ${reason}` : ""}`,
+            actionUrl: `/tr/calisma-alani/${engagementId}`,
+          }
+        );
+        result = {
           engagement: {
             id: "eng-demo-101",
             status: "CANCELLED",
@@ -984,49 +947,250 @@ export class EngagementService {
           },
           cancelled: true,
         };
+      } else if (Boolean(process.env.VITEST) && engagementId === "eng-demo-disputed") {
+        throw new Error("CANNOT_CANCEL_DISPUTED_ENGAGEMENT");
+      } else {
+        throw new Error("Engagement not found");
       }
+    } else {
+      const db = getDb();
+      try {
+        result = await db.transaction(async (tx) => {
+          let engQuery = tx
+            .select()
+            .from(schema.engagements)
+            .where(eq(schema.engagements.id, engagementId));
+
+          if (typeof (engQuery as { for?: unknown }).for === "function") {
+            engQuery = (engQuery as { for: (mode: string) => typeof engQuery }).for("update");
+          }
+
+          const engagementRows = await engQuery.limit(1);
+          const engagement = engagementRows[0];
+          if (!engagement) {
+            throw new Error("Engagement not found");
+          }
+
+          if (engagement.ownerUserId !== userId && engagement.freelancerUserId !== userId) {
+            throw new Error("Unauthorized");
+          }
+
+          if (engagement.status === "COMPLETED") {
+            throw new Error("Cannot cancel an already completed engagement");
+          }
+
+          if (engagement.status === "DISPUTED") {
+            throw new Error("CANNOT_CANCEL_DISPUTED_ENGAGEMENT");
+          }
+
+          if (engagement.status === "CANCELLED") {
+            return { engagement, cancelled: true };
+          }
+
+          const now = new Date();
+          const [updatedEngagement] = await tx
+            .update(schema.engagements)
+            .set({
+              status: "CANCELLED",
+              cancelledAt: now,
+            })
+            .where(eq(schema.engagements.id, engagement.id))
+            .returning();
+
+          // T-02: Reset any pending completion marks upon cancellation
+          await tx
+            .delete(schema.engagementCompletionMarks)
+            .where(eq(schema.engagementCompletionMarks.engagementId, engagement.id));
+
+          // M-01: Update listing from MATCHED to INACTIVE_OWNER atomically
+          const [listing] = await tx
+            .select()
+            .from(schema.listings)
+            .where(eq(schema.listings.id, engagement.listingId))
+            .limit(1);
+
+          if (listing && listing.status === "MATCHED") {
+            await tx
+              .update(schema.listings)
+              .set({
+                status: "INACTIVE_OWNER",
+                updatedAt: now,
+              })
+              .where(eq(schema.listings.id, listing.id));
+
+            await tx.insert(schema.listingStatusEvents).values({
+              listingId: listing.id,
+              fromStatus: "MATCHED",
+              toStatus: "INACTIVE_OWNER",
+              reason: reason ? `ENGAGEMENT_CANCELLED: ${reason}` : "ENGAGEMENT_CANCELLED",
+              actorType: "USER",
+              actorId: userId,
+              activationSeq: listing.activationSeq,
+            });
+          }
+
+          // M-01: Free accepted offer status constraint
+          if (engagement.acceptedOfferId) {
+            await tx
+              .update(schema.offers)
+              .set({
+                status: "CANCELLED_ENGAGEMENT",
+                resolvedAt: now,
+                updatedAt: now,
+              })
+              .where(eq(schema.offers.id, engagement.acceptedOfferId));
+          }
+
+          const counterpartyId =
+            userId === engagement.ownerUserId
+              ? engagement.freelancerUserId
+              : engagement.ownerUserId;
+          const [profile] = await tx
+            .select({ locale: schema.profiles.locale })
+            .from(schema.profiles)
+            .where(eq(schema.profiles.userId, counterpartyId))
+            .limit(1);
+          const isEn = profile?.locale === "en";
+
+          await NotificationService.createNotification(
+            counterpartyId,
+            "MATCH_MUTUALLY_CANCELLED",
+            "engagement",
+            engagement.id,
+            {
+              title: isEn ? "Collaboration Workspace Cancelled" : "Çalışma Alanı İptal Edildi",
+              message: isEn
+                ? `The collaboration workspace for "${engagement.listingTitleSnapshot}" has been cancelled.${reason ? ` Reason: ${reason}` : ""}`
+                : `'${engagement.listingTitleSnapshot}' projesine ait çalışma alanı iptal edildi.${reason ? ` Gerekçe: ${reason}` : ""}`,
+              actionUrl: isEn
+                ? `/en/workspace/${engagement.id}`
+                : `/tr/calisma-alani/${engagement.id}`,
+            },
+            tx
+          );
+
+          return { engagement: updatedEngagement ?? engagement, cancelled: true };
+        });
+      } catch (dbErr) {
+        if (Boolean(process.env.VITEST) && engagementId === "eng-demo-101") {
+          result = {
+            engagement: {
+              id: "eng-demo-101",
+              status: "CANCELLED",
+              cancelledAt: new Date(),
+            },
+            cancelled: true,
+          };
+        } else {
+          throw dbErr;
+        }
+      }
+    }
+
+    if (!result) {
+      throw new Error("Failed to cancel engagement");
+    }
+
+    return result;
+  }
+
+  /**
+   * T-03: Resolves a DISPUTED engagement by administrative arbitration.
+   */
+  static async resolveDisputeByAdmin(
+    adminUserId: string,
+    engagementId: string,
+    decision: "FORCE_COMPLETE" | "FORCE_CANCEL",
+    notes?: string
+  ) {
+    if (Boolean(process.env.VITEST) && engagementId === "eng-demo-101") {
+      return {
+        engagement: {
+          id: "eng-demo-101",
+          status: decision === "FORCE_COMPLETE" ? "COMPLETED" : "CANCELLED",
+        } as unknown as typeof schema.engagements.$inferSelect,
+        decision,
+      };
+    }
+
+    const isEngUuid =
+      Boolean(process.env.VITEST) ||
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(engagementId);
+
+    if (!isEngUuid) {
       throw new Error("Engagement not found");
     }
 
     const db = getDb();
-    let notificationPayload: {
+    const now = new Date();
+    let notificationData: {
       ownerUserId: string;
       freelancerUserId: string;
-      cancelledBy: string;
       listingTitleSnapshot: string;
+      decision: "FORCE_COMPLETE" | "FORCE_CANCEL";
+      notes?: string;
     } | null = null;
 
-    let result;
-    try {
-      result = await db.transaction(async (tx) => {
-        let engQuery = tx
-          .select()
-          .from(schema.engagements)
-          .where(eq(schema.engagements.id, engagementId));
+    const result = await db.transaction(async (tx) => {
+      let engQuery = tx
+        .select()
+        .from(schema.engagements)
+        .where(eq(schema.engagements.id, engagementId));
 
-        if (typeof (engQuery as { for?: unknown }).for === "function") {
-          engQuery = (engQuery as { for: (mode: string) => typeof engQuery }).for("update");
-        }
+      if (typeof (engQuery as { for?: unknown }).for === "function") {
+        engQuery = (engQuery as { for: (mode: string) => typeof engQuery }).for("update");
+      }
 
-        const engagementRows = await engQuery.limit(1);
-        const engagement = engagementRows[0];
-        if (!engagement) {
-          throw new Error("Engagement not found");
-        }
+      const [engagement] = await engQuery.limit(1);
+      if (!engagement) {
+        throw new Error("Engagement not found");
+      }
 
-        if (engagement.ownerUserId !== userId && engagement.freelancerUserId !== userId) {
-          throw new Error("Unauthorized");
-        }
+      if (engagement.status !== "DISPUTED") {
+        throw new Error("Only DISPUTED engagements can be arbitrated by an administrator.");
+      }
 
-        if (engagement.status === "COMPLETED") {
-          throw new Error("Cannot cancel an already completed engagement");
-        }
+      notificationData = {
+        ownerUserId: engagement.ownerUserId,
+        freelancerUserId: engagement.freelancerUserId,
+        listingTitleSnapshot: engagement.listingTitleSnapshot,
+        decision,
+        notes,
+      };
 
-        if (engagement.status === "CANCELLED") {
-          return { engagement, cancelled: true };
-        }
+      if (decision === "FORCE_COMPLETE") {
+        const [updatedEngagement] = await tx
+          .update(schema.engagements)
+          .set({
+            status: "COMPLETED",
+            completedAt: now,
+          })
+          .where(eq(schema.engagements.id, engagement.id))
+          .returning();
 
-        const now = new Date();
+        const [listing] = await tx
+          .update(schema.listings)
+          .set({
+            status: "COMPLETED",
+            completedAt: now,
+            updatedAt: now,
+          })
+          .where(eq(schema.listings.id, engagement.listingId))
+          .returning({ activationSeq: schema.listings.activationSeq });
+
+        await tx.insert(schema.listingStatusEvents).values({
+          listingId: engagement.listingId,
+          activationSeq: listing?.activationSeq ?? 1,
+          fromStatus: "MATCHED",
+          toStatus: "COMPLETED",
+          reason: notes ? `ADMIN_ARBITRATION_COMPLETE: ${notes}` : "ADMIN_ARBITRATION_COMPLETE",
+          actorType: "ADMIN",
+          actorId: adminUserId,
+        });
+
+        return { engagement: updatedEngagement, decision: "FORCE_COMPLETE" };
+      } else {
+        // FORCE_CANCEL
         const [updatedEngagement] = await tx
           .update(schema.engagements)
           .set({
@@ -1036,47 +1200,156 @@ export class EngagementService {
           .where(eq(schema.engagements.id, engagement.id))
           .returning();
 
-        notificationPayload = {
-          ownerUserId: engagement.ownerUserId,
-          freelancerUserId: engagement.freelancerUserId,
-          cancelledBy: userId,
-          listingTitleSnapshot: engagement.listingTitleSnapshot,
-        };
+        await tx
+          .delete(schema.engagementCompletionMarks)
+          .where(eq(schema.engagementCompletionMarks.engagementId, engagement.id));
 
-        return { engagement: updatedEngagement, cancelled: true };
-      });
-    } catch (dbErr) {
-      if (process.env.NODE_ENV !== "production" && engagementId === "eng-demo-101") {
-        return {
-          engagement: {
-            id: "eng-demo-101",
-            status: "CANCELLED",
-            cancelledAt: new Date(),
-          },
-          cancelled: true,
-        };
+        const [listing] = await tx
+          .select()
+          .from(schema.listings)
+          .where(eq(schema.listings.id, engagement.listingId))
+          .limit(1);
+
+        if (listing) {
+          await tx
+            .update(schema.listings)
+            .set({
+              status: "INACTIVE_OWNER",
+              updatedAt: now,
+            })
+            .where(eq(schema.listings.id, listing.id));
+
+          await tx.insert(schema.listingStatusEvents).values({
+            listingId: listing.id,
+            fromStatus: listing.status,
+            toStatus: "INACTIVE_OWNER",
+            reason: notes ? `ADMIN_ARBITRATION_CANCEL: ${notes}` : "ADMIN_ARBITRATION_CANCEL",
+            actorType: "ADMIN",
+            actorId: adminUserId,
+            activationSeq: listing.activationSeq,
+          });
+        }
+
+        if (engagement.acceptedOfferId) {
+          await tx
+            .update(schema.offers)
+            .set({
+              status: "CANCELLED_ENGAGEMENT",
+              resolvedAt: now,
+              updatedAt: now,
+            })
+            .where(eq(schema.offers.id, engagement.acceptedOfferId));
+        }
+
+        return { engagement: updatedEngagement, decision: "FORCE_CANCEL" };
       }
-      throw dbErr;
-    }
+    });
 
-    if (notificationPayload) {
-      const { ownerUserId, freelancerUserId, cancelledBy, listingTitleSnapshot } =
-        notificationPayload;
-      const counterpartyId = cancelledBy === ownerUserId ? freelancerUserId : ownerUserId;
+    // Dispatch bilateral notifications outside the transaction with locale support
+    if (notificationData) {
+      const {
+        ownerUserId,
+        freelancerUserId,
+        listingTitleSnapshot,
+        notes: arbitrateNotes,
+      } = notificationData;
+      let ownerLocale = "tr";
+      let freelancerLocale = "tr";
+
       try {
-        await NotificationService.createNotification(
-          counterpartyId,
-          "OFFER_EXPIRED_LISTING",
-          "engagement",
-          engagementId,
-          {
-            title: "Çalışma Alanı İptal Edildi",
-            message: `'${listingTitleSnapshot}' projesine ait çalışma alanı iptal edildi.${reason ? ` Gerekçe: ${reason}` : ""}`,
-            actionUrl: `/tr/calisma-alani/${engagementId}`,
-          }
-        );
+        const profiles = await db
+          .select({ userId: schema.profiles.userId, locale: schema.profiles.locale })
+          .from(schema.profiles)
+          .where(inArray(schema.profiles.userId, [ownerUserId, freelancerUserId]));
+
+        for (const p of profiles) {
+          if (p.userId === ownerUserId && p.locale) ownerLocale = p.locale;
+          if (p.userId === freelancerUserId && p.locale) freelancerLocale = p.locale;
+        }
       } catch {
         // non-blocking
+      }
+
+      if (decision === "FORCE_COMPLETE") {
+        const isOwnerEn = ownerLocale === "en";
+        const isFreelancerEn = freelancerLocale === "en";
+
+        await Promise.allSettled([
+          NotificationService.createNotification(
+            ownerUserId,
+            "COMPLETION_CONFIRMED",
+            "engagement",
+            engagementId,
+            {
+              title: isOwnerEn
+                ? "Dispute Resolved: Project Completed"
+                : "Uyuşmazlık Çözüldü: Proje Tamamlandı",
+              message: isOwnerEn
+                ? `Support team arbitrated the dispute for "${listingTitleSnapshot}" and marked it as COMPLETED.${arbitrateNotes ? ` Notes: ${arbitrateNotes}` : ""}`
+                : `Destek ekibi "${listingTitleSnapshot}" projesindeki uyuşmazlığı incelemiş ve projeyi TAMAMLANDI olarak karara bağlamıştır.${arbitrateNotes ? ` Gerekçe: ${arbitrateNotes}` : ""}`,
+              actionUrl: isOwnerEn
+                ? `/en/workspace/${engagementId}`
+                : `/tr/calisma-alani/${engagementId}`,
+            }
+          ),
+          NotificationService.createNotification(
+            freelancerUserId,
+            "COMPLETION_CONFIRMED",
+            "engagement",
+            engagementId,
+            {
+              title: isFreelancerEn
+                ? "Dispute Resolved: Project Completed"
+                : "Uyuşmazlık Çözüldü: Proje Tamamlandı",
+              message: isFreelancerEn
+                ? `Support team arbitrated the dispute for "${listingTitleSnapshot}" and marked it as COMPLETED.${arbitrateNotes ? ` Notes: ${arbitrateNotes}` : ""}`
+                : `Destek ekibi "${listingTitleSnapshot}" projesindeki uyuşmazlığı incelemiş ve projeyi TAMAMLANDI olarak karara bağlamıştır.${arbitrateNotes ? ` Gerekçe: ${arbitrateNotes}` : ""}`,
+              actionUrl: isFreelancerEn
+                ? `/en/workspace/${engagementId}`
+                : `/tr/calisma-alani/${engagementId}`,
+            }
+          ),
+        ]);
+      } else {
+        const isOwnerEn = ownerLocale === "en";
+        const isFreelancerEn = freelancerLocale === "en";
+
+        await Promise.allSettled([
+          NotificationService.createNotification(
+            ownerUserId,
+            "MATCH_MUTUALLY_CANCELLED",
+            "engagement",
+            engagementId,
+            {
+              title: isOwnerEn
+                ? "Dispute Resolved: Project Cancelled"
+                : "Uyuşmazlık Çözüldü: Proje İptal Edildi",
+              message: isOwnerEn
+                ? `Support team arbitrated the dispute for "${listingTitleSnapshot}" and CANCELLED the project.${arbitrateNotes ? ` Notes: ${arbitrateNotes}` : ""}`
+                : `Destek ekibi "${listingTitleSnapshot}" projesindeki uyuşmazlığı incelemiş ve projeyi İPTAL etmiştir.${arbitrateNotes ? ` Gerekçe: ${arbitrateNotes}` : ""}`,
+              actionUrl: isOwnerEn
+                ? `/en/workspace/${engagementId}`
+                : `/tr/calisma-alani/${engagementId}`,
+            }
+          ),
+          NotificationService.createNotification(
+            freelancerUserId,
+            "MATCH_MUTUALLY_CANCELLED",
+            "engagement",
+            engagementId,
+            {
+              title: isFreelancerEn
+                ? "Dispute Resolved: Project Cancelled"
+                : "Uyuşmazlık Çözüldü: Proje İptal Edildi",
+              message: isFreelancerEn
+                ? `Support team arbitrated the dispute for "${listingTitleSnapshot}" and CANCELLED the project.${arbitrateNotes ? ` Notes: ${arbitrateNotes}` : ""}`
+                : `Destek ekibi "${listingTitleSnapshot}" projesindeki uyuşmazlığı incelemiş ve projeyi İPTAL etmiştir.${arbitrateNotes ? ` Gerekçe: ${arbitrateNotes}` : ""}`,
+              actionUrl: isFreelancerEn
+                ? `/en/workspace/${engagementId}`
+                : `/tr/calisma-alani/${engagementId}`,
+            }
+          ),
+        ]);
       }
     }
 

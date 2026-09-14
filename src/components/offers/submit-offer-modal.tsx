@@ -107,9 +107,7 @@ export function SubmitOfferModal({
 
     if ((budgetMin && parseFloat(budgetMin) < 0) || (budgetMax && parseFloat(budgetMax) < 0)) {
       setError(
-        isTr
-          ? "Bütçe tutarları sıfırdan küçük olamaz."
-          : "Budget amounts cannot be negative."
+        isTr ? "Bütçe tutarları sıfırdan küçük olamaz." : "Budget amounts cannot be negative."
       );
       return;
     }
@@ -124,11 +122,7 @@ export function SubmitOfferModal({
     }
 
     if (timelineValue && parseInt(timelineValue, 10) <= 0) {
-      setError(
-        isTr
-          ? "Tahmini süre en az 1 olmalıdır."
-          : "Estimated duration must be at least 1."
-      );
+      setError(isTr ? "Tahmini süre en az 1 olmalıdır." : "Estimated duration must be at least 1.");
       return;
     }
 
@@ -166,7 +160,9 @@ export function SubmitOfferModal({
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || (isEditing ? "Failed to update offer" : "Failed to submit offer"));
+        throw new Error(
+          data.error || (isEditing ? "Failed to update offer" : "Failed to submit offer")
+        );
       }
 
       setSuccess(true);

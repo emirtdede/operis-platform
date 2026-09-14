@@ -22,6 +22,118 @@
       "when": 1789116510689,
       "tag": "0002_luxuriant_taskmaster",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789145273243,
+      "tag": "0003_tough_chronomancer",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1789150000000,
+      "tag": "0004_peaceful_valkyrie",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1789155000000,
+      "tag": "0005_outbox_fencing_and_email_encryption",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789160000000,
+      "tag": "0006_budget_check_constraint",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789165000000,
+      "tag": "0007_budget_check_open_bid_fix",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1789170000000,
+      "tag": "0008_delivery_key_and_export_jobs",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1789175000000,
+      "tag": "0009_notification_delivery_key_conflict_fix",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1789180000000,
+      "tag": "0010_notification_delivery_pipeline",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1789185000000,
+      "tag": "0011_export_job_leases_and_parts",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1789190000000,
+      "tag": "0012_budget_modes_comprehensive_chk",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1789195000000,
+      "tag": "0013_enable_rls_and_lockdown_postgrest",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1789200000000,
+      "tag": "0014_service_role_policies_on_all_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1789205000000,
+      "tag": "0015_add_covering_indexes_for_foreign_keys",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1789210000000,
+      "tag": "0016_create_resend_contact_pool",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1789215000000,
+      "tag": "0017_drop_duplicate_notification_delivery_key_idx",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1789220000000,
+      "tag": "0018_add_clerk_user_id",
+      "breakpoints": true
     }
   ]
 }

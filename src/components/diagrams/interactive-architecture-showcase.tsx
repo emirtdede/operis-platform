@@ -74,8 +74,8 @@ export function InteractiveArchitectureShowcase({ isTr = true }: { isTr?: boolea
         })}
       </div>
 
-      {/* Dynamic Diagram Viewport */}
-      <div className="transition-all duration-300">
+      {/* Dynamic Diagram Viewport with Smooth Animated Transition */}
+      <div key={activeTab} className="animate-tab-fade">
         {activeTab === "bilateral" && <BilateralMatchDiagram />}
         {activeTab === "lifecycle" && <LifecycleRadarDiagram />}
         {activeTab === "direct" && <DirectNetworkDiagram />}

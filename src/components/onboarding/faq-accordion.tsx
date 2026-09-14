@@ -95,12 +95,12 @@ export function FaqAccordion({ locale }: FaqAccordionProps) {
                 }`}
               >
                 {/* Corner Ambient Glow for Open Item */}
-                {isOpen && (
-                  <div
-                    className="pointer-events-none absolute -top-16 -right-16 w-36 h-36 rounded-full bg-blue-500/15 blur-2xl"
-                    aria-hidden="true"
-                  />
-                )}
+                <div
+                  className={`pointer-events-none absolute -top-16 -right-16 w-36 h-36 rounded-full bg-blue-500/15 blur-2xl transition-opacity duration-500 ${
+                    isOpen ? "opacity-100" : "opacity-0"
+                  }`}
+                  aria-hidden="true"
+                />
 
                 <button
                   type="button"
@@ -119,20 +119,31 @@ export function FaqAccordion({ locale }: FaqAccordionProps) {
                     }`}
                     aria-hidden="true"
                   >
-                    <ChevronDown className="h-4 w-4 transition-transform duration-300" />
+                    <ChevronDown className="h-4 w-4" />
                   </div>
                 </button>
 
-                {isOpen && (
-                  <div className="relative z-10 px-6 pb-6 sm:px-7 sm:pb-7 pt-0 animate-in fade-in-50 duration-200">
-                    <div className="rounded-2xl border border-blue-500/20 bg-blue-500/5 p-4 sm:p-5 flex items-start gap-3.5 text-xs sm:text-sm leading-relaxed">
-                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 mt-0.5">
-                        <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+                {/* Smooth Expand/Collapse Content Container */}
+                <div
+                  className={`grid transition-[grid-template-rows,opacity] duration-300 ease-in-out ${
+                    isOpen
+                      ? "grid-rows-[1fr] opacity-100"
+                      : "grid-rows-[0fr] opacity-0 pointer-events-none"
+                  }`}
+                >
+                  <div className="overflow-hidden">
+                    <div className="relative z-10 px-6 pb-6 sm:px-7 sm:pb-7 pt-0">
+                      <div className="rounded-2xl border border-blue-500/20 bg-blue-500/5 p-4 sm:p-5 flex items-start gap-3.5 text-xs sm:text-sm leading-relaxed">
+                        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 mt-0.5">
+                          <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+                        </div>
+                        <p className="leading-relaxed text-[var(--color-text-primary)]/90">
+                          {faq.a}
+                        </p>
                       </div>
-                      <p className="leading-relaxed text-[var(--color-text-primary)]/90">{faq.a}</p>
                     </div>
                   </div>
-                )}
+                </div>
               </div>
             );
           })}

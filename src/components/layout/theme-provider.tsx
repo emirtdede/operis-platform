@@ -29,6 +29,11 @@ export function ThemeScript() {
         theme = "light";
       }
       document.documentElement.setAttribute("data-theme", theme);
+      if (theme === "dark" || theme === "black") {
+        document.documentElement.classList.add("dark");
+      } else {
+        document.documentElement.classList.remove("dark");
+      }
     } catch (e) {}
   })();`;
 
@@ -50,6 +55,11 @@ export function ThemeProvider({
       if (stored && (stored === "light" || stored === "dark" || stored === "black")) {
         setThemeState(stored);
         document.documentElement.setAttribute("data-theme", stored);
+        if (stored === "dark" || stored === "black") {
+          document.documentElement.classList.add("dark");
+        } else {
+          document.documentElement.classList.remove("dark");
+        }
       }
     } catch {
       // Ignored in SSR or restricted storage environments
@@ -62,6 +72,11 @@ export function ThemeProvider({
       localStorage.setItem(THEME_STORAGE_KEY, newTheme);
       document.cookie = `${THEME_COOKIE_KEY}=${encodeURIComponent(newTheme)}; path=/; max-age=31536000; SameSite=Lax`;
       document.documentElement.setAttribute("data-theme", newTheme);
+      if (newTheme === "dark" || newTheme === "black") {
+        document.documentElement.classList.add("dark");
+      } else {
+        document.documentElement.classList.remove("dark");
+      }
     } catch {
       // Ignored
     }

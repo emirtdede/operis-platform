@@ -6,6 +6,7 @@ export interface DemoUser {
   status: "ACTIVE" | "SUSPENDED" | "DELETED";
   emailVerified: boolean;
   phoneVerified: boolean;
+  authVersion?: number;
   twoFactorEnabled?: boolean;
   twoFactorSecret?: string;
   profile: {
@@ -29,6 +30,7 @@ export const DEFAULT_USER: DemoUser = {
   status: "ACTIVE",
   emailVerified: true,
   phoneVerified: true,
+  authVersion: 1,
   twoFactorEnabled: false,
   twoFactorSecret: undefined,
   profile: {

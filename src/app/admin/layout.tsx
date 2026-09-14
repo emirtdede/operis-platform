@@ -9,8 +9,10 @@ import {
   Activity,
   AlertTriangle,
   ShieldAlert,
+  Scale,
   Search,
   ExternalLink,
+  Mail,
 } from "lucide-react";
 import { AdminService } from "@/src/modules/admin/service";
 import { BrandLogo } from "@/src/components/layout/brand-logo";
@@ -82,9 +84,22 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       icon: Activity,
       badge: "99.9%",
     },
+    {
+      href: "/admin/messages",
+      label: "İletişim & Destek",
+      icon: Mail,
+      badge: null,
+    },
   ];
 
   const alertEngines = [
+    {
+      href: "/admin/engagements",
+      label: "Uyuşmazlık Hakemliği",
+      icon: Scale,
+      badge: metrics.disputedEngagements > 0 ? `${metrics.disputedEngagements}` : null,
+      badgeColor: "bg-red-500/20 text-red-400 border-red-500/30 animate-pulse",
+    },
     {
       href: "/admin/moderation/abuse",
       label: "Kullanıcı İhlalleri (Küfür/Abuse)",

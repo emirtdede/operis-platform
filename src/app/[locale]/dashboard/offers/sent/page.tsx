@@ -74,6 +74,7 @@ export default async function SentOffersPage({ params }: { params: Promise<{ loc
   }
 
   let initialOffers: SentOfferItem[];
+  let fetchError = false;
 
   try {
     const rows = await OfferService.getSentOffers(session.userId);
@@ -91,8 +92,10 @@ export default async function SentOffersPage({ params }: { params: Promise<{ loc
       estimatedDurationUnit: r.offer.estimatedDurationUnit,
       createdAt: r.offer.createdAt,
       updatedAt: r.offer.updatedAt,
+      engagementId: r.engagementId || null,
     }));
   } catch {
+    fetchError = true;
     initialOffers = [];
   }
 
@@ -177,9 +180,29 @@ export default async function SentOffersPage({ params }: { params: Promise<{ loc
       </section>
 
       {/* Sent Offers Dashboard */}
-      <section aria-label={isTr ? "Gönderilen Teklif Listesi" : "Sent Offer List"}>
-        <SentOffersDashboard initialOffers={initialOffers} locale={locale} />
-      </section>
+      {fetchError ? (
+        <div className="rounded-2xl border border-rose-500/20 bg-rose-500/10 p-6 text-center space-y-3">
+          <p className="text-sm font-semibold text-rose-400">
+            {isTr
+              ? "Teklifleriniz yüklenirken bir sorun oluştu."
+              : "An error occurred while loading your proposals."}
+          </p>
+          <p className="text-xs text-[var(--color-text-secondary)]">
+            {isTr
+              ? "Sunucu bağlantısında anlık bir gecikme yaşanmış olabilir. Lütfen sayfayı yenileyiniz."
+              : "There may have been a temporary network blip. Please refresh the page to try again."}
+          </p>
+          <Link href={isTr ? "/tr/panel/teklifler/gonderilen" : "/en/dashboard/offers/sent"}>
+            <Button variant="outline" size="sm" className="mt-2 text-xs">
+              {isTr ? "Sayfayı Yenile" : "Refresh Page"}
+            </Button>
+          </Link>
+        </div>
+      ) : (
+        <section aria-label={isTr ? "Gönderilen Teklif Listesi" : "Sent Offer List"}>
+          <SentOffersDashboard initialOffers={initialOffers} locale={locale} />
+        </section>
+      )}
     </main>
   );
 }

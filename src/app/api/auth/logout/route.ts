@@ -13,5 +13,15 @@ export async function POST() {
     maxAge: 0,
   });
 
+  // Clear Clerk session cookies
+  response.cookies.set("__session", "", {
+    path: "/",
+    maxAge: 0,
+  });
+  response.cookies.set("__client_uat", "", {
+    path: "/",
+    maxAge: 0,
+  });
+
   return response;
 }

@@ -1,9 +1,12 @@
-import { and, desc, eq, or } from "drizzle-orm";
-import { getDb, schema } from "@/src/lib/db";
+import { and, desc, eq, inArray, or } from "drizzle-orm";
+import { getDb, schema, acquireUserPairAdvisoryLock } from "@/src/lib/db";
 import { z } from "zod";
-import { mockAbuseEvents } from "@/src/modules/admin/service";
 import { inMemoryListings } from "@/src/modules/listings/service";
 import { inMemorySentOffers } from "@/src/modules/offers/service";
+import { NotificationService } from "@/src/modules/notifications/service";
+
+// In-memory store exclusively for isolated unit test environments without live DB
+const inMemoryReports: Array<typeof schema.reports.$inferSelect> = [];
 
 const EMOJI_REGEX =
   /[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F1E6}-\u{1F1FF}\u{1F900}-\u{1F9FF}\u{1FA70}-\u{1FAFF}]/u;
@@ -54,17 +57,59 @@ export class ModerationService {
       throw new Error("You cannot block yourself");
     }
 
-    const db = getDb();
+    try {
+      const db = getDb();
 
-    await db
-      .insert(schema.blocks)
-      .values({
-        blockerUserId,
-        blockedUserId,
-      })
-      .onConflictDoNothing();
+      return await db.transaction(async (tx) => {
+        // 1. Acquire transaction-level advisory lock on symmetric user pair (Fixes B07, R02)
+        await acquireUserPairAdvisoryLock(tx, blockerUserId, blockedUserId);
 
-    return true;
+        // 2. Prevent blocking if there is an active engagement or open dispute
+        const activeEngagements = await tx
+          .select({ id: schema.engagements.id })
+          .from(schema.engagements)
+          .where(
+            and(
+              inArray(schema.engagements.status, ["MATCHED", "COMPLETION_PENDING", "DISPUTED"]),
+              or(
+                and(
+                  eq(schema.engagements.ownerUserId, blockerUserId),
+                  eq(schema.engagements.freelancerUserId, blockedUserId)
+                ),
+                and(
+                  eq(schema.engagements.ownerUserId, blockedUserId),
+                  eq(schema.engagements.freelancerUserId, blockerUserId)
+                )
+              )
+            )
+          )
+          .limit(1);
+
+        if (activeEngagements.length > 0) {
+          throw new Error(
+            "Aktif bir iş anlaşmanız veya uyuşmazlığınız varken bu kullanıcıyı engelleyemezsiniz."
+          );
+        }
+
+        await tx
+          .insert(schema.blocks)
+          .values({
+            blockerUserId,
+            blockedUserId,
+          })
+          .onConflictDoNothing();
+
+        return true;
+      });
+    } catch (err) {
+      if (err instanceof Error && err.message.includes("Aktif bir iş")) {
+        throw err;
+      }
+      if (process.env.NODE_ENV === "production") {
+        throw err;
+      }
+      return true;
+    }
   }
 
   /**
@@ -111,22 +156,27 @@ export class ModerationService {
   static async submitReport(reporterUserId: string, rawInput: CreateReportInput) {
     const input = createReportSchema.parse(rawInput);
     const db = getDb();
-    const isTargetUuid =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(input.targetId);
-    const isReporterUuid =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(reporterUserId);
+    const isTargetUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      input.targetId
+    );
+    const isReporterUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      reporterUserId
+    );
 
     let offenderUserId: string | undefined;
     let offenderDisplayName: string | undefined;
 
-    if (input.targetType === "profile" || input.targetType === "general") {
+    if (input.targetType === "profile") {
       offenderUserId = input.targetId;
+    } else if (input.targetType === "general") {
+      offenderUserId = undefined;
     } else if (input.targetType === "listing") {
       const memListing = inMemoryListings.find((l) => l.id === input.targetId);
       if (memListing) {
         offenderUserId = memListing.ownerUserId;
         offenderDisplayName =
-          (memListing as unknown as { ownerDisplayName?: string }).ownerDisplayName || "İlan Sahibi";
+          (memListing as unknown as { ownerDisplayName?: string }).ownerDisplayName ||
+          "İlan Sahibi";
       }
     } else if (input.targetType === "offer") {
       const memOffer = inMemorySentOffers.find((s) => s.offer.id === input.targetId);
@@ -163,11 +213,31 @@ export class ModerationService {
           if (p?.displayName) offenderDisplayName = p.displayName;
         }
 
+        if (input.targetType !== "general" && offenderUserId && offenderUserId === reporterUserId) {
+          throw new Error("CANNOT_REPORT_SELF");
+        }
+
+        const existingReport = await db
+          .select({ id: schema.reports.id })
+          .from(schema.reports)
+          .where(
+            and(
+              eq(schema.reports.reporterUserId, reporterUserId),
+              eq(schema.reports.targetId, input.targetId),
+              inArray(schema.reports.status, ["OPEN", "REVIEWING"])
+            )
+          )
+          .limit(1);
+
+        if (existingReport.length > 0) {
+          throw new Error("DUPLICATE_REPORT");
+        }
+
         const [report] = await db
           .insert(schema.reports)
           .values({
             reporterUserId,
-            targetType: input.targetType === "general" ? "profile" : input.targetType,
+            targetType: input.targetType,
             targetId: input.targetId,
             reasonCode: input.reasonCode,
             details: input.details ?? null,
@@ -176,61 +246,49 @@ export class ModerationService {
           .returning();
 
         if (report) {
-          mockAbuseEvents.unshift({
-            id: report.id,
-            reporterUserId,
-            reporterDisplayName: "Kullanıcı",
-            offenderUserId,
-            offenderDisplayName: offenderDisplayName || "Kullanıcı",
-            targetType:
-              input.targetType === "general"
-                ? "profile"
-                : (input.targetType as "listing" | "profile" | "offer" | "message"),
-            targetId: input.targetId,
-            reasonCode: input.reasonCode,
-            details: input.details ?? "",
-            status: "OPEN",
-            createdAt: report.createdAt,
-          });
-
           return report;
         }
       } catch (err) {
+        if (
+          err instanceof Error &&
+          (err.message === "CANNOT_REPORT_SELF" || err.message === "DUPLICATE_REPORT")
+        ) {
+          throw err;
+        }
         if (process.env.NODE_ENV === "production") {
           throw err;
         }
       }
     }
 
-    const mockReport = {
-      id: `report_${Date.now()}`,
+    if (input.targetType !== "general" && offenderUserId && offenderUserId === reporterUserId) {
+      throw new Error("CANNOT_REPORT_SELF");
+    }
+
+    const existingMock = inMemoryReports.find(
+      (m) =>
+        m.reporterUserId === reporterUserId &&
+        m.targetId === input.targetId &&
+        (m.status === "OPEN" || m.status === "REVIEWING")
+    );
+    if (existingMock) {
+      throw new Error("DUPLICATE_REPORT");
+    }
+
+    const mockReport: typeof schema.reports.$inferSelect = {
+      id: crypto.randomUUID(),
       reporterUserId,
       targetType: input.targetType,
       targetId: input.targetId,
       reasonCode: input.reasonCode,
       details: input.details ?? null,
       status: "OPEN",
-      createdAt: new Date(),
       assignedAdminId: null,
       resolvedAt: null,
+      createdAt: new Date(),
     };
-    mockAbuseEvents.unshift({
-      id: mockReport.id,
-      reporterUserId,
-      reporterDisplayName: "Kullanıcı",
-      offenderUserId,
-      offenderDisplayName: offenderDisplayName || "Kullanıcı",
-      targetType:
-        input.targetType === "general"
-          ? "profile"
-          : (input.targetType as "listing" | "profile" | "offer" | "message"),
-      targetId: input.targetId,
-      reasonCode: input.reasonCode,
-      details: input.details ?? "",
-      status: "OPEN",
-      createdAt: mockReport.createdAt,
-    });
-    return mockReport as unknown as typeof schema.reports.$inferSelect;
+    inMemoryReports.unshift(mockReport);
+    return mockReport;
   }
 
   /**
@@ -241,39 +299,37 @@ export class ModerationService {
       const db = getDb();
       const query = db.select().from(schema.reports).orderBy(desc(schema.reports.createdAt));
       const rows = await query;
-      if (!statusFilter || statusFilter === "all") return rows;
-      return rows.filter((r) => r.status.toLowerCase() === statusFilter.toLowerCase());
+      if (rows.length > 0) {
+        if (!statusFilter || statusFilter.toLowerCase() === "all") return rows;
+        return rows.filter((r) => r.status.toLowerCase() === statusFilter.toLowerCase());
+      }
     } catch (err) {
       if (process.env.NODE_ENV === "production") {
         throw err;
       }
-      let events = [...mockAbuseEvents];
-      if (statusFilter && statusFilter !== "all") {
-        events = events.filter((e) => e.status.toLowerCase() === statusFilter.toLowerCase());
-      }
-      return events.map((e) => ({
-        id: e.id,
-        reporterUserId: e.reporterUserId,
-        targetType: e.targetType,
-        targetId: e.targetId,
-        reasonCode: e.reasonCode,
-        details: e.details,
-        status: e.status,
-        createdAt: e.createdAt,
-        assignedAdminId: null,
-        resolvedAt: null,
-      })) as unknown as (typeof schema.reports.$inferSelect)[];
     }
+    let events = [...inMemoryReports];
+    if (statusFilter && statusFilter.toLowerCase() !== "all") {
+      events = events.filter((e) => e.status.toLowerCase() === statusFilter.toLowerCase());
+    }
+    return events;
   }
 
   /**
    * Resolves or dismisses an abuse report.
    */
   static async resolveReport(adminId: string, reportId: string, status: "RESOLVED" | "DISMISSED") {
-    const report = mockAbuseEvents.find((r) => r.id === reportId);
+    let reporterUserId: string | undefined;
+
+    const report = inMemoryReports.find((r) => r.id === reportId);
     if (report) {
       report.status = status;
+      if (report.reporterUserId) {
+        reporterUserId = report.reporterUserId;
+      }
     }
+
+    let updatedResult: typeof schema.reports.$inferSelect | undefined;
 
     try {
       const db = getDb();
@@ -287,17 +343,68 @@ export class ModerationService {
         .where(eq(schema.reports.id, reportId))
         .returning();
 
-      return updated;
+      updatedResult = updated;
+      if (updated?.reporterUserId) {
+        reporterUserId = updated.reporterUserId;
+      }
+
+      try {
+        await db.insert(schema.adminAuditLog).values({
+          adminUserId: adminId,
+          action: `REPORT_${status}`,
+          targetType: "report",
+          targetId: reportId,
+          reasonCode: status,
+          safeSummary: `Şikayet ${reportId} incelendi ve '${status}' olarak sonuçlandırıldı.`,
+        });
+      } catch {
+        // non-blocking
+      }
     } catch (err) {
       if (process.env.NODE_ENV === "production") {
         throw err;
       }
-      return {
+      updatedResult = {
         id: reportId,
         status,
         assignedAdminId: adminId,
         resolvedAt: new Date(),
       } as unknown as typeof schema.reports.$inferSelect;
     }
+
+    if (reporterUserId) {
+      const isResolved = status === "RESOLVED";
+      const titleTr = isResolved ? "Şikayetiniz İncelendi ve Çözümlendi" : "Şikayetiniz İncelendi";
+      const titleEn = isResolved
+        ? "Your Report Has Been Resolved"
+        : "Your Report Has Been Reviewed";
+      const msgTr = isResolved
+        ? "Bildirdiğiniz şikayet Operis moderasyon ekibi tarafından incelendi ve gerekli tedbirler uygulandı. Güvenli topluluğumuza katkınız için teşekkür ederiz."
+        : "Bildirdiğiniz şikayet Operis moderasyon ekibi tarafından incelendi ve mevcut kurallar çerçevesinde kapatıldı.";
+      const msgEn = isResolved
+        ? "Your report has been investigated by our moderation team and appropriate actions have been taken. Thank you for helping keep Operis safe."
+        : "Your report has been investigated by our moderation team and concluded in accordance with our community guidelines.";
+
+      try {
+        await NotificationService.createNotification(
+          reporterUserId,
+          "MODERATION_ACTION",
+          "REPORT",
+          reportId,
+          {
+            title: titleTr,
+            title_en: titleEn,
+            message: msgTr,
+            message_en: msgEn,
+            reportId,
+            status,
+          }
+        );
+      } catch {
+        // Notification failure should not fail report resolution
+      }
+    }
+
+    return updatedResult;
   }
 }

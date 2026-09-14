@@ -18,7 +18,7 @@ export async function generateMetadata({
   const isTr = locale === "tr";
 
   return {
-    title: isTr ? "Profil & Hesap Ayarları | Operis" : "Profile & Account Settings | Operis",
+    title: isTr ? "Profil & Hesap Ayarları" : "Profile & Account Settings",
     description: isTr
       ? "Operis profilinizi, bağlantılarınızı ve gizlilik tercihlerinizi yönetin."
       : "Manage your Operis public profile, portfolio links, and privacy settings.",
@@ -81,7 +81,7 @@ export default async function DashboardSettingsPage({
     emailVerified,
     phoneVerified,
     email: session.email || "",
-    links: (profile?.links || []).map((l) => ({
+    links: (profile?.links || []).map((l: { type: string; label: string; url: string }) => ({
       type: l.type,
       label: l.label,
       url: l.url,

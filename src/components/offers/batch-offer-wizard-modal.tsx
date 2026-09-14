@@ -191,9 +191,7 @@ export function BatchOfferWizardModal({
 
     try {
       const parsedDuration =
-        timelineValue && !isNaN(parseInt(timelineValue, 10))
-          ? parseInt(timelineValue, 10)
-          : null;
+        timelineValue && !isNaN(parseInt(timelineValue, 10)) ? parseInt(timelineValue, 10) : null;
 
       const items = selectedListings.map((listing) => {
         const msg = getListingMessage(listing);
@@ -230,8 +228,7 @@ export function BatchOfferWizardModal({
       const data = await res.json();
       if (!res.ok && !data.results) {
         throw new Error(
-          data.error ||
-            (isTr ? "Toplu teklif iletilemedi." : "Failed to submit batch offers.")
+          data.error || (isTr ? "Toplu teklif iletilemedi." : "Failed to submit batch offers.")
         );
       }
 
@@ -292,9 +289,7 @@ export function BatchOfferWizardModal({
 
     if ((minVal !== null && minVal < 0) || (maxVal !== null && maxVal < 0)) {
       setStep1Error(
-        isTr
-          ? "Bütçe tutarları sıfırdan küçük olamaz."
-          : "Budget amounts cannot be negative."
+        isTr ? "Bütçe tutarları sıfırdan küçük olamaz." : "Budget amounts cannot be negative."
       );
       return;
     }
@@ -311,9 +306,7 @@ export function BatchOfferWizardModal({
     // Validate timeline
     if (timelineValue && parseInt(timelineValue, 10) <= 0) {
       setStep1Error(
-        isTr
-          ? "Tahmini süre en az 1 olmalıdır."
-          : "Estimated duration must be at least 1."
+        isTr ? "Tahmini süre en az 1 olmalıdır." : "Estimated duration must be at least 1."
       );
       return;
     }

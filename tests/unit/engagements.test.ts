@@ -7,6 +7,7 @@ let mockEngagements: Array<Record<string, unknown>> = [];
 
 vi.mock("@/src/lib/db", () => {
   return {
+    acquireUserPairAdvisoryLock: vi.fn().mockResolvedValue(undefined),
     getDb: () => ({
       transaction: async (fn: (tx: unknown) => unknown) => {
         const txMock = {

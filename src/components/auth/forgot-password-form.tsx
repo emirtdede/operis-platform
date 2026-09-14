@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { Mail, CheckCircle2, AlertCircle } from "lucide-react";
 import { Button } from "../ui/button";
 import { TextInput } from "../ui/text-input";
+import { TurnstileWidget } from "../security/turnstile-widget";
 
 export interface ForgotPasswordFormProps {
   locale: string;
@@ -15,6 +16,7 @@ export function ForgotPasswordForm({ locale }: ForgotPasswordFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,12 +30,14 @@ export function ForgotPasswordForm({ locale }: ForgotPasswordFormProps) {
           "Content-Type": "application/json",
           "x-locale": locale,
         },
-        body: JSON.stringify({ email: email.trim(), locale }),
+        body: JSON.stringify({ email: email.trim(), locale, turnstileToken }),
       });
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || (isTr ? "İşlem gerçekleştirilemedi." : "Request could not be processed."));
+        throw new Error(
+          data.error || (isTr ? "İşlem gerçekleştirilemedi." : "Request could not be processed.")
+        );
       }
 
       setIsSuccess(true);
@@ -86,6 +90,12 @@ export function ForgotPasswordForm({ locale }: ForgotPasswordFormProps) {
         required
         autoFocus
         startIcon={<Mail className="h-4 w-4" aria-hidden="true" />}
+      />
+
+      {/* Cloudflare Turnstile Bot Defense */}
+      <TurnstileWidget
+        onVerify={(token) => setTurnstileToken(token)}
+        onExpire={() => setTurnstileToken(null)}
       />
 
       <Button

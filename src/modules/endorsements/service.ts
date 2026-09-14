@@ -77,10 +77,12 @@ export class EndorsementService {
       throw new Error("PROFANITY_OR_INAPPROPRIATE_CONTENT");
     }
 
-    const isEngUuid =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(input.engagementId);
-    const isAuthorUuid =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(input.authorUserId);
+    const isEngUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      input.engagementId
+    );
+    const isAuthorUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      input.authorUserId
+    );
 
     if (!isEngUuid || !isAuthorUuid) {
       if (process.env.NODE_ENV === "production") {
@@ -108,12 +110,8 @@ export class EndorsementService {
       }
 
       const recipientUserId = isAuthorDefault ? "u-techcorp-1" : DEFAULT_USER.id;
-      const authorDisplayName = isAuthorDefault
-        ? DEFAULT_USER.profile.displayName
-        : "Ahmet Yılmaz";
-      const authorHandle = isAuthorDefault
-        ? DEFAULT_USER.profile.handle
-        : "ahmetyilmaz";
+      const authorDisplayName = isAuthorDefault ? DEFAULT_USER.profile.displayName : "Ahmet Yılmaz";
+      const authorHandle = isAuthorDefault ? DEFAULT_USER.profile.handle : "ahmetyilmaz";
 
       const mockRecord = {
         id: `endorsement-${Date.now()}`,
@@ -305,12 +303,8 @@ export class EndorsementService {
           ? "u-techcorp-1"
           : DEFAULT_USER.id
         : "u-counterparty";
-      const authorDisplayName = isAuthorDefault
-        ? DEFAULT_USER.profile.displayName
-        : "Ahmet Yılmaz";
-      const authorHandle = isAuthorDefault
-        ? DEFAULT_USER.profile.handle
-        : "ahmetyilmaz";
+      const authorDisplayName = isAuthorDefault ? DEFAULT_USER.profile.displayName : "Ahmet Yılmaz";
+      const authorHandle = isAuthorDefault ? DEFAULT_USER.profile.handle : "ahmetyilmaz";
 
       const mockRecord = {
         id: `endorsement-${Date.now()}`,
@@ -365,8 +359,8 @@ export class EndorsementService {
    * Retrieves verified endorsements for a public profile.
    */
   static async getEndorsementsForUser(userId: string): Promise<EndorsementDto[]> {
-    // If demo user and in-memory contains demo endorsements
-    if (process.env.NODE_ENV !== "production" && userId === DEFAULT_USER.id) {
+    // If demo user and in-memory contains demo endorsements (VITEST only)
+    if (Boolean(process.env.VITEST) && userId === DEFAULT_USER.id) {
       const demoMatches = inMemoryEndorsements.filter((e) => e.recipientUserId === userId);
       if (demoMatches.length > 0) {
         return demoMatches.map((m) => ({
@@ -384,8 +378,9 @@ export class EndorsementService {
       }
     }
 
-    const isUserUuid =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
+    const isUserUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      userId
+    );
     if (!isUserUuid) {
       return inMemoryEndorsements
         .filter((e) => e.recipientUserId === userId)
@@ -421,7 +416,10 @@ export class EndorsementService {
         .from(schema.endorsements)
         .innerJoin(
           schema.users,
-          and(eq(schema.users.id, schema.endorsements.authorUserId), eq(schema.users.status, "ACTIVE"))
+          and(
+            eq(schema.users.id, schema.endorsements.authorUserId),
+            eq(schema.users.status, "ACTIVE")
+          )
         )
         .leftJoin(schema.profiles, eq(schema.endorsements.authorUserId, schema.profiles.userId))
         .where(eq(schema.endorsements.recipientUserId, userId))
@@ -465,8 +463,9 @@ export class EndorsementService {
    * Retrieves endorsements left for a specific engagement.
    */
   static async getEndorsementsForEngagement(engagementId: string): Promise<EndorsementDto[]> {
-    const isEngUuid =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(engagementId);
+    const isEngUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      engagementId
+    );
     if (!isEngUuid) {
       return inMemoryEndorsements
         .filter((e) => e.engagementId === engagementId)

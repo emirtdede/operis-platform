@@ -9,6 +9,8 @@ import { Footer } from "@/src/components/layout/footer";
 import { CookieConsentModal } from "@/src/components/legal/cookie-consent-modal";
 import { getSession } from "@/src/modules/auth/session";
 import { ProfileService } from "@/src/modules/profiles/service";
+import { OperisClerkProvider } from "@/src/components/auth/clerk-provider-wrapper";
+import { OperisPostHogProvider } from "@/src/components/analytics/posthog-provider";
 import "@/src/styles/tokens.css";
 
 export function generateStaticParams() {
@@ -91,23 +93,27 @@ export default async function RootLocaleLayout({
   }
 
   return (
-    <NextIntlClientProvider locale={locale} messages={messages}>
-      <ThemeProvider defaultTheme="light">
-        <a
-          href="#main-content"
-          className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-blue-600 focus:text-white focus:rounded-lg focus:shadow-xl focus:outline-none focus:ring-2 focus:ring-blue-400 text-sm font-semibold transition-all"
-        >
-          {locale === "tr" ? "Ana içeriğe atla" : "Skip to main content"}
-        </a>
-        <div className="flex min-h-screen flex-col">
-          <Header initialSession={session} initialProfile={initialProfile} />
-          <div id="main-content" className="flex-1">
-            {children}
-          </div>
-          <Footer />
-          <CookieConsentModal locale={locale} />
-        </div>
-      </ThemeProvider>
-    </NextIntlClientProvider>
+    <OperisClerkProvider locale={locale}>
+      <OperisPostHogProvider userId={session?.userId || null}>
+        <NextIntlClientProvider locale={locale} messages={messages}>
+          <ThemeProvider defaultTheme="light">
+            <a
+              href="#main-content"
+              className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-blue-600 focus:text-white focus:rounded-lg focus:shadow-xl focus:outline-none focus:ring-2 focus:ring-blue-400 text-sm font-semibold transition-all"
+            >
+              {locale === "tr" ? "Ana içeriğe atla" : "Skip to main content"}
+            </a>
+            <div className="flex min-h-screen flex-col">
+              <Header initialSession={session} initialProfile={initialProfile} />
+              <div id="main-content" className="flex-1">
+                {children}
+              </div>
+              <Footer />
+              <CookieConsentModal locale={locale} />
+            </div>
+          </ThemeProvider>
+        </NextIntlClientProvider>
+      </OperisPostHogProvider>
+    </OperisClerkProvider>
   );
 }

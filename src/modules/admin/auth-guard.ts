@@ -1,7 +1,4 @@
-import {
-  getSession,
-  SessionPayload,
-} from "@/src/modules/auth/session";
+import { getSession, SessionPayload } from "@/src/modules/auth/session";
 
 export const ADMIN_ROLES = ["ADMIN", "SECURITY_ADMIN", "MODERATOR"] as const;
 export type AdminRole = (typeof ADMIN_ROLES)[number];

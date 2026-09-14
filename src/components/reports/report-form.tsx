@@ -1,12 +1,11 @@
 "use client";
 
 import React, { useState } from "react";
-import { CheckCircle2, AlertCircle } from "lucide-react";
+import { CheckCircle2, AlertCircle, Copy, Check, LogIn, Mail } from "lucide-react";
 import { Button } from "../ui/button";
 import { TextInput } from "../ui/text-input";
 import { TextArea } from "../ui/text-area";
 import Link from "next/link";
-import { LogIn, Mail } from "lucide-react";
 
 export interface ReportFormProps {
   locale: string;
@@ -61,6 +60,8 @@ export function ReportForm({
   const [reasonCode, setReasonCode] = useState(REASON_CODES[0]!.value);
   const [details, setDetails] = useState("");
 
+  const [trackingCode, setTrackingCode] = useState<string>("");
+  const [copiedTracking, setCopiedTracking] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -87,8 +88,14 @@ export function ReportForm({
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || (isTr ? "Bildirim gönderilemedi." : "Failed to submit report."));
+      if (!res.ok)
+        throw new Error(
+          data.error || (isTr ? "Bildirim gönderilemedi." : "Failed to submit report.")
+        );
 
+      const generatedCode =
+        data.reportId ?? `OPR-REP-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+      setTrackingCode(generatedCode);
       setIsSuccess(true);
     } catch (err: unknown) {
       setError(
@@ -103,20 +110,66 @@ export function ReportForm({
     }
   };
 
+  const handleCopyCode = () => {
+    if (!trackingCode) return;
+    navigator.clipboard.writeText(trackingCode);
+    setCopiedTracking(true);
+    setTimeout(() => setCopiedTracking(false), 2000);
+  };
+
   if (isSuccess) {
     return (
-      <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-6 text-center space-y-3">
+      <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-6 text-center space-y-4">
         <div className="mx-auto h-12 w-12 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
           <CheckCircle2 className="h-6 w-6" aria-hidden="true" />
         </div>
         <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
-          {isTr ? "Bildiriminiz Alındı" : "Report Received"}
+          {isTr ? "Bildiriminiz Başarıyla Alındı" : "Report Received Successfully"}
         </h2>
         <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed max-w-md mx-auto">
           {isTr
             ? "Platform güvenliğine ve etik kurallara katkınız için teşekkür ederiz. İlgili kayıt moderatörlerimiz tarafından ivedilikle denetlenecektir."
             : "Thank you for helping keep Operis safe. Our security team will review this report promptly."}
         </p>
+
+        {trackingCode && (
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl border border-emerald-500/30 bg-[var(--color-surface-base)] shadow-sm">
+            <span className="text-[11px] font-mono text-[var(--color-text-secondary)]">
+              {isTr ? "Takip Kodu:" : "Tracking ID:"}
+            </span>
+            <code className="text-xs font-mono font-bold text-emerald-400">{trackingCode}</code>
+            <button
+              type="button"
+              onClick={handleCopyCode}
+              aria-label={isTr ? "Takip kodunu kopyala" : "Copy tracking ID"}
+              className="p-1 hover:text-emerald-300 transition-colors cursor-pointer"
+            >
+              {copiedTracking ? (
+                <Check className="h-3.5 w-3.5 text-emerald-400" aria-hidden="true" />
+              ) : (
+                <Copy
+                  className="h-3.5 w-3.5 text-[var(--color-text-tertiary)]"
+                  aria-hidden="true"
+                />
+              )}
+            </button>
+          </div>
+        )}
+
+        <div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setIsSuccess(false);
+              setDetails("");
+            }}
+            className="text-xs"
+          >
+            {isTr ? "Yeni İhbar Bildir" : "Submit Another Report"}
+          </Button>
+        </div>
       </div>
     );
   }

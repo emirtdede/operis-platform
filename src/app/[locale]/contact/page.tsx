@@ -13,7 +13,7 @@ export async function generateMetadata({
   const isTr = locale === "tr";
 
   return {
-    title: isTr ? "İletişim & Destek Formu | Operis" : "Contact & Support | Operis",
+    title: isTr ? "İletişim & Destek Formu" : "Contact & Support",
     description: isTr
       ? "Operis destek ekibiyle iletişime geçin, teknik destek alın veya iş ortaklığı talebinizi iletin."
       : "Get in touch with the Operis team for support, enterprise inquiries, and partnerships.",

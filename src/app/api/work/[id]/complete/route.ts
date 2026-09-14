@@ -2,23 +2,26 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/src/modules/auth/session";
 import { EngagementService } from "@/src/modules/engagements/service";
 import {
-  checkRateLimit,
+  evaluateSecurityAccessAsync,
   getClientIp,
-  rateLimitExceededResponse,
+  normalizeIp,
 } from "@/src/lib/security/rate-limit";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const isEn = req.headers.get("x-locale") === "en";
   const ip = getClientIp(req);
-  const limitCheck = checkRateLimit(`work:complete:${ip}`, 30, 60 * 1000);
 
-  if (!limitCheck.success) {
-    return rateLimitExceededResponse(
-      limitCheck.reset,
-      isEn
-        ? "Too many requests. Please wait a moment."
-        : "Çok fazla işlem denendi. Lütfen biraz bekleyin."
-    );
+  const access = await evaluateSecurityAccessAsync({
+    ip,
+    purpose: "work:complete",
+    subject: normalizeIp(ip),
+    limit: 30,
+    windowMs: 60 * 1000,
+    isEn,
+  });
+
+  if (!access.allowed) {
+    return access.response;
   }
 
   try {
@@ -43,7 +46,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const message =
       err instanceof Error
         ? err.message
-        : isEn ? "Failed to update project completion status." : "İş birliği tamamlama durumu güncellenemedi.";
+        : isEn
+          ? "Failed to update project completion status."
+          : "İş birliği tamamlama durumu güncellenemedi.";
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }

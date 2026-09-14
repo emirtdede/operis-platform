@@ -105,6 +105,17 @@ export function LegalModal({
                 <span className="font-mono text-[11px] font-semibold text-blue-500">
                   {docData.version}
                 </span>
+                {docData.contentHash && (
+                  <>
+                    <span className="text-[var(--border-strong)]">•</span>
+                    <span
+                      className="font-mono text-[10px] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors cursor-help truncate max-w-[140px]"
+                      title={`HMK m. 193 SHA-256 Dijital Doğrulama Özeti: ${docData.contentHash}`}
+                    >
+                      SHA-256: {docData.contentHash.slice(0, 8)}...
+                    </span>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -158,15 +169,25 @@ export function LegalModal({
 
         {/* Modal Footer */}
         <div className="relative z-10 flex items-center justify-between gap-3 p-4 sm:px-6 border-t border-[var(--border-subtle)] bg-[var(--bg-surface)]">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={onClose}
-            className="text-xs cursor-pointer"
-          >
-            {isTr ? "Kapat" : "Close"}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onClose}
+              className="text-xs cursor-pointer"
+            >
+              {isTr ? "Kapat" : "Close"}
+            </Button>
+            {docData.contentHash && (
+              <span
+                className="hidden sm:inline font-mono text-[10px] text-[var(--text-muted)]"
+                title={`Kanonik SHA-256 Özeti: ${docData.contentHash}`}
+              >
+                Hash: {docData.contentHash.slice(0, 10)}...
+              </span>
+            )}
+          </div>
 
           {onAccept && (
             <Button

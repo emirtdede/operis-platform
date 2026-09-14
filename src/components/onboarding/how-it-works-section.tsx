@@ -115,9 +115,9 @@ export function HowItWorksSection({ locale }: HowItWorksSectionProps) {
             <button
               type="button"
               onClick={() => setRole("client")}
-              className={`px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 ${
+              className={`px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-300 ${
                 role === "client"
-                  ? "bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-600 text-white shadow-md shadow-blue-500/20 border border-white/15"
+                  ? "bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-600 text-white shadow-md shadow-blue-500/20 border border-white/15 scale-[1.02]"
                   : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]"
               }`}
             >
@@ -126,9 +126,9 @@ export function HowItWorksSection({ locale }: HowItWorksSectionProps) {
             <button
               type="button"
               onClick={() => setRole("freelancer")}
-              className={`px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 ${
+              className={`px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-300 ${
                 role === "freelancer"
-                  ? "bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-600 text-white shadow-md shadow-blue-500/20 border border-white/15"
+                  ? "bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-600 text-white shadow-md shadow-blue-500/20 border border-white/15 scale-[1.02]"
                   : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]"
               }`}
             >
@@ -137,27 +137,30 @@ export function HowItWorksSection({ locale }: HowItWorksSectionProps) {
           </div>
         </div>
 
-        {/* 3 Step Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {steps.map((step) => {
+        {/* 3 Step Cards with Smooth Staggered Transition */}
+        <div key={role} className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-tab-fade">
+          {steps.map((step, idx) => {
             const Icon = step.icon;
             return (
               <SpotlightCard
                 key={step.num}
-                className="p-6 sm:p-8 space-y-5 rounded-2xl flex flex-col justify-between"
+                style={{ animationDelay: `${idx * 70}ms` }}
+                className="p-6 sm:p-8 space-y-5 rounded-2xl flex flex-col justify-between animate-card-cascade"
               >
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-2xl font-mono font-extrabold text-blue-500/60">
-                      {step.num}
-                    </span>
-                    <span className="inline-flex items-center rounded-md border border-[var(--color-border-subtle)] bg-[var(--color-surface-hover)] px-2.5 py-0.5 text-xs font-medium text-[var(--color-text-secondary)]">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0 shadow-sm">
+                        <Icon className="h-5 w-5" aria-hidden="true" />
+                      </div>
+                      <span className="text-2xl font-mono font-extrabold text-blue-500/80 tracking-tight">
+                        {step.num}
+                      </span>
+                    </div>
+
+                    <span className="inline-flex items-center rounded-md border border-[var(--color-border-subtle)] bg-[var(--color-surface-hover)] px-2.5 py-1 text-xs font-medium text-[var(--color-text-secondary)] whitespace-nowrap">
                       {step.badge}
                     </span>
-                  </div>
-
-                  <div className="h-10 w-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400">
-                    <Icon className="h-5 w-5" aria-hidden="true" />
                   </div>
 
                   <div className="space-y-2">

@@ -3,30 +3,44 @@ import { z } from "zod";
 import { eq, or } from "drizzle-orm";
 import { getSession } from "@/src/modules/auth/session";
 import { getDb, schema } from "@/src/lib/db";
-import {
-  checkRateLimit,
-  getClientIp,
-  rateLimitExceededResponse,
-} from "@/src/lib/security/rate-limit";
+import { evaluateSecurityAccessAsync, getClientIp } from "@/src/lib/security/rate-limit";
 import { EMOJI_REGEX } from "@/src/lib/security/content-moderator";
 import { ModerationService, ReportReason, REPORT_REASONS } from "@/src/modules/moderation/service";
-import { inMemoryListings } from "@/src/modules/listings/service";
+import { hashEmailBlindIndex } from "@/src/lib/crypto";
 
 const createReportSchema = (isEn: boolean) =>
   z.object({
     targetType: z.enum(["listing", "profile", "offer", "general"]),
     targetIdentifier: z
       .string()
-      .min(1, isEn ? "Target identifier or URL is required." : "Hedef kimliği veya bağlantısı zorunludur."),
+      .min(
+        1,
+        isEn ? "Target identifier or URL is required." : "Hedef kimliği veya bağlantısı zorunludur."
+      ),
     reasonCode: z
       .string()
-      .min(1, isEn ? "Please select a reason for reporting." : "Lütfen bir bildirim nedeni seçiniz."),
+      .min(
+        1,
+        isEn ? "Please select a reason for reporting." : "Lütfen bir bildirim nedeni seçiniz."
+      ),
     details: z
       .string()
-      .min(10, isEn ? "Please provide at least 10 characters of explanation." : "Lütfen en az 10 karakterlik detaylı bir açıklama yazınız.")
-      .max(2000, isEn ? "Explanation cannot exceed 2000 characters." : "Açıklama en fazla 2000 karakter olabilir.")
+      .min(
+        10,
+        isEn
+          ? "Please provide at least 10 characters of explanation."
+          : "Lütfen en az 10 karakterlik detaylı bir açıklama yazınız."
+      )
+      .max(
+        2000,
+        isEn
+          ? "Explanation cannot exceed 2000 characters."
+          : "Açıklama en fazla 2000 karakter olabilir."
+      )
       .refine((val) => !EMOJI_REGEX.test(val), {
-        message: isEn ? "Emojis are not permitted in report descriptions." : "Bildirim açıklamasında emoji kullanılamaz.",
+        message: isEn
+          ? "Emojis are not permitted in report descriptions."
+          : "Bildirim açıklamasında emoji kullanılamaz.",
       }),
     locale: z.enum(["tr", "en"]).optional(),
   });
@@ -43,14 +57,15 @@ export async function POST(req: Request) {
   const headerLocale = req.headers.get("x-locale");
   const isEnHeader = headerLocale === "en";
 
-  const limitCheck = checkRateLimit(`report:${ip}`, 5, 10 * 60 * 1000);
-  if (!limitCheck.success) {
-    return rateLimitExceededResponse(
-      limitCheck.reset,
-      isEnHeader
-        ? "Too many reports submitted. Please try again later."
-        : "Kısa sürede çok fazla bildirim iletildi. Lütfen daha sonra tekrar deneyiniz."
-    );
+  const access = await evaluateSecurityAccessAsync({
+    ip,
+    purpose: "report",
+    limit: 5,
+    windowMs: 10 * 60 * 1000,
+    isEn: isEnHeader,
+  });
+  if (!access.allowed) {
+    return access.response;
   }
 
   let isEn = isEnHeader;
@@ -92,11 +107,18 @@ export async function POST(req: Request) {
       } else if (data.targetType === "profile") {
         const rawHandle = cleanIdentifier.split("/").filter(Boolean).pop() || cleanIdentifier;
         const handle = rawHandle.replace(/^@/, "");
+        const emailHmac = hashEmailBlindIndex(cleanIdentifier.toLowerCase().trim());
         const [user] = await db
           .select({ id: schema.users.id })
           .from(schema.users)
           .innerJoin(schema.profiles, eq(schema.users.id, schema.profiles.userId))
-          .where(or(eq(schema.profiles.handle, handle), eq(schema.users.email, cleanIdentifier)))
+          .where(
+            or(
+              eq(schema.profiles.handle, handle),
+              eq(schema.users.emailHmac, emailHmac),
+              eq(schema.users.email, cleanIdentifier)
+            )
+          )
           .limit(1);
         if (user) {
           targetId = user.id;
@@ -104,28 +126,9 @@ export async function POST(req: Request) {
       }
     }
 
-    if (!targetId && process.env.NODE_ENV !== "production") {
-      if (data.targetType === "listing") {
-        const inMem = inMemoryListings.find(
-          (l) => l.id === cleanIdentifier || l.slug === cleanIdentifier
-        );
-        if (inMem) targetId = inMem.id;
-      } else if (data.targetType === "profile") {
-        const rawHandle = cleanIdentifier.split("/").filter(Boolean).pop() || cleanIdentifier;
-        const handle = rawHandle.replace(/^@/, "").toLowerCase();
-        if (handle === "demokullanici" || handle === "usr_mock_demir_yildiz") {
-          targetId = "usr_mock_demir_yildiz";
-        } else if (handle === "mehmetkaan" || handle === "usr_mock_mehmet_kaan") {
-          targetId = "usr_mock_mehmet_kaan";
-        } else if (handle === "selinyilmaz" || handle === "usr_mock_selin_yilmaz") {
-          targetId = "usr_mock_selin_yilmaz";
-        }
-      }
-    }
-
     if (!targetId) {
       if (data.targetType === "general") {
-        targetId = session.userId;
+        targetId = "00000000-0000-0000-0000-000000000000";
       } else {
         return NextResponse.json(
           {
@@ -148,7 +151,8 @@ export async function POST(req: Request) {
 
     const detailsPrefix = `[Hedef: ${data.targetIdentifier}] `;
     const combinedDetails = detailsPrefix + data.details;
-    const finalDetails = combinedDetails.length > 2000 ? combinedDetails.slice(0, 2000) : combinedDetails;
+    const finalDetails =
+      combinedDetails.length > 2000 ? combinedDetails.slice(0, 2000) : combinedDetails;
 
     try {
       await ModerationService.submitReport(session.userId, {
@@ -157,9 +161,31 @@ export async function POST(req: Request) {
         reasonCode: canonicalReason,
         details: finalDetails,
       });
-    } catch (dbErr) {
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        if (err.message === "CANNOT_REPORT_SELF") {
+          return NextResponse.json(
+            {
+              error: isEn
+                ? "You cannot submit a report against your own listing, profile, or proposal."
+                : "Kendi ilanınızı, profilinizi veya teklifinizi şikayet edemezsiniz.",
+            },
+            { status: 400 }
+          );
+        }
+        if (err.message === "DUPLICATE_REPORT") {
+          return NextResponse.json(
+            {
+              error: isEn
+                ? "You already have an active report under review for this item."
+                : "Bu içerik hakkında inceleme aşamasında olan aktif bir şikayetiniz bulunmaktadır.",
+            },
+            { status: 400 }
+          );
+        }
+      }
       if (process.env.NODE_ENV === "production") {
-        console.error("Failed to persist report:", dbErr);
+        console.error("Failed to persist report:", err);
         return NextResponse.json(
           {
             error: isEn
@@ -184,7 +210,9 @@ export async function POST(req: Request) {
     const message =
       err instanceof z.ZodError
         ? err.issues[0]?.message || (isEn ? "Invalid form data." : "Form verileri geçersiz.")
-        : isEn ? "Failed to submit report." : "Bildirim iletilemedi.";
+        : isEn
+          ? "Failed to submit report."
+          : "Bildirim iletilemedi.";
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }

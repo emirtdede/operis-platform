@@ -11,6 +11,7 @@ export interface SessionPayload {
   email: string;
   role: string;
   status: string;
+  authVersion: number;
   createdAt: number;
   expiresAt: number;
 }
@@ -27,10 +28,18 @@ export function createSessionToken(user: {
   email: string;
   role: string;
   status: string;
+  authVersion?: number;
 }): string {
   const env = getEnv();
   const now = Date.now();
   const expiresAt = now + SESSION_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
+
+  const validVersion =
+    typeof user.authVersion === "number" &&
+    Number.isInteger(user.authVersion) &&
+    user.authVersion >= 1
+      ? user.authVersion
+      : 1;
 
   const payload: SessionPayload = {
     type: "SESSION",
@@ -38,6 +47,7 @@ export function createSessionToken(user: {
     email: user.email,
     role: user.role,
     status: user.status,
+    authVersion: validVersion,
     createdAt: now,
     expiresAt,
   };
@@ -78,7 +88,14 @@ export function verifySessionToken(token: string): SessionPayload | null {
       Buffer.from(payloadB64, "base64url").toString("utf8")
     );
 
-    if (payload.type !== "SESSION" || !payload.userId || !payload.expiresAt) {
+    if (
+      payload.type !== "SESSION" ||
+      !payload.userId ||
+      !payload.expiresAt ||
+      typeof payload.authVersion !== "number" ||
+      !Number.isInteger(payload.authVersion) ||
+      payload.authVersion < 1
+    ) {
       return null;
     }
 
@@ -97,12 +114,103 @@ export const SESSION_MAX_AGE_SECONDS = SESSION_EXPIRY_DAYS * 24 * 60 * 60;
 /**
  * Validates session token and re-verifies user status against database (suspension/revocation/deletion check).
  */
-export async function getVerifiedSession(): Promise<SessionPayload | null> {
-  const cookieStore = await cookies();
-  const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME);
-  if (!sessionCookie?.value) return null;
+export async function getVerifiedSession(explicitToken?: string): Promise<SessionPayload | null> {
+  let token = explicitToken;
+  if (!token) {
+    try {
+      const cookieStore = await cookies();
+      const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME);
+      if (sessionCookie?.value) {
+        token = sessionCookie.value;
+      }
+    } catch {
+      // In test runners or background contexts outside Next.js request scope, cookies() throws
+    }
+  }
 
-  const session = verifySessionToken(sessionCookie.value);
+  if (!token && (process.env.NODE_ENV === "test" || process.env.VITEST)) {
+    token = process.env.__TEST_SESSION_TOKEN;
+  }
+
+  if (!token) {
+    // Bridge Clerk authentication if fp_session is not present
+    if (
+      !process.env.VITEST &&
+      process.env.CLERK_SECRET_KEY &&
+      process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+    ) {
+      try {
+        const { auth, currentUser } = await import("@clerk/nextjs/server");
+        const clerkAuth = await auth();
+        if (clerkAuth?.userId) {
+          const { getDb, schema } = await import("@/src/lib/db");
+          const { eq } = await import("drizzle-orm");
+          const db = getDb();
+          let [dbUser] = await db
+            .select({
+              id: schema.users.id,
+              email: schema.users.email,
+              role: schema.users.role,
+              status: schema.users.status,
+              authVersion: schema.users.authVersion,
+            })
+            .from(schema.users)
+            .where(eq(schema.users.clerkUserId, clerkAuth.userId))
+            .limit(1);
+
+          if (!dbUser) {
+            const clerkUser = await currentUser();
+            if (clerkUser) {
+              const primaryEmail =
+                clerkUser.emailAddresses?.find((e) => e.id === clerkUser.primaryEmailAddressId)
+                  ?.emailAddress || clerkUser.emailAddresses?.[0]?.emailAddress;
+              if (primaryEmail) {
+                const { ClerkSyncService } = await import("./clerk-sync-service");
+                const syncResult = await ClerkSyncService.syncClerkUser({
+                  clerkUserId: clerkUser.id,
+                  email: primaryEmail,
+                  firstName: clerkUser.firstName,
+                  lastName: clerkUser.lastName,
+                  avatarUrl: clerkUser.imageUrl,
+                  emailVerified: true,
+                });
+                [dbUser] = await db
+                  .select({
+                    id: schema.users.id,
+                    email: schema.users.email,
+                    role: schema.users.role,
+                    status: schema.users.status,
+                    authVersion: schema.users.authVersion,
+                  })
+                  .from(schema.users)
+                  .where(eq(schema.users.id, syncResult.userId))
+                  .limit(1);
+              }
+            }
+          }
+
+          if (dbUser && dbUser.status === "ACTIVE") {
+            const payload: SessionPayload = {
+              type: "SESSION",
+              userId: dbUser.id,
+              email: dbUser.email,
+              role: dbUser.role,
+              status: dbUser.status,
+              authVersion: dbUser.authVersion ?? 1,
+              createdAt: Date.now(),
+              expiresAt: Date.now() + SESSION_EXPIRY_DAYS * 24 * 60 * 60 * 1000,
+            };
+            return payload;
+          }
+        }
+      } catch {
+        // Outside request context or Clerk auth unavailable
+      }
+    }
+    return null;
+  }
+
+  const session = verifySessionToken(token);
   if (!session) return null;
 
   try {
@@ -113,6 +221,7 @@ export async function getVerifiedSession(): Promise<SessionPayload | null> {
       .select({
         status: schema.users.status,
         role: schema.users.role,
+        authVersion: schema.users.authVersion,
         updatedAt: schema.users.updatedAt,
       })
       .from(schema.users)
@@ -129,6 +238,7 @@ export async function getVerifiedSession(): Promise<SessionPayload | null> {
             ...session,
             role: DEFAULT_USER.role,
             status: DEFAULT_USER.status,
+            authVersion: DEFAULT_USER.authVersion ?? 1,
           };
         }
       }
@@ -138,18 +248,17 @@ export async function getVerifiedSession(): Promise<SessionPayload | null> {
     const dbUser = userRows[0]!;
     if (dbUser.status !== "ACTIVE") return null;
 
-    // Invalidate session if credentials or status updated after token was created (B03)
-    if (dbUser.updatedAt) {
-      const userUpdatedTime = new Date(dbUser.updatedAt).getTime();
-      if (session.createdAt < userUpdatedTime - 2000) {
-        return null;
-      }
+    // Strictly enforce authVersion matching current database authVersion (R01)
+    const expectedAuthVersion = dbUser.authVersion ?? 1;
+    if (session.authVersion !== expectedAuthVersion) {
+      return null;
     }
 
     return {
       ...session,
       role: dbUser.role,
       status: dbUser.status,
+      authVersion: dbUser.authVersion,
     };
   } catch {
     // If DB check fails in non-production or test environments, check demo user status or return signed session
@@ -170,8 +279,50 @@ export async function getVerifiedSession(): Promise<SessionPayload | null> {
 }
 
 /**
- * Gets the current authenticated session with active database status and role verification.
+ * Atomically increments a user's authVersion to invalidate all previously issued sessions (R01).
+ * Optionally accepts a transaction runner to be executed within caller's atomic transaction.
  */
-export async function getSession(): Promise<SessionPayload | null> {
+export async function bumpUserAuthVersion(userId: string, tx?: unknown): Promise<number | null> {
+  try {
+    const { getDb, schema } = await import("@/src/lib/db");
+    const { eq, sql } = await import("drizzle-orm");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const client = (tx as any) || getDb();
+    const [updated] = await client
+      .update(schema.users)
+      .set({
+        authVersion: sql`${schema.users.authVersion} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.users.id, userId))
+      .returning({ authVersion: schema.users.authVersion });
+
+    return updated?.authVersion ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Gets the current authenticated session with active database status and role verification.
+ * Optionally extracts session token from Request cookies or Authorization header.
+ */
+export async function getSession(reqOrToken?: Request | string): Promise<SessionPayload | null> {
+  if (typeof reqOrToken === "string") {
+    return getVerifiedSession(reqOrToken);
+  }
+  if (reqOrToken && typeof (reqOrToken as Request).headers?.get === "function") {
+    const cookieHeader = (reqOrToken as Request).headers.get("cookie");
+    if (cookieHeader) {
+      const match = cookieHeader.match(new RegExp(`(?:^|;\\s*)${SESSION_COOKIE_NAME}=([^;]+)`));
+      if (match) {
+        return getVerifiedSession(match[1]);
+      }
+    }
+    const authHeader = (reqOrToken as Request).headers.get("authorization");
+    if (authHeader?.startsWith("Bearer ")) {
+      return getVerifiedSession(authHeader.slice(7));
+    }
+  }
   return getVerifiedSession();
 }

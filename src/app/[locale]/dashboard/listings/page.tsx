@@ -76,6 +76,7 @@ export default async function DashboardListingsPage({
   }
 
   let initialListings: OwnerListingItem[];
+  let hasLoadError = false;
 
   try {
     const rows = await ListingService.getOwnerListings(session.userId);
@@ -94,8 +95,11 @@ export default async function DashboardListingsPage({
       activationSeq: r.activationSeq,
       viewCount: r.viewCount ?? 0,
       clickCount: r.clickCount ?? 0,
+      engagementId: r.engagementId ?? null,
     }));
-  } catch {
+  } catch (err) {
+    console.error("Failed to load owner listings for dashboard:", err);
+    hasLoadError = true;
     initialListings = [];
   }
 
@@ -183,7 +187,11 @@ export default async function DashboardListingsPage({
 
       {/* Listings Table / Cards */}
       <section aria-label={isTr ? "İlan Yönetimi" : "Listing Management"}>
-        <OwnerListingsDashboard initialListings={initialListings} locale={locale} />
+        <OwnerListingsDashboard
+          initialListings={initialListings}
+          locale={locale}
+          hasLoadError={hasLoadError}
+        />
       </section>
     </main>
   );

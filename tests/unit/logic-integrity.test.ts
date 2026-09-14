@@ -124,22 +124,13 @@ describe("Logic Integrity & Workflow Connections Audit Suite", () => {
     });
 
     it("should execute system optimization tools cleanly", async () => {
-      const expiryResult = await AdminService.triggerSystemOptimization(
-        "admin-id",
-        "run_expiry"
-      );
+      const expiryResult = await AdminService.triggerSystemOptimization("admin-id", "run_expiry");
       expect(expiryResult.success).toBe(true);
 
-      const outboxResult = await AdminService.triggerSystemOptimization(
-        "admin-id",
-        "retry_outbox"
-      );
+      const outboxResult = await AdminService.triggerSystemOptimization("admin-id", "retry_outbox");
       expect(outboxResult.success).toBe(true);
 
-      const pingResult = await AdminService.triggerSystemOptimization(
-        "admin-id",
-        "ping_db"
-      );
+      const pingResult = await AdminService.triggerSystemOptimization("admin-id", "ping_db");
       expect(typeof pingResult.success).toBe("boolean");
     });
   });
@@ -181,5 +172,61 @@ describe("Logic Integrity & Workflow Connections Audit Suite", () => {
       ).rejects.toThrow("Listing not found or you are not authorized.");
     });
   });
-});
 
+  describe("Admin Role Hierarchy & Self-Moderation Guards (M-08)", () => {
+    it("should block an admin from moderating/suspending their own account", async () => {
+      await expect(
+        AdminService.moderateUser("admin-1", "admin-1", "SUSPEND", "Self test")
+      ).rejects.toThrow("CANNOT_MODERATE_SELF");
+    });
+  });
+
+  describe("Moderation Invariants & User Blocking (M-13)", () => {
+    it("should reject blocking self", async () => {
+      const { ModerationService } = await import("@/src/modules/moderation/service");
+      await expect(ModerationService.blockUser("user-same-1", "user-same-1")).rejects.toThrow(
+        "You cannot block yourself"
+      );
+    });
+  });
+
+  describe("Abuse Incidents Offender Resolution (M-02)", () => {
+    it("should return abuse incidents with resolved offender fields", async () => {
+      const incidents = await AdminService.getAbuseIncidents();
+      expect(Array.isArray(incidents)).toBe(true);
+      if (incidents.length > 0) {
+        expect(incidents[0]).toHaveProperty("offenderUserId");
+        expect(incidents[0]).toHaveProperty("offenderDisplayName");
+      }
+    });
+  });
+
+  describe("Security Threats Dynamic Rate-Limit Integration (M-14)", () => {
+    it("should return security threats including live blocked threats", async () => {
+      await AdminService.blockIp(
+        "admin_audit_id",
+        "198.51.100.42",
+        "Security rate-limit test threat"
+      );
+      const threats = await AdminService.getSecurityThreats({});
+      expect(Array.isArray(threats)).toBe(true);
+      expect(threats.length).toBeGreaterThan(0);
+      expect(threats[0]).toHaveProperty("threatType");
+      expect(threats[0]).toHaveProperty("severity");
+      expect(threats[0]).toHaveProperty("riskScore");
+    });
+  });
+
+  describe("Email Adapter Reply-To Header Support (M-15)", () => {
+    it("should accept replyTo parameter in sendTransactionalEmail", async () => {
+      const { EmailAdapter } = await import("@/src/lib/email");
+      const result = await EmailAdapter.sendTransactionalEmail({
+        to: "destek@operis.pro",
+        replyTo: "sender@example.com",
+        subject: "Test Inquiry",
+        body: "Test Body with reply-to",
+      });
+      expect(result).toBe(true);
+    });
+  });
+});

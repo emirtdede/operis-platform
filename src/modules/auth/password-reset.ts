@@ -74,12 +74,7 @@ export function verifyPasswordResetToken(token: string): PasswordResetPayload | 
     const payloadJson = Buffer.from(payloadB64, "base64url").toString("utf-8");
     const payload = JSON.parse(payloadJson) as PasswordResetPayload;
 
-    if (
-      payload.type !== "PASSWORD_RESET" ||
-      !payload.email ||
-      !payload.expiresAt ||
-      !payload.pwh
-    ) {
+    if (payload.type !== "PASSWORD_RESET" || !payload.email || !payload.expiresAt || !payload.pwh) {
       return null;
     }
 

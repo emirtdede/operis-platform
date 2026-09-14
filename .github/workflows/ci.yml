@@ -11,6 +11,32 @@ jobs:
     name: Code Quality, Security & Test Matrix
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: operis_ci
+          POSTGRES_PASSWORD: operis_ci_password
+          POSTGRES_DB: operis_test_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://operis_ci:operis_ci_password@localhost:5432/operis_test_ci
+      DATABASE_MIGRATION_URL: postgresql://operis_ci:operis_ci_password@localhost:5432/operis_test_ci
+      TEST_DATABASE_URL: postgresql://operis_ci:operis_ci_password@localhost:5432/operis_test_ci
+      AUTH_SECRET: ci_operis_mock_secret_key_32bytes_minimum_length_test
+      SMS_PROVIDER_API_KEY: mock_ci_sms_key
+      EMAIL_PROVIDER_API_KEY: mock_ci_email_key
+      PII_ENCRYPTION_KEY_CURRENT: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      PII_HMAC_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -35,14 +61,39 @@ jobs:
       - name: 2. ESLint Code Hygiene (0 Errors / 0 Warnings)
         run: pnpm lint
 
+      - name: 2.5 Code Formatting Check
+        run: pnpm format:check
+
       - name: 3. Zero-Emoji Compliance Audit
         run: pnpm audit:emoji
 
       - name: 4. Dual-Language (TR/EN) Parity Audit
         run: pnpm audit:i18n
 
-      - name: 5. Unit & Security Matrix Test Suite (5,170+ Tests)
+      - name: 5. Database Migrations Validation
+        run: pnpm db:migrate
+
+      - name: 6. Integration Test Suite
+        run: pnpm test:integration
+
+      - name: 7. Unit & Security Matrix Test Suite (5,258 Tests)
         run: pnpm test:unit
 
-      - name: 6. WAI-ARIA & Accessibility (a11y) Test Suite
+      - name: 8. WAI-ARIA & Accessibility (a11y) Test Suite
         run: pnpm test:a11y
+
+      - name: 9. Production Application Build Gate
+        env:
+          NODE_ENV: production
+        run: pnpm build
+
+      - name: 10. Install Playwright Browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: 11. End-to-End (E2E) Browser Test Suite (Production Mode on next start)
+        env:
+          TEST_PROD: "1"
+          NODE_ENV: production
+          EMAIL_PROVIDER: resend
+          RESEND_API_KEY: re_ci_test_key_placeholder
+        run: pnpm test:e2e:prod

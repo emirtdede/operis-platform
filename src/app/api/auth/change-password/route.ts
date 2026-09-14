@@ -1,16 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
-import { getSession } from "@/src/modules/auth/session";
+import { eq, and, sql } from "drizzle-orm";
+import { getSession, createSessionToken, SESSION_COOKIE_NAME } from "@/src/modules/auth/session";
 import { getDb, schema } from "@/src/lib/db";
 import { verifyPassword, hashPassword } from "@/src/lib/crypto";
 import { DEFAULT_USER } from "@/src/modules/auth/demo-user";
 
-import {
-  checkRateLimit,
-  getClientIp,
-  rateLimitExceededResponse,
-} from "@/src/lib/security/rate-limit";
+import { evaluateSecurityAccessAsync, getClientIp } from "@/src/lib/security/rate-limit";
 
 const createChangePasswordSchema = (isEn: boolean) =>
   z
@@ -20,9 +16,22 @@ const createChangePasswordSchema = (isEn: boolean) =>
         .min(1, isEn ? "Please enter your current password." : "Mevcut şifrenizi giriniz."),
       newPassword: z
         .string()
-        .min(12, isEn ? "New password must be at least 12 characters." : "Yeni şifre en az 12 karakter olmalıdır.")
-        .regex(/[A-Z]/, isEn ? "Password must contain at least one uppercase letter." : "Şifre en az bir büyük harf içermelidir.")
-        .regex(/[0-9]/, isEn ? "Password must contain at least one number." : "Şifre en az bir rakam içermelidir."),
+        .min(
+          12,
+          isEn
+            ? "New password must be at least 12 characters."
+            : "Yeni şifre en az 12 karakter olmalıdır."
+        )
+        .regex(
+          /[A-Z]/,
+          isEn
+            ? "Password must contain at least one uppercase letter."
+            : "Şifre en az bir büyük harf içermelidir."
+        )
+        .regex(
+          /[0-9]/,
+          isEn ? "Password must contain at least one number." : "Şifre en az bir rakam içermelidir."
+        ),
       locale: z.enum(["tr", "en"]).optional(),
     })
     .refine((data) => data.currentPassword !== data.newPassword, {
@@ -46,14 +55,16 @@ export async function POST(req: Request) {
       );
     }
 
-    const limitCheck = checkRateLimit(`auth:change-pwd:${session.userId}:${ip}`, 5, 15 * 60 * 1000);
-    if (!limitCheck.success) {
-      return rateLimitExceededResponse(
-        limitCheck.reset,
-        isEnHeader
-          ? "Too many password change attempts. Please try again later."
-          : "Kısa sürede çok fazla şifre değiştirme denemesi yapıldı. Lütfen daha sonra tekrar deneyiniz."
-      );
+    const security = await evaluateSecurityAccessAsync({
+      ip,
+      purpose: "auth:change-pwd",
+      subject: session.userId,
+      limit: 5,
+      windowMs: 15 * 60 * 1000,
+      isEn: isEnHeader,
+    });
+    if (!security.allowed) {
+      return security.response;
     }
 
     const body = await req.json();
@@ -61,6 +72,7 @@ export async function POST(req: Request) {
     const { currentPassword, newPassword } = createChangePasswordSchema(isEn).parse(body);
 
     const db = getDb();
+    let newAuthVersion: number | null = null;
     let updated = false;
 
     try {
@@ -74,21 +86,30 @@ export async function POST(req: Request) {
         const isValid = await verifyPassword(currentPassword, user.passwordHash);
         if (!isValid) {
           return NextResponse.json(
-            { error: isEn ? "Current password is incorrect." : "Mevcut şifrenizi hatalı girdiniz." },
+            {
+              error: isEn ? "Current password is incorrect." : "Mevcut şifrenizi hatalı girdiniz.",
+            },
             { status: 400 }
           );
         }
 
         const newPasswordHash = await hashPassword(newPassword);
-        await db
+        const [updatedRow] = await db
           .update(schema.users)
           .set({
             passwordHash: newPasswordHash,
+            authVersion: sql`${schema.users.authVersion} + 1`,
             updatedAt: new Date(),
           })
-          .where(eq(schema.users.id, user.id));
+          .where(
+            and(eq(schema.users.id, user.id), eq(schema.users.passwordHash, user.passwordHash))
+          )
+          .returning({ authVersion: schema.users.authVersion });
 
-        updated = true;
+        if (updatedRow?.authVersion) {
+          newAuthVersion = updatedRow.authVersion;
+          updated = true;
+        }
       }
     } catch {
       // Fallback for in-memory or demo user
@@ -108,35 +129,63 @@ export async function POST(req: Request) {
           currentPassword !== "demo1234"
         ) {
           return NextResponse.json(
-            { error: isEn ? "Current password is incorrect." : "Mevcut şifrenizi hatalı girdiniz." },
+            {
+              error: isEn ? "Current password is incorrect." : "Mevcut şifrenizi hatalı girdiniz.",
+            },
             { status: 400 }
           );
         }
         DEFAULT_USER.password = newPassword;
+        DEFAULT_USER.authVersion = (DEFAULT_USER.authVersion ?? 1) + 1;
+        newAuthVersion = DEFAULT_USER.authVersion;
         updated = true;
       }
     }
 
-    if (!updated) {
+    if (!updated || !newAuthVersion) {
       return NextResponse.json(
-        { error: isEn ? "User record not found." : "Kullanıcı kaydı bulunamadı." },
+        {
+          error: isEn
+            ? "User record not found or update failed."
+            : "Kullanıcı kaydı bulunamadı veya güncelleme başarısız oldu.",
+        },
         { status: 404 }
       );
     }
 
-    return NextResponse.json(
+    const freshToken = createSessionToken({
+      id: session.userId,
+      email: session.email,
+      role: session.role,
+      status: "ACTIVE",
+      authVersion: newAuthVersion,
+    });
+
+    const response = NextResponse.json(
       {
         success: true,
         message: isEn ? "Password changed successfully." : "Şifreniz başarıyla değiştirildi.",
       },
       { status: 200 }
     );
+
+    response.cookies.set(SESSION_COOKIE_NAME, freshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 7 * 24 * 60 * 60,
+    });
+
+    return response;
   } catch (err: unknown) {
     const isEn = req.headers.get("x-locale") === "en";
     const message =
       err instanceof z.ZodError
         ? err.issues[0]?.message || (isEn ? "Invalid password format." : "Geçersiz şifre formatı.")
-        : isEn ? "Failed to change password." : "Şifre değiştirme işlemi başarısız oldu.";
+        : isEn
+          ? "Failed to change password."
+          : "Şifre değiştirme işlemi başarısız oldu.";
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }

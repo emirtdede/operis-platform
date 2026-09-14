@@ -14,7 +14,7 @@ export async function generateMetadata({
   const isTr = locale === "tr";
 
   return {
-    title: isTr ? "403 — Yetkisiz Erişim | Operis" : "403 — Access Denied | Operis",
+    title: isTr ? "403 — Yetkisiz Erişim" : "403 — Access Denied",
     description: isTr
       ? "Bu sayfayı görüntülemek için yetkiniz bulunmuyor."
       : "You do not have permission to access this resource.",

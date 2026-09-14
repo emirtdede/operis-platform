@@ -49,22 +49,6 @@ export interface UpdateProfileInput {
   links?: ProfileLinkInput[];
 }
 
-let demoUserLinks: Array<{
-  id: string;
-  type: string;
-  label: string;
-  url: string;
-  sortOrder: number;
-}> = [
-  {
-    id: "link-1",
-    type: "github",
-    label: "GitHub",
-    url: "https://github.com/operis",
-    sortOrder: 0,
-  },
-];
-
 const inMemoryUserLinks = new Map<
   string,
   Array<{
@@ -83,10 +67,7 @@ export class ProfileService {
    */
   static async getPublicProfileByHandle(handle: string): Promise<PublicProfileDto | null> {
     const lower = handle.toLowerCase();
-    if (
-      process.env.NODE_ENV !== "production" &&
-      lower === DEFAULT_USER.profile.handle.toLowerCase()
-    ) {
+    if (Boolean(process.env.VITEST) && lower === DEFAULT_USER.profile.handle.toLowerCase()) {
       if (DEFAULT_USER.status !== "ACTIVE") {
         return null;
       }
@@ -98,7 +79,7 @@ export class ProfileService {
         avatarUrl: DEFAULT_USER.profile.avatarUrl || null,
         showLocation: DEFAULT_USER.profile.showLocation,
         location: { countryCode: "TR", city: "İstanbul" },
-        links: (inMemoryUserLinks.get(DEFAULT_USER.id) || demoUserLinks).map((l) => ({
+        links: (inMemoryUserLinks.get(DEFAULT_USER.id) || []).map((l) => ({
           id: l.id,
           type: l.type,
           label: l.label,
@@ -116,43 +97,6 @@ export class ProfileService {
       };
     }
 
-    if (process.env.NODE_ENV !== "production") {
-      if (lower === "mehmetkaan" || lower === "usr_mock_mehmet_kaan") {
-        return {
-          userId: "usr_mock_mehmet_kaan",
-          handle: "mehmetkaan",
-          displayName: "Mehmet Kaan",
-          about: "Cross-platform mobil geliştirici ve Flutter uzmanı.",
-          avatarUrl: null,
-          showLocation: true,
-          location: { countryCode: "TR", city: "Ankara" },
-          links: inMemoryUserLinks.get("usr_mock_mehmet_kaan") || [
-            { id: "mk-1", type: "github", label: "GitHub", url: "https://github.com/mehmetkaan" },
-          ],
-          completedWork: [],
-          trackedSkills: ["Flutter", "Dart", "iOS", "Android"],
-          endorsements: await EndorsementService.getEndorsementsForUser("usr_mock_mehmet_kaan"),
-        };
-      }
-      if (lower === "selinyilmaz" || lower === "usr_mock_selin_yilmaz") {
-        return {
-          userId: "usr_mock_selin_yilmaz",
-          handle: "selinyilmaz",
-          displayName: "Selin Yılmaz",
-          about: "Go ve PostgreSQL ile yüksek trafikli mikroservis mimarı.",
-          avatarUrl: null,
-          showLocation: true,
-          location: { countryCode: "TR", city: "İzmir" },
-          links: inMemoryUserLinks.get("usr_mock_selin_yilmaz") || [
-            { id: "sy-1", type: "github", label: "GitHub", url: "https://github.com/selinyilmaz" },
-          ],
-          completedWork: [],
-          trackedSkills: ["Go", "PostgreSQL", "Docker", "Redis"],
-          endorsements: await EndorsementService.getEndorsementsForUser("usr_mock_selin_yilmaz"),
-        };
-      }
-    }
-
     try {
       const db = getDb();
 
@@ -164,10 +108,7 @@ export class ProfileService {
         .from(schema.profiles)
         .innerJoin(schema.users, eq(schema.profiles.userId, schema.users.id))
         .where(
-          and(
-            eq(schema.profiles.handle, handle.toLowerCase()),
-            eq(schema.users.status, "ACTIVE")
-          )
+          and(eq(schema.profiles.handle, handle.toLowerCase()), eq(schema.users.status, "ACTIVE"))
         )
         .limit(1);
 
@@ -437,13 +378,16 @@ export class ProfileService {
       if (input.trackedSkills !== undefined)
         DEFAULT_USER.profile.trackedSkills = updateData.trackedSkills;
       if (validatedLinks !== undefined) {
-        demoUserLinks = validatedLinks.map((l, idx) => ({
-          id: `link-${Date.now()}-${idx}`,
-          type: l.type,
-          label: l.label || l.type,
-          url: l.url,
-          sortOrder: idx,
-        }));
+        inMemoryUserLinks.set(
+          DEFAULT_USER.id,
+          validatedLinks.map((l, idx) => ({
+            id: `link-${Date.now()}-${idx}`,
+            type: l.type,
+            label: l.label || l.type,
+            url: l.url,
+            sortOrder: idx,
+          }))
+        );
       }
 
       if (process.env.VITEST || process.env.NODE_ENV === "test") {
@@ -468,7 +412,10 @@ export class ProfileService {
       const db = getDb();
       await db.transaction(async (tx) => {
         if (Object.keys(updateData).length > 0) {
-          await tx.update(schema.profiles).set(updateData).where(eq(schema.profiles.userId, userId));
+          await tx
+            .update(schema.profiles)
+            .set(updateData)
+            .where(eq(schema.profiles.userId, userId));
         }
         if (validatedLinks !== undefined) {
           await tx.delete(schema.profileLinks).where(eq(schema.profileLinks.userId, userId));
@@ -513,8 +460,7 @@ export class ProfileService {
 
     inMemoryUserLinks.set(userId, mappedLinks);
 
-    if (userId === DEFAULT_USER.id) {
-      demoUserLinks = mappedLinks;
+    if (Boolean(process.env.VITEST) && userId === DEFAULT_USER.id) {
       return;
     }
 
@@ -535,7 +481,7 @@ export class ProfileService {
         }
       });
     } catch (err) {
-      if (process.env.NODE_ENV === "production") {
+      if (process.env.NODE_ENV === "production" || !process.env.VITEST) {
         throw err;
       }
     }
@@ -545,7 +491,7 @@ export class ProfileService {
    * Retrieves full profile settings and configured links for the given user ID.
    */
   static async getProfileByUserId(userId: string) {
-    if (process.env.NODE_ENV !== "production" && userId === DEFAULT_USER.id) {
+    if (Boolean(process.env.VITEST) && userId === DEFAULT_USER.id) {
       return {
         userId: DEFAULT_USER.id,
         handle: DEFAULT_USER.profile.handle,
@@ -563,7 +509,7 @@ export class ProfileService {
           "PostgreSQL",
           "React",
         ],
-        links: inMemoryUserLinks.get(DEFAULT_USER.id) || demoUserLinks,
+        links: inMemoryUserLinks.get(DEFAULT_USER.id) || [],
       };
     }
 
@@ -590,33 +536,7 @@ export class ProfileService {
         links,
       };
     } catch {
-      if (process.env.NODE_ENV === "production") {
-        return null;
-      }
-      const handle =
-        userId === "usr_mock_mehmet_kaan"
-          ? "mehmetkaan"
-          : userId === "usr_mock_selin_yilmaz"
-            ? "selinyilmaz"
-            : `user-${userId.slice(0, 8)}`;
-      const displayName =
-        userId === "usr_mock_mehmet_kaan"
-          ? "Mehmet Kaan"
-          : userId === "usr_mock_selin_yilmaz"
-            ? "Selin Yılmaz"
-            : "Operis Kullanıcısı";
-      return {
-        userId,
-        handle,
-        displayName,
-        about: "Kıdemli Yazılım Mühendisi.",
-        avatarUrl: null,
-        showLocation: true,
-        revealPhoneAfterMatch: false,
-        locale: "tr",
-        theme: "dark",
-        links: inMemoryUserLinks.get(userId) || [],
-      };
+      return null;
     }
   }
 }

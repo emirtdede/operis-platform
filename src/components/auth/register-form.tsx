@@ -19,6 +19,8 @@ import { TextInput } from "../ui/text-input";
 import { Checkbox } from "../ui/checkbox";
 import { DatePicker } from "../ui/date-picker";
 import { LegalModal } from "../ui/legal-modal";
+import { SocialLoginButtons } from "./social-login-buttons";
+import { TurnstileWidget } from "../security/turnstile-widget";
 
 export interface RegisterFormProps {
   locale: string;
@@ -47,6 +49,7 @@ export function RegisterForm({ locale, returnUrl }: RegisterFormProps) {
   const [privacyAcknowledged, setPrivacyAcknowledged] = useState(false);
   const [matchingAcknowledged, setMatchingAcknowledged] = useState(false);
   const [ageConfirmed, setAgeConfirmed] = useState(false);
+  const [marketingConsent, setMarketingConsent] = useState(false);
 
   // Legal Modal State
   const [activeLegalDoc, setActiveLegalDoc] = useState<string | null>(null);
@@ -61,6 +64,7 @@ export function RegisterForm({ locale, returnUrl }: RegisterFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -136,6 +140,8 @@ export function RegisterForm({ locale, returnUrl }: RegisterFormProps) {
           privacyAcknowledged,
           matchingAcknowledged,
           ageConfirmed,
+          marketingConsent,
+          turnstileToken,
           focusCategoryKeys: ["web-development", "frontend-ui"],
           locale: isTr ? "tr" : "en",
         }),
@@ -143,7 +149,9 @@ export function RegisterForm({ locale, returnUrl }: RegisterFormProps) {
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || (isTr ? "Kayıt işlemi başarısız oldu" : "Registration failed"));
+        throw new Error(
+          data.error || (isTr ? "Kayıt işlemi başarısız oldu" : "Registration failed")
+        );
       }
 
       setSuccess(true);
@@ -433,7 +441,23 @@ export function RegisterForm({ locale, returnUrl }: RegisterFormProps) {
           onChange={(e) => setAgeConfirmed(e.target.checked)}
           required
         />
+
+        <Checkbox
+          label={
+            isTr
+              ? "Operis platform duyuruları, bültenler ve yeni özellikler hakkında bilgilendirme e-postaları almak istiyorum (İsteğe bağlı)."
+              : "I would like to receive product announcements, updates, and newsletters (Optional)."
+          }
+          checked={marketingConsent}
+          onChange={(e) => setMarketingConsent(e.target.checked)}
+        />
       </div>
+
+      {/* Cloudflare Turnstile Bot Defense */}
+      <TurnstileWidget
+        onVerify={(token) => setTurnstileToken(token)}
+        onExpire={() => setTurnstileToken(null)}
+      />
 
       <Button
         type="submit"
@@ -444,6 +468,15 @@ export function RegisterForm({ locale, returnUrl }: RegisterFormProps) {
       >
         {isTr ? "Hesap Oluştur" : "Create Account"}
       </Button>
+
+      {/* 5 Circular Social Sign-Up Buttons */}
+      <div className="pt-2">
+        <SocialLoginButtons
+          locale={locale}
+          returnUrl={returnUrl}
+          onError={(msg) => setError(msg)}
+        />
+      </div>
 
       <div className="pt-2 text-center text-xs text-[var(--color-text-secondary)]">
         {isTr ? "Zaten bir hesabınız var mı?" : "Already have an account?"}{" "}

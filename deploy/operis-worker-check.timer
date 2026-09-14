@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Operis Worker Healthcheck Probe Every 30 Seconds
+After=operis-worker.service
+
+[Timer]
+OnBootSec=15s
+OnUnitActiveSec=30s
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target

@@ -13,7 +13,7 @@ export async function generateMetadata({
   const isTr = locale === "tr";
 
   return {
-    title: isTr ? "Hakkımızda & Manifestomuz | Operis" : "About Us & Manifesto | Operis",
+    title: isTr ? "Hakkımızda & Manifestomuz" : "About Us & Manifesto",
     description: isTr
       ? "Operis'in bağımsız mühendisler ve teknoloji ekipleri için kurduğu komisyonsuz, şeffaf eşleştirme manifestosu."
       : "The Operis manifesto: empowering verified engineers and modern teams through direct, 0% cut matching.",
@@ -59,7 +59,10 @@ export default async function AboutPage({ params }: { params: Promise<{ locale: 
         </h2>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div id="zero-commission" className="scroll-mt-24 rounded-3xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/70 backdrop-blur-xl p-6 sm:p-7 space-y-3">
+          <div
+            id="zero-commission"
+            className="scroll-mt-24 rounded-3xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/70 backdrop-blur-xl p-6 sm:p-7 space-y-3"
+          >
             <div className="h-10 w-10 rounded-2xl bg-blue-500/10 text-blue-400 border border-blue-500/20 flex items-center justify-center font-bold">
               1
             </div>
@@ -73,7 +76,10 @@ export default async function AboutPage({ params }: { params: Promise<{ locale: 
             </p>
           </div>
 
-          <div id="freshness-radar" className="scroll-mt-24 rounded-3xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/70 backdrop-blur-xl p-6 sm:p-7 space-y-3">
+          <div
+            id="freshness-radar"
+            className="scroll-mt-24 rounded-3xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/70 backdrop-blur-xl p-6 sm:p-7 space-y-3"
+          >
             <div className="h-10 w-10 rounded-2xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center font-bold">
               2
             </div>
@@ -87,7 +93,10 @@ export default async function AboutPage({ params }: { params: Promise<{ locale: 
             </p>
           </div>
 
-          <div id="encrypted-offers" className="scroll-mt-24 rounded-3xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/70 backdrop-blur-xl p-6 sm:p-7 space-y-3">
+          <div
+            id="encrypted-offers"
+            className="scroll-mt-24 rounded-3xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/70 backdrop-blur-xl p-6 sm:p-7 space-y-3"
+          >
             <div className="h-10 w-10 rounded-2xl bg-purple-500/10 text-purple-400 border border-purple-500/20 flex items-center justify-center font-bold">
               3
             </div>

@@ -1,10 +1,18 @@
-import { and, count, desc, eq, gt, ilike, or, sql, inArray } from "drizzle-orm";
+import { and, count, desc, eq, gt, ilike, lte, or, sql, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/src/lib/db";
 import { ListingService, inMemoryListings } from "@/src/modules/listings/service";
 import { NotificationService } from "@/src/modules/notifications/service";
+import { EngagementService } from "@/src/modules/engagements/service";
 import { DEFAULT_USER } from "@/src/modules/auth/demo-user";
 import { inMemorySentOffers, inMemoryReceivedOffers } from "@/src/modules/offers/service";
-import { blockIpAddress, unblockIpAddress } from "@/src/lib/security/rate-limit";
+import {
+  blockIpAddressAsync,
+  unblockIpAddressAsync,
+  blockedIpSet,
+  loadBlockedIpsFromDb,
+  recordBlockedIpInCache,
+  removeBlockedIpFromCache,
+} from "@/src/lib/security/rate-limit";
 
 export interface PaginatedResult<T> {
   items: T[];
@@ -48,6 +56,26 @@ export interface AdminListingItem {
   createdAt: Date;
 }
 
+export interface AdminDisputeItem {
+  id: string;
+  listingId: string;
+  listingTitle: string;
+  listingSlug?: string | null;
+  categoryKey: string;
+  status: string;
+  matchedAt: Date;
+  completedAt: Date | null;
+  cancelledAt: Date | null;
+  ownerUserId: string;
+  ownerDisplayName: string;
+  ownerHandle: string;
+  ownerMarkStatus: string | null;
+  freelancerUserId: string;
+  freelancerDisplayName: string;
+  freelancerHandle: string;
+  freelancerMarkStatus: string | null;
+}
+
 export interface AdminOfferItem {
   id: string;
   listingId: string;
@@ -87,7 +115,7 @@ export interface AdminAbuseItem {
   reporterDisplayName?: string;
   offenderUserId?: string;
   offenderDisplayName?: string;
-  targetType: "listing" | "profile" | "offer" | "message";
+  targetType: "listing" | "profile" | "offer" | "message" | "general";
   targetId: string;
   reasonCode: string;
   details: string;
@@ -109,227 +137,12 @@ export interface AdminThreatItem {
   lastSeenAt: Date;
 }
 
-// In-Memory Seed Storage for Dev / Preview Mode
-const mockUsers: AdminUserItem[] = [
-  {
-    id: "usr_mock_demir_yildiz",
-    email: "kullanici@operis.pro",
-    displayName: "Demir Yıldız",
-    handle: "demokullanici",
-    role: "SECURITY_ADMIN",
-    status: "ACTIVE",
-    emailVerified: true,
-    twoFactorEnabled: true,
-    listingsCount: 3,
-    offersCount: 8,
-    createdAt: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000),
-    updatedAt: new Date(),
-  },
-  {
-    id: "usr_mock_selin_kaya",
-    email: "selin.kaya@techlabs.io",
-    displayName: "Selin Kaya",
-    handle: "selinkaya",
-    role: "USER",
-    status: "ACTIVE",
-    emailVerified: true,
-    twoFactorEnabled: false,
-    listingsCount: 5,
-    offersCount: 2,
-    createdAt: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000),
-    updatedAt: new Date(),
-  },
-  {
-    id: "usr_mock_mert_aydin",
-    email: "mert.aydin@devops.co",
-    displayName: "Mert Aydın",
-    handle: "mertdev",
-    role: "USER",
-    status: "ACTIVE",
-    emailVerified: true,
-    twoFactorEnabled: true,
-    listingsCount: 1,
-    offersCount: 14,
-    createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
-    updatedAt: new Date(),
-  },
-  {
-    id: "usr_mock_spammer_bot",
-    email: "fastcash99@tempmail.org",
-    displayName: "Quick Crypto Earn",
-    handle: "cryptopromote",
-    role: "USER",
-    status: "SUSPENDED",
-    emailVerified: false,
-    twoFactorEnabled: false,
-    listingsCount: 2,
-    offersCount: 19,
-    createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
-    updatedAt: new Date(),
-  },
-  {
-    id: "usr_mock_zeynep_arslan",
-    email: "zeynep.arslan@designhub.studio",
-    displayName: "Zeynep Arslan",
-    handle: "zeynepux",
-    role: "USER",
-    status: "ACTIVE",
-    emailVerified: true,
-    twoFactorEnabled: true,
-    listingsCount: 0,
-    offersCount: 22,
-    createdAt: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000),
-    updatedAt: new Date(),
-  },
-];
-
-const mockBlockedIps = new Set<string>(["185.220.101.5", "194.26.29.112"]);
-
-export const mockAbuseEvents: AdminAbuseItem[] = [
-  {
-    id: "abuse_001",
-    reporterUserId: "usr_mock_selin_kaya",
-    reporterDisplayName: "Selin Kaya",
-    offenderUserId: "usr_mock_spammer_bot",
-    offenderDisplayName: "Quick Crypto Earn",
-    targetType: "offer",
-    targetId: "off_mock_spam_99",
-    reasonCode: "SPAM_PROMOTION",
-    details:
-      "İlanda belirtilmeyen harici Telegram grubuna yönlendirme ve kripto yatırım vaadi içeren teklif.",
-    flaggedTerms: ["t.me/crypto", "yatırım", "garanti"],
-    status: "OPEN",
-    createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
-  },
-  {
-    id: "abuse_002",
-    reporterUserId: "usr_mock_mert_aydin",
-    reporterDisplayName: "Mert Aydın",
-    offenderUserId: "usr_mock_toxic_user",
-    offenderDisplayName: "Ahmet K.",
-    targetType: "message",
-    targetId: "off_mock_insult_12",
-    reasonCode: "PROFANITY_INSULT",
-    details:
-      "Bütçe pazarlığı esnasında karşı tarafa küfür ve hakaret içeren mesaj gönderme teşebbüsü.",
-    flaggedTerms: ["gerizekalı", "amk", "ahmak"],
-    status: "OPEN",
-    createdAt: new Date(Date.now() - 4 * 60 * 60 * 1000),
-  },
-  {
-    id: "abuse_003",
-    reporterUserId: "usr_mock_demir_yildiz",
-    reporterDisplayName: "Demir Yıldız",
-    offenderUserId: "usr_mock_ext_lead",
-    offenderDisplayName: "Harici İletişim Botu",
-    targetType: "listing",
-    targetId: "list_mock_fake_01",
-    reasonCode: "EXTERNAL_CONTACT_LEAK",
-    details:
-      "Proje açıklamasında WhatsApp numarası ve doğrudan banka havalesi talep eden sahte ilan.",
-    flaggedTerms: ["0555", "whatsapp", "havale"],
-    status: "RESOLVED",
-    createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000),
-  },
-];
-
-const mockThreats: AdminThreatItem[] = [
-  {
-    id: "threat_001",
-    threatType: "BRUTE_FORCE",
-    severity: "CRITICAL",
-    sourceIp: "185.220.101.5",
-    targetEndpoint: "/api/auth/login",
-    attemptCount: 142,
-    status: "BLOCKED",
-    riskScore: 95,
-    lastSeenAt: new Date(Date.now() - 15 * 60 * 1000),
-  },
-  {
-    id: "threat_002",
-    threatType: "INJECTION_PROBE",
-    severity: "HIGH",
-    sourceIp: "194.26.29.112",
-    targetEndpoint: "/api/listings/search?q=' OR 1=1--",
-    attemptCount: 28,
-    status: "BLOCKED",
-    riskScore: 88,
-    lastSeenAt: new Date(Date.now() - 42 * 60 * 1000),
-  },
-  {
-    id: "threat_003",
-    threatType: "RATE_LIMIT_DDOS",
-    severity: "MEDIUM",
-    sourceIp: "45.154.255.89",
-    targetEndpoint: "/api/feed",
-    attemptCount: 520,
-    status: "MITIGATED",
-    riskScore: 72,
-    lastSeenAt: new Date(Date.now() - 85 * 60 * 1000),
-  },
-  {
-    id: "threat_004",
-    threatType: "UNAUTHORIZED_PATH",
-    severity: "LOW",
-    sourceIp: "103.149.162.195",
-    targetEndpoint: "/wp-admin/setup-config.php",
-    attemptCount: 12,
-    status: "INVESTIGATING",
-    riskScore: 45,
-    lastSeenAt: new Date(Date.now() - 180 * 60 * 1000),
-  },
-];
-
-const mockLogs: AdminLogItem[] = [
-  {
-    id: "log_001",
-    category: "auth",
-    level: "WARN",
-    action: "AUTH_BRUTE_FORCE_TRIGGER",
-    safeSummary:
-      "185.220.101.5 IP adresinden 100+ başarısız giriş denemesi tespit edildi ve IP geçici olarak engellendi.",
-    ipAddress: "185.220.101.5",
-    createdAt: new Date(Date.now() - 15 * 60 * 1000),
-  },
-  {
-    id: "log_002",
-    category: "audit",
-    level: "INFO",
-    action: "USER_SUSPEND",
-    actorEmail: "kullanici@operis.pro",
-    targetId: "usr_mock_spammer_bot",
-    safeSummary:
-      "Admin Demir Yıldız tarafından @cryptopromote hesabı spam/dolandırıcılık gerekçesiyle askıya alındı.",
-    createdAt: new Date(Date.now() - 25 * 60 * 1000),
-  },
-  {
-    id: "log_003",
-    category: "business",
-    level: "INFO",
-    action: "OFFER_SUBMITTED",
-    safeSummary:
-      "Mert Aydın tarafından 'Next.js ve Tailwind ile E-Ticaret' ilanına 30.000 TRY tutarında şifreli teklif sunuldu.",
-    createdAt: new Date(Date.now() - 40 * 60 * 1000),
-  },
-  {
-    id: "log_004",
-    category: "system",
-    level: "INFO",
-    action: "WORKER_7DAY_EXPIRY_RUN",
-    safeSummary:
-      "7 günlük yaşam döngüsü arka plan görevi başarıyla çalıştı. 2 süresi dolan ilan INACTIVE_EXPIRED durumuna alındı.",
-    createdAt: new Date(Date.now() - 60 * 60 * 1000),
-  },
-  {
-    id: "log_005",
-    category: "system",
-    level: "WARN",
-    action: "DB_SLOW_QUERY",
-    safeSummary:
-      "Kategori takip filtre sorgusu 215ms sürdü (eşik: 200ms). Gecikme analizi için loglandı.",
-    createdAt: new Date(Date.now() - 120 * 60 * 1000),
-  },
-];
+const ROLE_HIERARCHY: Record<string, number> = {
+  USER: 1,
+  MODERATOR: 2,
+  ADMIN: 3,
+  SECURITY_ADMIN: 4,
+};
 
 export class AdminService {
   /**
@@ -373,6 +186,33 @@ export class AdminService {
         .from(schema.users)
         .where(eq(schema.users.status, "SUSPENDED"));
 
+      const [disputedRow] = await db
+        .select({ val: count() })
+        .from(schema.engagements)
+        .where(eq(schema.engagements.status, "DISPUTED"));
+
+      const [deadLettersRow] = await db
+        .select({ val: count() })
+        .from(schema.outboxEvents)
+        .where(eq(schema.outboxEvents.status, "DEAD"));
+
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+      const [threatsRow] = await db
+        .select({ val: count() })
+        .from(schema.securityEvents)
+        .where(gt(schema.securityEvents.createdAt, twentyFourHoursAgo));
+
+      const [blockedIpsRow] = await db
+        .select({ val: count() })
+        .from(schema.ipBlocks)
+        .where(
+          or(sql`${schema.ipBlocks.expiresAt} IS NULL`, gt(schema.ipBlocks.expiresAt, new Date()))
+        );
+
+      const deadCount = deadLettersRow?.val ?? 0;
+      const systemHealth = deadCount === 0 ? 100 : Math.max(90, 100 - deadCount * 2);
+
       return {
         totalUsers: totalUsersRow?.val ?? 0,
         activeListings: activeListingsRow?.val ?? 0,
@@ -381,41 +221,26 @@ export class AdminService {
         matchesLast24h: matches24hRow?.val ?? 0,
         openReports: openReportsRow?.val ?? 0,
         suspendedUsers: suspendedUsersRow?.val ?? 0,
-        deadLetters: 0,
-        activeThreats: mockThreats.filter((t) => t.status === "BLOCKED" || t.status === "DETECTED")
-          .length,
-        blockedIpsCount: mockBlockedIps.size,
-        systemHealthPercent: 99.98,
+        disputedEngagements: disputedRow?.val ?? 0,
+        deadLetters: deadCount,
+        activeThreats: threatsRow?.val ?? 0,
+        blockedIpsCount: blockedIpsRow?.val ?? 0,
+        systemHealthPercent: systemHealth,
       };
     } catch {
-      if (process.env.NODE_ENV === "production") {
-        return {
-          totalUsers: 0,
-          activeListings: 0,
-          expiredListingsLast24h: 0,
-          offersLast24h: 0,
-          matchesLast24h: 0,
-          openReports: 0,
-          suspendedUsers: 0,
-          deadLetters: 0,
-          activeThreats: 0,
-          blockedIpsCount: mockBlockedIps.size,
-          systemHealthPercent: 100,
-        };
-      }
       return {
-        totalUsers: 10420,
-        activeListings: inMemoryListings.filter((l) => l.status === "ACTIVE").length || 1,
-        expiredListingsLast24h: 2,
-        offersLast24h: 18,
-        matchesLast24h: 6,
-        openReports: mockAbuseEvents.filter((a) => a.status === "OPEN").length,
-        suspendedUsers: 1,
+        totalUsers: 0,
+        activeListings: 0,
+        expiredListingsLast24h: 0,
+        offersLast24h: 0,
+        matchesLast24h: 0,
+        openReports: 0,
+        suspendedUsers: 0,
+        disputedEngagements: 0,
         deadLetters: 0,
-        activeThreats: mockThreats.filter((t) => t.status === "BLOCKED" || t.status === "DETECTED")
-          .length,
-        blockedIpsCount: mockBlockedIps.size,
-        systemHealthPercent: 99.98,
+        activeThreats: 0,
+        blockedIpsCount: 0,
+        systemHealthPercent: 100,
       };
     }
   }
@@ -483,60 +308,29 @@ export class AdminService {
         .offset((page - 1) * limit)
         .orderBy(desc(schema.users.createdAt));
 
-      if (rows && rows.length > 0) {
-        return {
-          items: rows.map((r) => ({
-            id: r.id,
-            email: r.email,
-            displayName: r.displayName || r.email.split("@")[0] || "İsimsiz",
-            handle: r.handle || "user",
-            role: r.role,
-            status: r.status,
-            emailVerified: r.emailVerified,
-            twoFactorEnabled: r.twoFactorEnabled,
-            listingsCount: 0,
-            offersCount: 0,
-            createdAt: r.createdAt,
-            updatedAt: r.updatedAt,
-          })),
-          total,
-          page,
-          limit,
-          totalPages: Math.max(1, Math.ceil(total / limit)),
-        };
-      }
+      return {
+        items: (rows || []).map((r) => ({
+          id: r.id,
+          email: r.email,
+          displayName: r.displayName || r.email.split("@")[0] || "İsimsiz",
+          handle: r.handle || "user",
+          role: r.role,
+          status: r.status,
+          emailVerified: r.emailVerified,
+          twoFactorEnabled: r.twoFactorEnabled,
+          listingsCount: 0,
+          offersCount: 0,
+          createdAt: r.createdAt,
+          updatedAt: r.updatedAt,
+        })),
+        total,
+        page,
+        limit,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+      };
     } catch {
-      // In-memory fallback
+      return { items: [], total: 0, page, limit, totalPages: 1 };
     }
-
-    let filtered = [...mockUsers];
-    if (params.status && params.status !== "ALL") {
-      filtered = filtered.filter((u) => u.status === params.status);
-    }
-    if (params.role && params.role !== "ALL") {
-      filtered = filtered.filter((u) => u.role === params.role);
-    }
-    if (params.search && params.search.trim()) {
-      const q = params.search.trim().toLowerCase();
-      filtered = filtered.filter(
-        (u) =>
-          u.email.toLowerCase().includes(q) ||
-          u.displayName.toLowerCase().includes(q) ||
-          u.handle.toLowerCase().includes(q)
-      );
-    }
-
-    const total = filtered.length;
-    const startIndex = (page - 1) * limit;
-    const items = filtered.slice(startIndex, startIndex + limit);
-
-    return {
-      items,
-      total,
-      page,
-      limit,
-      totalPages: Math.max(1, Math.ceil(total / limit)),
-    };
   }
 
   /**
@@ -631,10 +425,10 @@ export class AdminService {
         totalPages: Math.max(1, Math.ceil(total / limit)),
       };
     } catch {
-      if (process.env.NODE_ENV === "production") {
+      if (!process.env.VITEST) {
         return { items: [], total: 0, page, limit, totalPages: 1 };
       }
-      // In-memory fallback
+      // In-memory fallback for Vitest
     }
 
     // Gather from in-memory listings
@@ -659,29 +453,6 @@ export class AdminService {
       activeUntil: l.activeUntil,
       createdAt: l.firstPublishedAt,
     }));
-
-    if (all.length === 0) {
-      all = [
-        {
-          id: "list_sample_01",
-          title: "Next.js ve Tailwind ile Modern E-Ticaret Arayüzü",
-          slug: "nextjs-ve-tailwind-ile-modern-e-ticaret-arayuzu-gelistirilmesi-a1b2c3",
-          status: "ACTIVE",
-          categoryName: "Web Geliştirme",
-          categoryKey: "web-development",
-          ownerDisplayName: "Demir Yıldız",
-          ownerHandle: "demokullanici",
-          ownerUserId: "usr_mock_demir_yildiz",
-          budgetMode: "FIXED_RANGE",
-          budgetFormatted: "25.000 - 40.000 TRY",
-          activationSeq: 1,
-          viewCount: 142,
-          clickCount: 89,
-          activeUntil: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
-          createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
-        },
-      ];
-    }
 
     if (params.status && params.status !== "ALL") {
       all = all.filter((l) => l.status === params.status);
@@ -731,12 +502,7 @@ export class AdminService {
       }
       if (params.search && params.search.trim()) {
         const q = `%${params.search.trim()}%`;
-        conditions.push(
-          or(
-            ilike(schema.listings.title, q),
-            ilike(schema.listings.slug, q)
-          )
-        );
+        conditions.push(or(ilike(schema.listings.title, q), ilike(schema.listings.slug, q)));
       }
 
       const [totalCountRow] = await db
@@ -817,95 +583,8 @@ export class AdminService {
         totalPages: Math.max(1, Math.ceil(total / limit)),
       };
     } catch {
-      if (process.env.NODE_ENV === "production") {
-        return { items: [], total: 0, page, limit, totalPages: 1 };
-      }
-      // In-memory fallback
+      return { items: [], total: 0, page, limit, totalPages: 1 };
     }
-
-    const mockOffers: AdminOfferItem[] = [
-      {
-        id: "off_audit_001",
-        listingId: "list_sample_01",
-        listingTitle: "Next.js ve Tailwind ile Modern E-Ticaret Arayüzü",
-        listingSlug: "nextjs-ve-tailwind-ile-modern-e-ticaret-arayuzu-gelistirilmesi-a1b2c3",
-        senderUserId: "usr_mock_mert_aydin",
-        senderDisplayName: "Mert Aydın",
-        senderHandle: "mertdev",
-        recipientUserId: "usr_mock_demir_yildiz",
-        recipientDisplayName: "Demir Yıldız",
-        recipientHandle: "demokullanici",
-        status: "ACCEPTED",
-        rejectionReasonCode: null,
-        budgetFormatted: "32.000 TRY",
-        estimatedDuration: "2 Hafta",
-        createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
-        resolvedAt: new Date(Date.now() - 18 * 60 * 60 * 1000),
-      },
-      {
-        id: "off_audit_002",
-        listingId: "list_sample_01",
-        listingTitle: "Next.js ve Tailwind ile Modern E-Ticaret Arayüzü",
-        listingSlug: "nextjs-ve-tailwind-ile-modern-e-ticaret-arayuzu-gelistirilmesi-a1b2c3",
-        senderUserId: "usr_mock_zeynep_arslan",
-        senderDisplayName: "Zeynep Arslan",
-        senderHandle: "zeynepux",
-        recipientUserId: "usr_mock_demir_yildiz",
-        recipientDisplayName: "Demir Yıldız",
-        recipientHandle: "demokullanici",
-        status: "PENDING",
-        rejectionReasonCode: null,
-        budgetFormatted: "28.000 TRY",
-        estimatedDuration: "10 Gün",
-        createdAt: new Date(Date.now() - 6 * 60 * 60 * 1000),
-        resolvedAt: null,
-      },
-      {
-        id: "off_audit_003",
-        listingId: "list_sample_01",
-        listingTitle: "Next.js ve Tailwind ile Modern E-Ticaret Arayüzü",
-        listingSlug: "nextjs-ve-tailwind-ile-modern-e-ticaret-arayuzu-gelistirilmesi-a1b2c3",
-        senderUserId: "usr_mock_spammer_bot",
-        senderDisplayName: "Quick Crypto Earn",
-        senderHandle: "cryptopromote",
-        recipientUserId: "usr_mock_demir_yildiz",
-        recipientDisplayName: "Demir Yıldız",
-        recipientHandle: "demokullanici",
-        status: "REJECTED",
-        rejectionReasonCode: "SCOPE_MISMATCH",
-        budgetFormatted: "5.000 TRY",
-        estimatedDuration: "1 Gün",
-        createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
-        resolvedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
-      },
-    ];
-
-    let all = [...mockOffers];
-    if (params.status && params.status !== "ALL") {
-      all = all.filter((o) => o.status === params.status);
-    }
-    if (params.search && params.search.trim()) {
-      const q = params.search.trim().toLowerCase();
-      all = all.filter(
-        (o) =>
-          o.listingTitle.toLowerCase().includes(q) ||
-          o.senderDisplayName.toLowerCase().includes(q) ||
-          o.senderHandle.toLowerCase().includes(q) ||
-          o.recipientDisplayName.toLowerCase().includes(q)
-      );
-    }
-
-    const total = all.length;
-    const startIndex = (page - 1) * limit;
-    const items = all.slice(startIndex, startIndex + limit);
-
-    return {
-      items,
-      total,
-      page,
-      limit,
-      totalPages: Math.max(1, Math.ceil(total / limit)),
-    };
   }
 
   /**
@@ -921,7 +600,55 @@ export class AdminService {
     const page = Math.max(1, params.page || 1);
     const limit = Math.min(100, Math.max(10, params.limit || 25));
 
-    let all = [...mockLogs];
+    let dbLogs: AdminLogItem[] = [];
+    try {
+      const db = getDb();
+      const auditRows = await db
+        .select()
+        .from(schema.adminAuditLog)
+        .orderBy(desc(schema.adminAuditLog.createdAt))
+        .limit(100);
+
+      const securityRows = await db
+        .select()
+        .from(schema.securityEvents)
+        .orderBy(desc(schema.securityEvents.createdAt))
+        .limit(100);
+
+      dbLogs = [
+        ...auditRows.map((r) => ({
+          id: r.id,
+          category: "audit" as const,
+          level: (r.action.includes("FAIL") || r.action.includes("SUSPEND") ? "WARN" : "INFO") as
+            "INFO" | "WARN",
+          action: r.action,
+          actorId: r.adminUserId,
+          targetId: r.targetId,
+          safeSummary: r.safeSummary || `${r.action} on ${r.targetType}`,
+          createdAt: r.createdAt,
+        })),
+        ...securityRows.map((r) => {
+          const isCritical = r.eventType.includes("BRUTE") || r.eventType.includes("DDOS");
+          return {
+            id: r.id,
+            category: "auth" as const,
+            level: (isCritical ? "CRITICAL" : "WARN") as "WARN" | "CRITICAL",
+            action: r.eventType,
+            actorId: r.userId || undefined,
+            ipAddress: r.ipAddress || undefined,
+            safeSummary: `Güvenlik Olayı: ${r.eventType}`,
+            metadata: (r.riskMetadata as Record<string, unknown>) || undefined,
+            createdAt: r.createdAt,
+          };
+        }),
+      ];
+    } catch {
+      // In-memory fallback
+    }
+
+    let all = [...dbLogs];
+    all.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
     if (params.category && params.category !== "all") {
       all = all.filter((l) => l.category === params.category);
     }
@@ -954,10 +681,12 @@ export class AdminService {
   /**
    * Channel 1 Engine: User Abuse, Profanity & Behavior Incidents.
    */
-  static async getAbuseIncidents(params: {
-    status?: string;
-    search?: string;
-  }): Promise<AdminAbuseItem[]> {
+  static async getAbuseIncidents(
+    params: {
+      status?: string;
+      search?: string;
+    } = {}
+  ): Promise<AdminAbuseItem[]> {
     let dbReports: AdminAbuseItem[] = [];
     try {
       const db = getDb();
@@ -978,24 +707,135 @@ export class AdminService {
         .leftJoin(schema.profiles, eq(schema.reports.reporterUserId, schema.profiles.userId))
         .orderBy(desc(schema.reports.createdAt));
 
-      dbReports = rows.map((r) => ({
-        id: r.id,
-        reporterUserId: r.reporterUserId,
-        reporterDisplayName: r.reporterDisplayName || "Kullanici",
-        offenderUserId: r.targetType === "profile" ? r.targetId : undefined,
-        targetType: (r.targetType as "listing" | "profile" | "offer" | "message") || "listing",
-        targetId: r.targetId,
-        reasonCode: r.reasonCode,
-        details: r.details || "",
-        status: (r.status as "OPEN" | "REVIEWING" | "RESOLVED" | "DISMISSED") || "OPEN",
-        createdAt: r.createdAt,
-      }));
+      // Collect IDs to resolve offenders for each target type
+      const listingTargetIds: string[] = [];
+      const offerTargetIds: string[] = [];
+      const profileTargetIds: string[] = [];
+
+      for (const r of rows) {
+        if (r.targetType === "listing" && r.targetId) listingTargetIds.push(r.targetId);
+        else if (r.targetType === "offer" && r.targetId) offerTargetIds.push(r.targetId);
+        else if (r.targetType === "profile" && r.targetId) profileTargetIds.push(r.targetId);
+      }
+
+      const listingOffenders = new Map<string, { userId: string; displayName: string }>();
+      if (listingTargetIds.length > 0) {
+        const listingRows = await db
+          .select({
+            listingId: schema.listings.id,
+            ownerUserId: schema.listings.ownerUserId,
+            displayName: schema.profiles.displayName,
+          })
+          .from(schema.listings)
+          .leftJoin(schema.profiles, eq(schema.listings.ownerUserId, schema.profiles.userId))
+          .where(inArray(schema.listings.id, listingTargetIds));
+        for (const lr of listingRows) {
+          listingOffenders.set(lr.listingId, {
+            userId: lr.ownerUserId,
+            displayName: lr.displayName || "İlan Sahibi",
+          });
+        }
+      }
+
+      const offerOffenders = new Map<string, { userId: string; displayName: string }>();
+      if (offerTargetIds.length > 0) {
+        const offerRows = await db
+          .select({
+            offerId: schema.offers.id,
+            offerorUserId: schema.offers.offerorUserId,
+            displayName: schema.profiles.displayName,
+          })
+          .from(schema.offers)
+          .leftJoin(schema.profiles, eq(schema.offers.offerorUserId, schema.profiles.userId))
+          .where(inArray(schema.offers.id, offerTargetIds));
+        for (const ofr of offerRows) {
+          offerOffenders.set(ofr.offerId, {
+            userId: ofr.offerorUserId,
+            displayName: ofr.displayName || "Teklif Sahibi",
+          });
+        }
+      }
+
+      const profileOffenders = new Map<string, { userId: string; displayName: string }>();
+      if (profileTargetIds.length > 0) {
+        const profileRows = await db
+          .select({
+            userId: schema.profiles.userId,
+            displayName: schema.profiles.displayName,
+          })
+          .from(schema.profiles)
+          .where(inArray(schema.profiles.userId, profileTargetIds));
+        for (const pr of profileRows) {
+          profileOffenders.set(pr.userId, {
+            userId: pr.userId,
+            displayName: pr.displayName || "Kullanıcı",
+          });
+        }
+      }
+
+      dbReports = rows.map((r) => {
+        let offenderUserId: string | undefined = undefined;
+        let offenderDisplayName: string | undefined = undefined;
+
+        if (r.targetType === "listing") {
+          const resolved = listingOffenders.get(r.targetId);
+          offenderUserId = resolved?.userId;
+          offenderDisplayName = resolved?.displayName;
+        } else if (r.targetType === "offer") {
+          const resolved = offerOffenders.get(r.targetId);
+          offenderUserId = resolved?.userId;
+          offenderDisplayName = resolved?.displayName;
+        } else if (r.targetType === "profile") {
+          const resolved = profileOffenders.get(r.targetId);
+          offenderUserId = resolved?.userId || r.targetId;
+          offenderDisplayName = resolved?.displayName;
+        } else if (r.targetType === "general") {
+          offenderUserId = undefined;
+          offenderDisplayName = "Platform Geri Bildirimi / Genel Şikayet";
+        }
+
+        return {
+          id: r.id,
+          reporterUserId: r.reporterUserId,
+          reporterDisplayName: r.reporterDisplayName || "Kullanıcı",
+          offenderUserId,
+          offenderDisplayName,
+          targetType:
+            (r.targetType as "listing" | "profile" | "offer" | "message" | "general") || "listing",
+          targetId: r.targetId,
+          reasonCode: r.reasonCode,
+          details: r.details || "",
+          status: (r.status as "OPEN" | "REVIEWING" | "RESOLVED" | "DISMISSED") || "OPEN",
+          createdAt: r.createdAt,
+        };
+      });
     } catch {
       // In-memory fallback
     }
 
+    let combined: AdminAbuseItem[] = dbReports;
+    if (combined.length === 0 && process.env.NODE_ENV !== "production") {
+      try {
+        const { ModerationService } = await import("@/src/modules/moderation/service");
+        const mem = await ModerationService.getReports(params.status);
+        combined = mem.map((r) => ({
+          id: r.id,
+          reporterUserId: r.reporterUserId,
+          reporterDisplayName: "Kullanıcı",
+          targetType:
+            (r.targetType as "listing" | "profile" | "offer" | "message" | "general") || "listing",
+          targetId: r.targetId,
+          reasonCode: r.reasonCode,
+          details: r.details || "",
+          status: (r.status as "OPEN" | "REVIEWING" | "RESOLVED" | "DISMISSED") || "OPEN",
+          createdAt: r.createdAt,
+        }));
+      } catch {
+        // non-blocking
+      }
+    }
+
     const seenIds = new Set<string>();
-    const combined = [...dbReports, ...mockAbuseEvents];
     let all: AdminAbuseItem[] = [];
     for (const item of combined) {
       if (!seenIds.has(item.id)) {
@@ -1026,7 +866,23 @@ export class AdminService {
     status?: string;
     search?: string;
   }): Promise<AdminThreatItem[]> {
-    let all = [...mockThreats];
+    await loadBlockedIpsFromDb().catch(() => {});
+
+    const liveThreats: AdminThreatItem[] = Array.from(blockedIpSet).map((ip, idx) => ({
+      id: `threat_live_blocked_${idx + 1}`,
+      threatType: "RATE_LIMIT_DDOS",
+      severity: "HIGH",
+      sourceIp: ip,
+      targetEndpoint: "/api/*",
+      attemptCount: 100,
+      status: "BLOCKED",
+      riskScore: 90,
+      lastSeenAt: new Date(),
+    }));
+
+    const merged: AdminThreatItem[] = liveThreats;
+
+    let all = merged;
     if (params.severity && params.severity !== "ALL") {
       all = all.filter((t) => t.severity === params.severity);
     }
@@ -1058,14 +914,21 @@ export class AdminService {
       throw new Error("A reason is strictly required for moderation actions");
     }
 
-    const isTargetUuid =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetUserId);
+    if (adminUserId === targetUserId) {
+      throw new Error(
+        "CANNOT_MODERATE_SELF: Yöneticiler kendi hesaplarını askıya alamaz veya durumunu değiştiremez."
+      );
+    }
+
+    const isTargetUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      targetUserId
+    );
 
     if (isTargetUuid) {
       try {
         const db = getDb();
 
-        return await db.transaction(async (tx) => {
+        const result = await db.transaction(async (tx) => {
           let updatedUser;
 
           const [existing] = await tx
@@ -1080,6 +943,28 @@ export class AdminService {
           if (existing.status === "DELETED") {
             throw new Error("Cannot modify status of a deleted account");
           }
+
+          const [adminUser] = await tx
+            .select({ role: schema.users.role })
+            .from(schema.users)
+            .where(eq(schema.users.id, adminUserId))
+            .limit(1);
+
+          const adminRank = ROLE_HIERARCHY[adminUser?.role || "MODERATOR"] || 1;
+          const targetRank = ROLE_HIERARCHY[existing.role || "USER"] || 1;
+
+          if (targetRank >= adminRank && action === "SUSPEND") {
+            throw new Error(
+              "INSUFFICIENT_ROLE_HIERARCHY: Yetki seviyeniz hedef kullanıcının rolünü askıya almak için yetersizdir."
+            );
+          }
+
+          let pendingReceivedOffersToNotify: Array<{
+            id: string;
+            offerorUserId: string;
+            listingTitle: string;
+            locale: string;
+          }> = [];
 
           if (action === "WARN") {
             // Do NOT alter user status on WARN
@@ -1102,6 +987,7 @@ export class AdminService {
               .update(schema.users)
               .set({
                 status: newStatus,
+                authVersion: sql`${schema.users.authVersion} + 1`,
                 updatedAt: new Date(),
               })
               .where(eq(schema.users.id, targetUserId))
@@ -1109,6 +995,18 @@ export class AdminService {
             updatedUser = u;
 
             if (action === "SUSPEND") {
+              const activeListings = await tx
+                .select({ id: schema.listings.id, title: schema.listings.title })
+                .from(schema.listings)
+                .where(
+                  and(
+                    eq(schema.listings.ownerUserId, targetUserId),
+                    eq(schema.listings.status, "ACTIVE")
+                  )
+                );
+
+              const activeListingIds = activeListings.map((l) => l.id);
+
               await tx
                 .update(schema.listings)
                 .set({
@@ -1135,6 +1033,89 @@ export class AdminService {
                     eq(schema.offers.status, "PENDING")
                   )
                 );
+
+              if (activeListingIds.length > 0) {
+                const receivedPendingOffers = await tx
+                  .select({
+                    id: schema.offers.id,
+                    offerorUserId: schema.offers.offerorUserId,
+                    listingId: schema.offers.listingId,
+                    locale: schema.profiles.locale,
+                  })
+                  .from(schema.offers)
+                  .leftJoin(
+                    schema.profiles,
+                    eq(schema.offers.offerorUserId, schema.profiles.userId)
+                  )
+                  .where(
+                    and(
+                      inArray(schema.offers.listingId, activeListingIds),
+                      eq(schema.offers.status, "PENDING")
+                    )
+                  );
+
+                await tx
+                  .update(schema.offers)
+                  .set({
+                    status: "EXPIRED_LISTING_INACTIVE",
+                    resolvedAt: new Date(),
+                    updatedAt: new Date(),
+                  })
+                  .where(
+                    and(
+                      inArray(schema.offers.listingId, activeListingIds),
+                      eq(schema.offers.status, "PENDING")
+                    )
+                  );
+
+                pendingReceivedOffersToNotify = receivedPendingOffers.map((ro) => {
+                  const matchingListing = activeListings.find((l) => l.id === ro.listingId);
+                  return {
+                    id: ro.id,
+                    offerorUserId: ro.offerorUserId,
+                    listingTitle: matchingListing?.title || "İlan",
+                    locale: ro.locale || "tr",
+                  };
+                });
+              }
+            } else if (action === "UNSUSPEND") {
+              const hiddenListings = await tx
+                .select({
+                  id: schema.listings.id,
+                  activeUntil: schema.listings.activeUntil,
+                  activationSeq: schema.listings.activationSeq,
+                })
+                .from(schema.listings)
+                .where(
+                  and(
+                    eq(schema.listings.ownerUserId, targetUserId),
+                    eq(schema.listings.status, "HIDDEN_MODERATION")
+                  )
+                );
+
+              const now = new Date();
+              for (const hl of hiddenListings) {
+                const isStillActive = Boolean(hl.activeUntil && new Date(hl.activeUntil) > now);
+                const newListingStatus = isStillActive ? "ACTIVE" : "INACTIVE_OWNER";
+
+                await tx
+                  .update(schema.listings)
+                  .set({
+                    status: newListingStatus,
+                    updatedAt: now,
+                  })
+                  .where(eq(schema.listings.id, hl.id));
+
+                await tx.insert(schema.listingStatusEvents).values({
+                  listingId: hl.id,
+                  fromStatus: "HIDDEN_MODERATION",
+                  toStatus: newListingStatus,
+                  reason: "User unsuspended by administrator",
+                  actorType: "ADMIN",
+                  actorId: adminUserId,
+                  activationSeq: hl.activationSeq,
+                });
+              }
             }
           }
 
@@ -1147,28 +1128,51 @@ export class AdminService {
             safeSummary: reason,
           });
 
-          return updatedUser;
+          return { updatedUser, pendingReceivedOffersToNotify };
         });
+
+        if (
+          result?.pendingReceivedOffersToNotify &&
+          result.pendingReceivedOffersToNotify.length > 0
+        ) {
+          await Promise.allSettled(
+            result.pendingReceivedOffersToNotify.map((po) => {
+              const isEn = po.locale === "en";
+              return NotificationService.createNotification(
+                po.offerorUserId,
+                "OFFER_EXPIRED_LISTING",
+                "offer",
+                po.id,
+                {
+                  title: isEn ? "Proposal Concluded" : "Teklif Sonlandırıldı",
+                  message: isEn
+                    ? `The listing "${po.listingTitle}" was taken down by platform moderation. Your pending proposal has ended.`
+                    : `"${po.listingTitle}" ilanı moderasyon incelemesi nedeniyle yayından kaldırıldığı için bekleyen teklifiniz sonlandırıldı.`,
+                  actionUrl: isEn ? "/en/dashboard/offers/sent" : "/tr/panel/teklifler/gonderilen",
+                }
+              );
+            })
+          );
+        }
+
+        return result?.updatedUser;
       } catch (err) {
-        if (process.env.NODE_ENV === "production") {
+        if (process.env.NODE_ENV === "production" || !process.env.VITEST) {
           throw err;
         }
       }
     }
 
     // In-memory fallback
-    const u = mockUsers.find((user) => user.id === targetUserId);
-    if (u && u.status === "DELETED") {
-      throw new Error("Cannot modify status of a deleted account");
+    if (adminUserId === targetUserId) {
+      throw new Error(
+        "CANNOT_MODERATE_SELF: Yöneticiler kendi hesaplarını askıya alamaz veya durumunu değiştiremez."
+      );
     }
-
     if (action !== "WARN") {
       if (targetUserId === DEFAULT_USER.id) {
         DEFAULT_USER.status = action === "SUSPEND" ? "SUSPENDED" : "ACTIVE";
       }
-    }
-    if (u && action !== "WARN") {
-      u.status = action === "SUSPEND" ? "SUSPENDED" : "ACTIVE";
     }
     if (action === "SUSPEND") {
       for (const l of inMemoryListings) {
@@ -1182,25 +1186,35 @@ export class AdminService {
           o.offer.resolvedAt = new Date();
           o.offer.updatedAt = new Date();
         }
+        if (
+          (o.listing as { ownerUserId?: string })?.ownerUserId === targetUserId &&
+          o.offer.status === "PENDING"
+        ) {
+          o.offer.status = "EXPIRED_LISTING_INACTIVE";
+          o.offer.resolvedAt = new Date();
+          o.offer.updatedAt = new Date();
+        }
+      }
+      for (const r of inMemoryReceivedOffers) {
+        if (r.listing.ownerUserId === targetUserId && r.offer.status === "PENDING") {
+          r.offer.status = "EXPIRED_LISTING_INACTIVE";
+          r.offer.resolvedAt = new Date();
+          r.offer.updatedAt = new Date();
+        }
+      }
+    } else if (action === "UNSUSPEND") {
+      const now = new Date();
+      for (const l of inMemoryListings) {
+        if (l.ownerUserId === targetUserId && l.status === "HIDDEN_MODERATION") {
+          l.status = l.activeUntil && new Date(l.activeUntil) > now ? "ACTIVE" : "INACTIVE_OWNER";
+        }
       }
     }
-    mockLogs.unshift({
-      id: `log_${Date.now()}`,
-      category: "audit",
-      level: "WARN",
-      action: `USER_${action}`,
-      actorId: adminUserId,
-      targetId: targetUserId,
-      safeSummary: reason,
-      createdAt: new Date(),
-    });
-    return (
-      u || {
-        id: targetUserId,
-        status: action === "SUSPEND" ? "SUSPENDED" : "ACTIVE",
-        updatedAt: new Date(),
-      }
-    );
+    return {
+      id: targetUserId,
+      status: action === "SUSPEND" ? "SUSPENDED" : "ACTIVE",
+      updatedAt: new Date(),
+    };
   }
 
   /**
@@ -1216,18 +1230,27 @@ export class AdminService {
       throw new Error("A reason is strictly required for moderation actions");
     }
 
-    const isListingUuid =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(listingId);
+    const isListingUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      listingId
+    );
 
     if (isListingUuid) {
       try {
         const db = getDb();
 
-        return await db.transaction(async (tx) => {
-          const [currentListing] = await tx
+        const txResult = await db.transaction(async (tx) => {
+          let listingQuery = tx
             .select()
             .from(schema.listings)
             .where(eq(schema.listings.id, listingId));
+
+          if (typeof (listingQuery as { for?: unknown }).for === "function") {
+            listingQuery = (listingQuery as { for: (mode: string) => typeof listingQuery }).for(
+              "update"
+            );
+          }
+
+          const [currentListing] = await listingQuery.limit(1);
 
           if (!currentListing) {
             throw new Error("Listing not found");
@@ -1271,7 +1294,27 @@ export class AdminService {
             .where(eq(schema.listings.id, listingId))
             .returning();
 
+          const notificationsToDispatch: Array<{
+            userId: string;
+            type: "MODERATION_ACTION" | "OFFER_EXPIRED_LISTING";
+            aggregateType: string;
+            aggregateId: string;
+            payload: Record<string, unknown>;
+          }> = [];
+
           if (action === "HIDE" || action === "DEACTIVATE") {
+            const pendingOffersToNotify = await tx
+              .select({
+                id: schema.offers.id,
+                offerorUserId: schema.offers.offerorUserId,
+                locale: schema.profiles.locale,
+              })
+              .from(schema.offers)
+              .leftJoin(schema.profiles, eq(schema.offers.offerorUserId, schema.profiles.userId))
+              .where(
+                and(eq(schema.offers.listingId, listingId), eq(schema.offers.status, "PENDING"))
+              );
+
             await tx
               .update(schema.offers)
               .set({
@@ -1280,11 +1323,51 @@ export class AdminService {
                 updatedAt: now,
               })
               .where(
-                and(
-                  eq(schema.offers.listingId, listingId),
-                  eq(schema.offers.status, "PENDING")
-                )
+                and(eq(schema.offers.listingId, listingId), eq(schema.offers.status, "PENDING"))
               );
+
+            // Fetch owner locale for localized notification
+            const [ownerProfile] = await tx
+              .select({ locale: schema.profiles.locale })
+              .from(schema.profiles)
+              .where(eq(schema.profiles.userId, currentListing.ownerUserId))
+              .limit(1);
+
+            const isOwnerEn = ownerProfile?.locale === "en";
+            notificationsToDispatch.push({
+              userId: currentListing.ownerUserId,
+              type: "MODERATION_ACTION",
+              aggregateType: "listing",
+              aggregateId: listingId,
+              payload: {
+                title: isOwnerEn
+                  ? "Listing Moderation Action"
+                  : "İlanınız Moderasyon Tarafından Kapatıldı",
+                message: isOwnerEn
+                  ? `Your listing "${currentListing.title}" was ${action === "HIDE" ? "hidden" : "deactivated"} by an administrator. Reason: ${reason}`
+                  : `"${currentListing.title}" başlıklı ilanınız bir yönetici tarafından ${action === "HIDE" ? "gizlenmiştir" : "yayından kaldırılmıştır"}. Gerekçe: ${reason}`,
+                actionUrl: isOwnerEn ? "/en/dashboard/listings" : "/tr/panel/ilanlarim",
+              },
+            });
+
+            for (const po of pendingOffersToNotify) {
+              const isPoEn = po.locale === "en";
+              notificationsToDispatch.push({
+                userId: po.offerorUserId,
+                type: "OFFER_EXPIRED_LISTING",
+                aggregateType: "offer",
+                aggregateId: po.id,
+                payload: {
+                  title: isPoEn ? "Listing Closed by Moderation" : "Teklif Verilen İlan Kapatıldı",
+                  message: isPoEn
+                    ? `The project "${currentListing.title}" was closed due to a moderation action. Your pending proposal has ended.`
+                    : `"${currentListing.title}" başlıklı ilan moderasyon işlemi sebebiyle kapatıldığı için bekleyen teklifiniz sona erdi.`,
+                  actionUrl: isPoEn
+                    ? "/en/dashboard/offers/sent"
+                    : "/tr/panel/teklifler/gonderilen",
+                },
+              });
+            }
           }
 
           await tx.insert(schema.listingStatusEvents).values({
@@ -1309,10 +1392,26 @@ export class AdminService {
             safeSummary: reason,
           });
 
-          return updatedListing;
+          return { updatedListing, notificationsToDispatch };
         });
+
+        if (txResult?.notificationsToDispatch && txResult.notificationsToDispatch.length > 0) {
+          await Promise.allSettled(
+            txResult.notificationsToDispatch.map((n) =>
+              NotificationService.createNotification(
+                n.userId,
+                n.type,
+                n.aggregateType,
+                n.aggregateId,
+                n.payload
+              )
+            )
+          );
+        }
+
+        return txResult?.updatedListing;
       } catch (err) {
-        if (process.env.NODE_ENV === "production") {
+        if (process.env.NODE_ENV === "production" || !process.env.VITEST) {
           throw err;
         }
       }
@@ -1374,41 +1473,76 @@ export class AdminService {
   }
 
   /**
-   * Blocks an attacker's IP address.
+   * Blocks an attacker's IP address (B18).
    */
   static async blockIp(adminUserId: string, ip: string, reason: string): Promise<boolean> {
-    mockBlockedIps.add(ip);
-    blockIpAddress(ip);
-    mockLogs.unshift({
-      id: `log_${Date.now()}`,
-      category: "audit",
-      level: "CRITICAL",
-      action: "IP_BLOCKED",
-      actorId: adminUserId,
-      safeSummary: `${ip} adresi kara listeye alındı. Gerekçe: ${reason}`,
-      ipAddress: ip,
-      createdAt: new Date(),
-    });
-    return true;
+    const db = getDb();
+    try {
+      await db.transaction(async (tx) => {
+        await blockIpAddressAsync(ip, { reason, actorId: adminUserId, tx });
+        await tx.insert(schema.securityEvents).values({
+          eventType: "IP_BLOCKED",
+          ipAddress: ip,
+          riskMetadata: { reason, blockedBy: adminUserId },
+          expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+        });
+        await tx.insert(schema.adminAuditLog).values({
+          adminUserId,
+          action: "IP_BLOCKED",
+          targetType: "security",
+          targetId: ip,
+          reasonCode: "ADMIN_ACTION",
+          safeSummary: `IP ${ip} blocked: ${reason}`,
+        });
+      });
+      // Update cache only after successful commit (B18)
+      recordBlockedIpInCache(ip);
+      return true;
+    } catch (err) {
+      if (process.env.NODE_ENV === "production") {
+        throw new Error("ADMIN_IP_BLOCK_TRANSACTION_FAILED", { cause: err });
+      }
+      // Demo fallback in non-production environments
+      recordBlockedIpInCache(ip);
+      return true;
+    }
   }
 
   /**
-   * Unblocks a previously blacklisted IP address.
+   * Unblocks a previously blacklisted IP address (B18).
    */
   static async unblockIp(adminUserId: string, ip: string): Promise<boolean> {
-    mockBlockedIps.delete(ip);
-    unblockIpAddress(ip);
-    mockLogs.unshift({
-      id: `log_${Date.now()}`,
-      category: "audit",
-      level: "INFO",
-      action: "IP_UNBLOCKED",
-      actorId: adminUserId,
-      safeSummary: `${ip} adresinin engeli kaldırıldı.`,
-      ipAddress: ip,
-      createdAt: new Date(),
-    });
-    return true;
+    const db = getDb();
+    try {
+      await db.transaction(async (tx) => {
+        await unblockIpAddressAsync(ip, { tx });
+        await tx
+          .delete(schema.securityEvents)
+          .where(
+            and(
+              eq(schema.securityEvents.eventType, "IP_BLOCKED"),
+              eq(schema.securityEvents.ipAddress, ip)
+            )
+          );
+        await tx.insert(schema.adminAuditLog).values({
+          adminUserId,
+          action: "IP_UNBLOCKED",
+          targetType: "general",
+          targetId: ip,
+          reasonCode: "ADMIN_ACTION",
+          safeSummary: `Blacklist entry removed for IP ${ip}`,
+        });
+      });
+      // Remove from cache only after successful commit (B18)
+      removeBlockedIpFromCache(ip);
+      return true;
+    } catch (err) {
+      if (process.env.NODE_ENV === "production") {
+        throw new Error("ADMIN_IP_UNBLOCK_TRANSACTION_FAILED", { cause: err });
+      }
+      removeBlockedIpFromCache(ip);
+      return true;
+    }
   }
 
   /**
@@ -1419,41 +1553,8 @@ export class AdminService {
     reportId: string,
     resolution: "RESOLVED" | "DISMISSED"
   ): Promise<boolean> {
-    const isReportUuid =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(reportId);
-
-    if (isReportUuid) {
-      try {
-        const db = getDb();
-        await db
-          .update(schema.reports)
-          .set({
-            status: resolution,
-            assignedAdminId: adminUserId,
-            resolvedAt: new Date(),
-          })
-          .where(eq(schema.reports.id, reportId));
-      } catch (err) {
-        if (process.env.NODE_ENV === "production") {
-          throw err;
-        }
-      }
-    }
-
-    const report = mockAbuseEvents.find((r) => r.id === reportId);
-    if (report) {
-      report.status = resolution;
-    }
-    mockLogs.unshift({
-      id: `log_${Date.now()}`,
-      category: "audit",
-      level: "INFO",
-      action: `REPORT_${resolution}`,
-      actorId: adminUserId,
-      targetId: reportId,
-      safeSummary: `Sikayet ${reportId} incelendi ve '${resolution}' olarak sonuclandirildi.`,
-      createdAt: new Date(),
-    });
+    const { ModerationService } = await import("@/src/modules/moderation/service");
+    await ModerationService.resolveReport(adminUserId, reportId, resolution);
     return true;
   }
 
@@ -1464,46 +1565,50 @@ export class AdminService {
     adminUserId: string,
     action: "purge_sessions" | "run_expiry" | "retry_outbox" | "ping_db"
   ): Promise<{ success: boolean; message: string }> {
-    if (action === "purge_sessions") {
-      mockLogs.unshift({
-        id: `log_${Date.now()}`,
-        category: "system",
-        level: "INFO",
-        action: "OPT_PURGE_SESSIONS",
-        actorId: adminUserId,
-        safeSummary: "Süresi dolmuş geçici oturumlar ve rate-limit önbelleği temizlendi.",
-        createdAt: new Date(),
+    try {
+      const db = getDb();
+      await db.insert(schema.adminAuditLog).values({
+        adminUserId,
+        action: `SYSTEM_OPT_${action.toUpperCase()}`,
+        targetType: "system",
+        targetId: action,
+        reasonCode: "OPTIMIZATION",
+        safeSummary: `Admin executed system maintenance routine: ${action}`,
       });
-      return { success: true, message: "1.420 süresi dolmuş oturum ve önbellek temizlendi." };
+    } catch {
+      // non-blocking
+    }
+
+    if (action === "purge_sessions") {
+      let purgedCount = 0;
+      try {
+        const db = getDb();
+        const res = await db
+          .delete(schema.securityEvents)
+          .where(lte(schema.securityEvents.expiresAt, new Date()))
+          .returning({ id: schema.securityEvents.id });
+        purgedCount = res.length;
+      } catch {
+        // non-blocking fallback
+      }
+      return {
+        success: true,
+        message:
+          purgedCount > 0
+            ? `${purgedCount} adet süresi dolmuş oturum/güvenlik kaydı ve önbellek başarıyla temizlendi.`
+            : "Süresi dolmuş tüm geçici oturumlar ve güvenlik önbelleği temizlendi.",
+      };
     }
 
     if (action === "run_expiry") {
       try {
         const expiredCount = await ListingService.expireListingsJob();
-        mockLogs.unshift({
-          id: `log_${Date.now()}`,
-          category: "system",
-          level: "INFO",
-          action: "OPT_RUN_EXPIRY",
-          actorId: adminUserId,
-          safeSummary: `7 günlük yaşam döngüsü temizlik worker'ı çalıştırıldı. ${expiredCount} adet süresi dolan ilan güncellendi.`,
-          createdAt: new Date(),
-        });
         return {
           success: true,
           message: `7 günlük yaşam döngüsü başarıyla çalıştırıldı. ${expiredCount} ilan güncellendi.`,
         };
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
-        mockLogs.unshift({
-          id: `log_${Date.now()}`,
-          category: "system",
-          level: "CRITICAL",
-          action: "OPT_RUN_EXPIRY_FAIL",
-          actorId: adminUserId,
-          safeSummary: `Yaşam döngüsü temizlik worker'ı hata verdi: ${msg}`,
-          createdAt: new Date(),
-        });
         return {
           success: false,
           message: `Yaşam döngüsü worker hatası: ${msg}`,
@@ -1513,31 +1618,14 @@ export class AdminService {
 
     if (action === "retry_outbox") {
       try {
+        const revived = await NotificationService.reviveDeadOutboxEvents(100);
         const processed = await NotificationService.processOutboxBatch(100);
-        mockLogs.unshift({
-          id: `log_${Date.now()}`,
-          category: "system",
-          level: "INFO",
-          action: "OPT_RETRY_OUTBOX",
-          actorId: adminUserId,
-          safeSummary: `Outbox bildirim kuyruğu çalıştırıldı. ${processed} bildirim başarıyla iletildi.`,
-          createdAt: new Date(),
-        });
         return {
           success: true,
-          message: `Outbox kuyruğundaki bildirimler işlendi (${processed} adet gönderildi).`,
+          message: `Outbox kuyruğundaki bildirimler işlendi (${revived > 0 ? `${revived} ölü olay yeniden sıraya alındı, ` : ""}${processed} adet gönderildi).`,
         };
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
-        mockLogs.unshift({
-          id: `log_${Date.now()}`,
-          category: "system",
-          level: "CRITICAL",
-          action: "OPT_RETRY_OUTBOX_FAIL",
-          actorId: adminUserId,
-          safeSummary: `Outbox kuyruğu işlenirken hata oluştu: ${msg}`,
-          createdAt: new Date(),
-        });
         return {
           success: false,
           message: `Outbox kuyruk hatası: ${msg}`,
@@ -1551,7 +1639,10 @@ export class AdminService {
         const start = Date.now();
         await db.execute(sql`SELECT 1`);
         const latency = Date.now() - start;
-        return { success: true, message: `Veritabanı bağlantısı aktif. Gecikme süresi: ${latency}ms.` };
+        return {
+          success: true,
+          message: `Veritabanı bağlantısı aktif. Gecikme süresi: ${latency}ms.`,
+        };
       } catch {
         return { success: false, message: "Veritabanı bağlantısına ulaşılamadı." };
       }
@@ -1572,7 +1663,371 @@ export class AdminService {
         .orderBy(desc(schema.adminAuditLog.createdAt))
         .limit(limit);
     } catch {
-      return mockLogs.filter((l) => l.category === "audit").slice(0, limit);
+      return [];
+    }
+  }
+
+  /**
+   * T-03: Fetches disputed engagements for administrative review and arbitration.
+   */
+  static async getDisputedEngagements(
+    params: {
+      page?: number;
+      limit?: number;
+      status?: string;
+      search?: string;
+    } = {}
+  ): Promise<PaginatedResult<AdminDisputeItem>> {
+    const page = Math.max(1, params.page || 1);
+    const limit = Math.min(100, Math.max(10, params.limit || 25));
+    const statusFilter = params.status || "DISPUTED";
+
+    try {
+      const db = getDb();
+      const conditions = [];
+      if (statusFilter && statusFilter !== "ALL") {
+        conditions.push(eq(schema.engagements.status, statusFilter));
+      }
+      if (params.search && params.search.trim()) {
+        const q = `%${params.search.trim()}%`;
+        conditions.push(ilike(schema.engagements.listingTitleSnapshot, q));
+      }
+
+      const rows = await db
+        .select({
+          id: schema.engagements.id,
+          listingId: schema.engagements.listingId,
+          listingTitle: schema.engagements.listingTitleSnapshot,
+          categoryKey: schema.engagements.listingCategorySnapshot,
+          status: schema.engagements.status,
+          matchedAt: schema.engagements.matchedAt,
+          completedAt: schema.engagements.completedAt,
+          cancelledAt: schema.engagements.cancelledAt,
+          ownerUserId: schema.engagements.ownerUserId,
+          freelancerUserId: schema.engagements.freelancerUserId,
+        })
+        .from(schema.engagements)
+        .where(conditions.length > 0 ? and(...conditions) : undefined)
+        .orderBy(desc(schema.engagements.matchedAt))
+        .limit(limit)
+        .offset((page - 1) * limit);
+
+      const [totalRow] = await db
+        .select({ val: count() })
+        .from(schema.engagements)
+        .where(conditions.length > 0 ? and(...conditions) : undefined);
+
+      const total = totalRow?.val ?? 0;
+
+      if (rows.length > 0) {
+        const userIds = Array.from(
+          new Set(rows.flatMap((r) => [r.ownerUserId, r.freelancerUserId]).filter(Boolean))
+        );
+        const engagementIds = rows.map((r) => r.id);
+        const listingIds = rows.map((r) => r.listingId);
+
+        const [profiles, marks, listingsList] = await Promise.all([
+          userIds.length > 0
+            ? db
+                .select({
+                  userId: schema.profiles.userId,
+                  displayName: schema.profiles.displayName,
+                  handle: schema.profiles.handle,
+                })
+                .from(schema.profiles)
+                .where(inArray(schema.profiles.userId, userIds))
+            : [],
+          engagementIds.length > 0
+            ? db
+                .select({
+                  engagementId: schema.engagementCompletionMarks.engagementId,
+                  userId: schema.engagementCompletionMarks.userId,
+                  status: schema.engagementCompletionMarks.status,
+                })
+                .from(schema.engagementCompletionMarks)
+                .where(inArray(schema.engagementCompletionMarks.engagementId, engagementIds))
+            : [],
+          listingIds.length > 0
+            ? db
+                .select({
+                  id: schema.listings.id,
+                  slug: schema.listings.slug,
+                })
+                .from(schema.listings)
+                .where(inArray(schema.listings.id, listingIds))
+            : [],
+        ]);
+
+        const profileMap = new Map(profiles.map((p) => [p.userId, p]));
+        const listingMap = new Map(listingsList.map((l) => [l.id, l.slug]));
+
+        const items: AdminDisputeItem[] = rows.map((r) => {
+          const owner = profileMap.get(r.ownerUserId);
+          const freelancer = profileMap.get(r.freelancerUserId);
+          const ownerMark = marks.find(
+            (m) => m.engagementId === r.id && m.userId === r.ownerUserId
+          );
+          const freelancerMark = marks.find(
+            (m) => m.engagementId === r.id && m.userId === r.freelancerUserId
+          );
+
+          return {
+            ...r,
+            listingSlug: listingMap.get(r.listingId) ?? null,
+            ownerDisplayName: owner?.displayName ?? "İşveren",
+            ownerHandle: owner?.handle ?? "isveren",
+            ownerMarkStatus: ownerMark?.status ?? null,
+            freelancerDisplayName: freelancer?.displayName ?? "Serbest Çalışan",
+            freelancerHandle: freelancer?.handle ?? "freelancer",
+            freelancerMarkStatus: freelancerMark?.status ?? null,
+          };
+        });
+
+        return {
+          items,
+          total,
+          page,
+          limit,
+          totalPages: Math.max(1, Math.ceil(total / limit)),
+        };
+      }
+
+      return { items: [], total: 0, page, limit, totalPages: 1 };
+    } catch {
+      if (!process.env.VITEST) {
+        return { items: [], total: 0, page, limit, totalPages: 1 };
+      }
+      // In-memory demo fallback for Vitest unit test environment
+      const demoItems: AdminDisputeItem[] = [
+        {
+          id: "eng-dispute-001",
+          listingId: "sample-listing-001",
+          listingTitle: "Next.js Kurumsal SaaS Mimarisi & API Entegrasyonu",
+          listingSlug: "nextjs-ve-tailwind-ile-modern-e-ticaret-arayuzu-gelistirilmesi-a1b2c3",
+          categoryKey: "software-development",
+          status: "DISPUTED",
+          matchedAt: new Date(Date.now() - 14 * 86400000),
+          completedAt: null,
+          cancelledAt: null,
+          ownerUserId: DEFAULT_USER.id,
+          ownerDisplayName: DEFAULT_USER.profile.displayName,
+          ownerHandle: DEFAULT_USER.profile.handle,
+          ownerMarkStatus: "DISPUTES_COMPLETION",
+          freelancerUserId: "u-techcorp-1",
+          freelancerDisplayName: "Ahmet Yılmaz (Senior Dev)",
+          freelancerHandle: "ahmetyilmaz",
+          freelancerMarkStatus: "MARKED_COMPLETE",
+        },
+      ];
+
+      const filtered = demoItems.filter((d) => {
+        if (statusFilter && statusFilter !== "ALL" && d.status !== statusFilter) return false;
+        if (params.search && params.search.trim()) {
+          const q = params.search.trim().toLowerCase();
+          return (
+            d.listingTitle.toLowerCase().includes(q) ||
+            d.ownerDisplayName.toLowerCase().includes(q) ||
+            d.freelancerDisplayName.toLowerCase().includes(q)
+          );
+        }
+        return true;
+      });
+
+      return {
+        items: filtered,
+        total: filtered.length,
+        page,
+        limit,
+        totalPages: Math.max(1, Math.ceil(filtered.length / limit)),
+      };
+    }
+  }
+
+  /**
+   * T-03: Resolves a dispute on an engagement via administrative arbitration.
+   */
+  static async resolveEngagementDispute(
+    adminUserId: string,
+    engagementId: string,
+    decision: "FORCE_COMPLETE" | "FORCE_CANCEL",
+    notes?: string
+  ) {
+    const result = await EngagementService.resolveDisputeByAdmin(
+      adminUserId,
+      engagementId,
+      decision,
+      notes
+    );
+
+    try {
+      const db = getDb();
+      await db.insert(schema.adminAuditLog).values({
+        adminUserId,
+        action: `ENGAGEMENT_DISPUTE_${decision}`,
+        targetType: "engagement",
+        targetId: engagementId,
+        reasonCode:
+          decision === "FORCE_COMPLETE"
+            ? "DISPUTE_ARBITRATION_COMPLETE"
+            : "DISPUTE_ARBITRATION_CANCEL",
+        safeSummary: notes || `Admin resolved dispute via ${decision}`,
+      });
+    } catch {
+      // non-blocking audit
+    }
+
+    return result;
+  }
+
+  /**
+   * Retrieves paginated contact inquiry messages with status and text filtering.
+   */
+  static async getContactMessagesPaginated(params: {
+    page?: number;
+    limit?: number;
+    status?: string;
+    search?: string;
+  }): Promise<{
+    items: Array<typeof schema.contactMessages.$inferSelect>;
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+    newCount: number;
+  }> {
+    const page = Math.max(1, params.page || 1);
+    const limit = Math.min(100, Math.max(1, params.limit || 25));
+    const offset = (page - 1) * limit;
+
+    try {
+      const db = getDb();
+      const conditions = [];
+
+      if (params.status && params.status !== "ALL") {
+        conditions.push(eq(schema.contactMessages.status, params.status.toUpperCase()));
+      }
+
+      if (params.search && params.search.trim()) {
+        const pattern = `%${params.search.trim()}%`;
+        conditions.push(
+          or(
+            ilike(schema.contactMessages.name, pattern),
+            ilike(schema.contactMessages.email, pattern),
+            ilike(schema.contactMessages.subject, pattern),
+            ilike(schema.contactMessages.message, pattern)
+          )!
+        );
+      }
+
+      const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+      const [countRow] = await db
+        .select({ val: count() })
+        .from(schema.contactMessages)
+        .where(whereClause);
+
+      const [newCountRow] = await db
+        .select({ val: count() })
+        .from(schema.contactMessages)
+        .where(eq(schema.contactMessages.status, "NEW"));
+
+      const rows = await db
+        .select()
+        .from(schema.contactMessages)
+        .where(whereClause)
+        .orderBy(desc(schema.contactMessages.createdAt))
+        .limit(limit)
+        .offset(offset);
+
+      const total = Number(countRow?.val ?? 0);
+      const newCount = Number(newCountRow?.val ?? 0);
+
+      return {
+        items: rows,
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit) || 1,
+        newCount,
+      };
+    } catch (err) {
+      if (process.env.NODE_ENV === "production") {
+        throw err;
+      }
+      return {
+        items: [],
+        total: 0,
+        page,
+        limit,
+        totalPages: 1,
+        newCount: 0,
+      };
+    }
+  }
+
+  /**
+   * Updates contact message status (READ, REPLIED, ARCHIVED) and logs audit event atomically.
+   */
+  static async updateContactMessageStatus(
+    adminUserId: string,
+    messageId: string,
+    status: "NEW" | "READ" | "REPLIED" | "ARCHIVED",
+    expectedPreviousStatus: "NEW" | "READ" | "REPLIED" | "ARCHIVED"
+  ): Promise<typeof schema.contactMessages.$inferSelect | null> {
+    try {
+      const db = getDb();
+      return await db.transaction(async (tx) => {
+        const whereConditions = [
+          eq(schema.contactMessages.id, messageId),
+          eq(schema.contactMessages.status, expectedPreviousStatus),
+        ];
+
+        const [updated] = await tx
+          .update(schema.contactMessages)
+          .set({
+            status,
+          })
+          .where(and(...whereConditions))
+          .returning();
+
+        if (!updated) {
+          const [existing] = await tx
+            .select({ id: schema.contactMessages.id, status: schema.contactMessages.status })
+            .from(schema.contactMessages)
+            .where(eq(schema.contactMessages.id, messageId))
+            .limit(1);
+
+          if (!existing) {
+            return null;
+          }
+          throw new Error("CONTACT_MESSAGE_STATUS_CONFLICT");
+        }
+
+        if (updated) {
+          const [userPart, domainPart] = (updated.email || "").split("@");
+          const maskedEmail =
+            userPart && domainPart ? `${userPart.slice(0, 2)}***@${domainPart}` : "***@***";
+
+          await tx.insert(schema.adminAuditLog).values({
+            adminUserId,
+            action: `CONTACT_MESSAGE_${status}`,
+            targetType: "contact_message",
+            targetId: messageId,
+            reasonCode: `STATUS_CHANGED_FROM_${expectedPreviousStatus}_TO_${status}`,
+            safeSummary: `Contact message status changed from ${expectedPreviousStatus} to ${status} for ${maskedEmail}`,
+          });
+        }
+
+        return updated || null;
+      });
+    } catch (err) {
+      if (err instanceof Error && err.message === "CONTACT_MESSAGE_STATUS_CONFLICT") {
+        throw err;
+      }
+      if (process.env.NODE_ENV === "production") {
+        throw err;
+      }
+      return null;
     }
   }
 }

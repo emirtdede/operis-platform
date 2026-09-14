@@ -2,21 +2,25 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/src/modules/auth/session";
 import { CategoryService } from "@/src/modules/categories/service";
 import {
-  checkRateLimit,
+  evaluateSecurityAccessAsync,
   getClientIp,
-  rateLimitExceededResponse,
+  normalizeIp,
 } from "@/src/lib/security/rate-limit";
 
 export async function POST(req: Request) {
   const ip = getClientIp(req);
   const isEn = req.headers.get("x-locale") === "en";
 
-  const limitCheck = checkRateLimit(`cat:follow-all:${ip}`, 15, 60 * 1000);
-  if (!limitCheck.success) {
-    return rateLimitExceededResponse(
-      limitCheck.reset,
-      isEn ? "Too many requests. Please wait a moment." : "Kısa sürede çok fazla işlem yapıldı. Lütfen bekleyiniz."
-    );
+  const access = await evaluateSecurityAccessAsync({
+    ip,
+    purpose: "cat:follow-all",
+    subject: normalizeIp(ip),
+    limit: 15,
+    windowMs: 60 * 1000,
+    isEn,
+  });
+  if (!access.allowed) {
+    return access.response;
   }
 
   try {
@@ -30,14 +34,19 @@ export async function POST(req: Request) {
 
     await CategoryService.followAll(session.userId);
     return NextResponse.json(
-      { success: true, message: isEn ? "Followed all categories." : "Tüm kategoriler takip edildi." },
+      {
+        success: true,
+        message: isEn ? "Followed all categories." : "Tüm kategoriler takip edildi.",
+      },
       { status: 200 }
     );
   } catch (err: unknown) {
     const message =
       err instanceof Error
         ? err.message
-        : isEn ? "Failed to follow all categories." : "Tüm kategoriler takip edilemedi.";
+        : isEn
+          ? "Failed to follow all categories."
+          : "Tüm kategoriler takip edilemedi.";
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }

@@ -24,6 +24,7 @@ import {
   getLocalizedProfilePath,
   getLocalizedRoute,
 } from "@/src/lib/i18n/routes";
+import { serializeJsonLd } from "@/src/lib/security/json-ld";
 
 export async function generateMetadata({
   params,
@@ -103,7 +104,7 @@ export default async function ListingDetailPage({
 
   const isTr = locale === "tr";
   const session = await getSession();
-  const data = await FeedService.getListingBySlug(slug, session?.userId);
+  const data = await FeedService.getListingBySlug(slug, session?.userId, session?.role);
 
   if (!data) {
     notFound();
@@ -236,7 +237,7 @@ export default async function ListingDetailPage({
       {/* Schema.org Structured Data */}
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
       />
 
       {/* Navigation Breadcrumb */}

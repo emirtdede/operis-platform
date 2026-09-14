@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Bell, Inbox, Send, Handshake, CheckCheck } from "lucide-react";
+import { Bell, Inbox, Send, Handshake, CheckCheck, Mail } from "lucide-react";
 import { Button } from "../ui/button";
 import { EmptyState } from "../ui/empty-state";
 import { getAlternateLocalePath } from "@/src/lib/i18n/routes";
@@ -36,13 +36,15 @@ export function NotificationsView({ initialNotifications, locale }: Notification
   const handleMarkAllRead = async () => {
     setIsMarkingAll(true);
     try {
-      await fetch("/api/notifications", {
+      const res = await fetch("/api/notifications", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-locale": locale },
         body: JSON.stringify({ action: "markAllRead", locale }),
       });
-      const now = new Date();
-      setNotifications((prev) => prev.map((n) => ({ ...n, readAt: n.readAt || now })));
+      if (res.ok) {
+        const now = new Date();
+        setNotifications((prev) => prev.map((n) => ({ ...n, readAt: n.readAt || now })));
+      }
     } catch {
       // ignore
     } finally {
@@ -53,15 +55,17 @@ export function NotificationsView({ initialNotifications, locale }: Notification
   const handleNotificationClick = async (id: string, isUnread: boolean) => {
     if (!isUnread) return;
     try {
-      await fetch("/api/notifications", {
+      const res = await fetch("/api/notifications", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-locale": locale },
         body: JSON.stringify({ notificationId: id, locale }),
       });
-      const now = new Date().toISOString();
-      setNotifications((prev) =>
-        prev.map((n) => (n.id === id ? { ...n, readAt: n.readAt || now } : n))
-      );
+      if (res.ok) {
+        const now = new Date().toISOString();
+        setNotifications((prev) =>
+          prev.map((n) => (n.id === id ? { ...n, readAt: n.readAt || now } : n))
+        );
+      }
     } catch {
       // ignore
     }
@@ -69,15 +73,16 @@ export function NotificationsView({ initialNotifications, locale }: Notification
 
   const handleMarkSingleRead = async (id: string) => {
     try {
-      await fetch("/api/notifications", {
+      const res = await fetch("/api/notifications", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-locale": locale },
         body: JSON.stringify({ notificationId: id, locale }),
       });
-
-      setNotifications((prev) =>
-        prev.map((n) => (n.id === id ? { ...n, readAt: new Date().toISOString() } : n))
-      );
+      if (res.ok) {
+        setNotifications((prev) =>
+          prev.map((n) => (n.id === id ? { ...n, readAt: new Date().toISOString() } : n))
+        );
+      }
     } catch {
       // Fallback
     }
@@ -86,6 +91,7 @@ export function NotificationsView({ initialNotifications, locale }: Notification
   const getIcon = (type: string) => {
     switch (type) {
       case "OFFER_RECEIVED":
+      case "OFFER_UPDATED":
         return <Inbox className="h-4 w-4 text-purple-400" />;
       case "OFFER_ACCEPTED":
       case "MATCHED":
@@ -236,6 +242,23 @@ export function NotificationsView({ initialNotifications, locale }: Notification
           })}
         </div>
       )}
+
+      <div className="rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-hover)]/40 p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-2.5 text-[var(--color-text-secondary)]">
+          <Mail className="h-4 w-4 text-blue-400 shrink-0" aria-hidden="true" />
+          <span>
+            {isTr
+              ? "E-posta bildirimleri ve bülten tercihlerinizi dilediğiniz zaman hesap ayarlarından değiştirebilirsiniz."
+              : "You can manage your email notifications and newsletter preferences anytime from account settings."}
+          </span>
+        </div>
+        <Link
+          href={isTr ? "/tr/panel/ayarlar" : "/en/dashboard/settings"}
+          className="font-medium text-blue-400 hover:text-blue-300 transition-colors whitespace-nowrap"
+        >
+          {isTr ? "Ayarlara Git →" : "Go to Settings →"}
+        </Link>
+      </div>
     </div>
   );
 }

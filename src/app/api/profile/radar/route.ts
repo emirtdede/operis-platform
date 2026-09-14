@@ -3,9 +3,9 @@ import { getSession } from "@/src/modules/auth/session";
 import { ProfileService } from "@/src/modules/profiles/service";
 import { EMOJI_REGEX, validateContentAppropriateness } from "@/src/lib/security/content-moderator";
 import {
-  checkRateLimit,
+  evaluateSecurityAccessAsync,
   getClientIp,
-  rateLimitExceededResponse,
+  normalizeIp,
 } from "@/src/lib/security/rate-limit";
 
 export async function GET(req: Request) {
@@ -41,14 +41,16 @@ export async function POST(req: Request) {
   const headerLocale = req.headers.get("x-locale");
   const isEnHeader = headerLocale === "en";
 
-  const limitCheck = checkRateLimit(`profile:radar:${ip}`, 20, 60 * 1000);
-  if (!limitCheck.success) {
-    return rateLimitExceededResponse(
-      limitCheck.reset,
-      isEnHeader
-        ? "Too many radar update requests. Please wait a moment."
-        : "Radar güncellemesi için çok fazla istek yapıldı. Lütfen biraz bekleyiniz."
-    );
+  const access = await evaluateSecurityAccessAsync({
+    ip,
+    purpose: "profile:radar",
+    subject: normalizeIp(ip),
+    limit: 20,
+    windowMs: 60 * 1000,
+    isEn: isEnHeader,
+  });
+  if (!access.allowed) {
+    return access.response;
   }
 
   try {
@@ -118,11 +120,7 @@ export async function POST(req: Request) {
   } catch (err: unknown) {
     const isEn = headerLocale === "en";
     const message =
-      err instanceof Error
-        ? err.message
-        : isEn
-          ? "Could not update radar"
-          : "Radar güncellenemedi";
+      err instanceof Error ? err.message : isEn ? "Could not update radar" : "Radar güncellenemedi";
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }

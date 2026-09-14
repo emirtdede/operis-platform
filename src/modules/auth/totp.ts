@@ -1,4 +1,95 @@
 import crypto from "node:crypto";
+import { encryptEnvelopeV2, decryptEnvelopeV2 } from "@/src/lib/crypto/envelope";
+
+/**
+ * Encrypts a raw Base32 TOTP secret using Envelope v2 with AAD context binding for zero-knowledge storage at rest.
+ */
+export function encryptTotpSecret(userId: string, secretBase32: string): string;
+export function encryptTotpSecret(secretBase32: string, userId?: string): string;
+export function encryptTotpSecret(arg1: string, arg2?: string): string {
+  let userId = "";
+  let secretBase32: string;
+
+  if (arg2 !== undefined) {
+    if (/^[A-Z2-7]{16,64}$/i.test(arg1) || /^[0-9a-f-]{36}$/i.test(arg2)) {
+      secretBase32 = arg1;
+      userId = arg2;
+    } else {
+      userId = arg1;
+      secretBase32 = arg2;
+    }
+  } else {
+    secretBase32 = arg1;
+  }
+
+  if (!secretBase32) return "";
+  const primaryKey = userId || "global";
+  return encryptEnvelopeV2(secretBase32, {
+    table: "users",
+    primaryKey,
+    column: "two_factor_secret",
+  });
+}
+
+/**
+ * Decrypts an encrypted TOTP secret.
+ * Supports:
+ * 1. Envelope v2 (v2:keyId:...) verified with AAD context { table: "users", primaryKey: userId, column: "two_factor_secret" }.
+ * 2. Legacy 3-part format (iv:tag:cipher).
+ * 3. Legacy plaintext Base32 strings.
+ */
+export function decryptTotpSecret(userId: string, storedSecret: string | null | undefined): string;
+export function decryptTotpSecret(storedSecret: string | null | undefined, userId?: string): string;
+export function decryptTotpSecret(
+  arg1: string | null | undefined,
+  arg2?: string | null | undefined
+): string {
+  let userId = "";
+  let storedSecret: string | null | undefined;
+
+  if (arg2 !== undefined) {
+    if (typeof arg1 === "string" && (arg1.startsWith("v2:") || arg1.includes(":"))) {
+      storedSecret = arg1;
+      userId = typeof arg2 === "string" ? arg2 : "";
+    } else if (typeof arg2 === "string" && (arg2.startsWith("v2:") || arg2.includes(":"))) {
+      userId = typeof arg1 === "string" ? arg1 : "";
+      storedSecret = arg2;
+    } else if (typeof arg2 === "string" && /^[0-9a-f-]{36}$/i.test(arg2)) {
+      storedSecret = arg1;
+      userId = arg2;
+    } else {
+      userId = typeof arg1 === "string" ? arg1 : "";
+      storedSecret = arg2;
+    }
+  } else {
+    storedSecret = arg1;
+  }
+
+  if (!storedSecret) return "";
+
+  // Envelope v2 format: requires AAD context
+  if (storedSecret.startsWith("v2:")) {
+    const effectivePrimaryKey = userId || "global";
+    return decryptEnvelopeV2(storedSecret, {
+      table: "users",
+      primaryKey: effectivePrimaryKey,
+      column: "two_factor_secret",
+    });
+  }
+
+  // Legacy 3-part ciphertext format (iv:tag:cipher)
+  if (storedSecret.includes(":")) {
+    return decryptEnvelopeV2(storedSecret);
+  }
+
+  // Legacy plaintext fallback: strictly validate that it's an unpadded Base32 string (16-64 chars)
+  const cleaned = storedSecret.trim().toUpperCase();
+  if (/^[A-Z2-7]{16,64}$/.test(cleaned)) {
+    return cleaned;
+  }
+
+  throw new Error("Invalid or corrupted TOTP secret format");
+}
 
 const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 
@@ -136,4 +227,69 @@ export function getOtpAuthUri(account: string, secretBase32: string, issuer = "O
   const encodedAccount = encodeURIComponent(account.trim());
   const encodedIssuer = encodeURIComponent(issuer.trim());
   return `otpauth://totp/${encodedIssuer}:${encodedAccount}?secret=${secretBase32}&issuer=${encodedIssuer}&algorithm=SHA1&digits=6&period=30`;
+}
+
+/**
+ * Generates cryptographically secure single-use backup codes (e.g. 10 codes formatted as XXXX-XXXX).
+ */
+export function generateBackupCodes(count = 10): string[] {
+  const codes: string[] = [];
+  const chars = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"; // Base32 without 0, O, 1, I for unambiguous human reading
+  for (let i = 0; i < count; i++) {
+    const bytes = crypto.randomBytes(8);
+    let code = "";
+    for (let j = 0; j < 8; j++) {
+      code += chars[bytes[j]! % chars.length];
+      if (j === 3) code += "-";
+    }
+    codes.push(code);
+  }
+  return codes;
+}
+
+/**
+ * Hashes a backup code using SHA-256 for secure database storage.
+ */
+export function hashBackupCode(code: string): string {
+  const normalized = code
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "");
+  return crypto.createHash("sha256").update(normalized).digest("hex");
+}
+
+/**
+ * Verifies if a given raw backup code matches any stored hashed code.
+ * If matched, returns isValid: true and the remaining hashed codes array.
+ */
+export function verifyAndConsumeBackupCode(
+  rawCode: string,
+  hashedCodes: string[]
+): { isValid: boolean; remainingHashedCodes: string[] } {
+  if (!rawCode || !Array.isArray(hashedCodes) || hashedCodes.length === 0) {
+    return { isValid: false, remainingHashedCodes: hashedCodes || [] };
+  }
+
+  const targetHash = hashBackupCode(rawCode);
+  const targetBuf = Buffer.from(targetHash, "hex");
+
+  let matchIndex = -1;
+  for (let i = 0; i < hashedCodes.length; i++) {
+    const storedBuf = Buffer.from(hashedCodes[i]!, "hex");
+    if (storedBuf.length === targetBuf.length && crypto.timingSafeEqual(storedBuf, targetBuf)) {
+      matchIndex = i;
+      break;
+    }
+  }
+
+  if (matchIndex === -1) {
+    return { isValid: false, remainingHashedCodes: hashedCodes };
+  }
+
+  const remainingHashedCodes = [
+    ...hashedCodes.slice(0, matchIndex),
+    ...hashedCodes.slice(matchIndex + 1),
+  ];
+
+  return { isValid: true, remainingHashedCodes };
 }

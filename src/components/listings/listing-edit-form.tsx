@@ -102,7 +102,8 @@ export function ListingEditForm({ listing, locale }: ListingEditFormProps) {
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || (isTr ? "İlan güncellenemedi" : "Failed to update listing"));
+      if (!res.ok)
+        throw new Error(data.error || (isTr ? "İlan güncellenemedi" : "Failed to update listing"));
 
       setSuccess(true);
       setTimeout(() => {

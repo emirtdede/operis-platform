@@ -11,12 +11,20 @@ import {
   Info,
   Clock,
   Coins,
+  Eye,
+  Plus,
+  FileCode,
+  TrendingUp,
+  Check,
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { TextInput } from "../ui/text-input";
 import { TextArea } from "../ui/text-area";
 import { Checkbox } from "../ui/checkbox";
 import { Select } from "../ui/select";
+import { Dialog } from "../ui/dialog";
+import { DraftRecoveryBar } from "../ui/draft-recovery-bar";
+import { ListingCard } from "./listing-card";
 import { getLocalizedListingPath } from "@/src/lib/i18n/routes";
 import type { ListingWizardInput } from "@/src/modules/listings/wizard/schema";
 
@@ -32,6 +40,104 @@ export interface ListingWizardFormProps {
   locale: string;
   userId?: string;
 }
+
+const CATEGORY_TECH_SUGGESTIONS: Record<string, string[]> = {
+  "web-development": ["React", "Next.js", "TypeScript", "Tailwind CSS", "Node.js", "Vue.js"],
+  "mobile-development": ["React Native", "Flutter", "iOS Swift", "Android Kotlin", "Expo"],
+  "desktop-development": ["Electron", "Tauri", "C# .NET", "Qt", "C++"],
+  "backend-api": ["Node.js", "Go", "PostgreSQL", "Redis", "Docker", "GraphQL"],
+  "ai-ml": ["Python", "PyTorch", "OpenAI API", "LangChain", "TensorFlow"],
+  "devops-cloud": ["AWS", "Kubernetes", "Docker", "Terraform", "GitHub Actions"],
+  cybersecurity: ["Penetration Testing", "OAuth 2.0", "OWASP", "WAF", "Cryptography"],
+  "qa-testing": ["Playwright", "Cypress", "Jest", "k6", "Selenium"],
+  "ui-ux-design": ["Figma", "Design System", "Prototyping", "Wireframing", "Tailwind CSS"],
+  "data-analytics": ["Python", "Pandas", "PowerBI", "SQL", "Airflow"],
+  "blockchain-web3": ["Solidity", "Ethers.js", "Smart Contracts", "Hardhat", "Web3.js"],
+  "embedded-iot": ["C++", "Rust", "ESP32", "Raspberry Pi", "MQTT"],
+  "game-development": ["Unity", "Unreal Engine", "C#", "C++", "Shaders"],
+};
+
+const DEFAULT_TECH_SUGGESTIONS = ["TypeScript", "React", "Node.js", "PostgreSQL", "Docker"];
+
+const CATEGORY_BUDGET_GUIDELINES: Record<string, { min: number; max: number }> = {
+  "web-development": { min: 20000, max: 80000 },
+  "mobile-development": { min: 30000, max: 120000 },
+  "desktop-development": { min: 25000, max: 85000 },
+  "backend-api": { min: 25000, max: 90000 },
+  "ai-ml": { min: 35000, max: 150000 },
+  "devops-cloud": { min: 20000, max: 75000 },
+  cybersecurity: { min: 30000, max: 100000 },
+  "qa-testing": { min: 15000, max: 55000 },
+  "ui-ux-design": { min: 15000, max: 60000 },
+  "data-analytics": { min: 25000, max: 85000 },
+  "blockchain-web3": { min: 40000, max: 160000 },
+  "embedded-iot": { min: 25000, max: 95000 },
+  "game-development": { min: 35000, max: 140000 },
+};
+
+function getMarketGuidance(categorySlug: string, currency: string, isTr: boolean): string {
+  const guide = CATEGORY_BUDGET_GUIDELINES[categorySlug] || { min: 20000, max: 70000 };
+
+  if (currency === "USD") {
+    const minUsd = Math.round(guide.min / 35 / 50) * 50;
+    const maxUsd = Math.round(guide.max / 35 / 50) * 50;
+    return isTr
+      ? `Bu kategori için tipik piyasa bütçe beklentisi: $${minUsd.toLocaleString()} - $${maxUsd.toLocaleString()} aralığındadır.`
+      : `Typical market budget benchmark for this category: $${minUsd.toLocaleString()} - $${maxUsd.toLocaleString()}.`;
+  }
+  if (currency === "EUR") {
+    const minEur = Math.round(guide.min / 38 / 50) * 50;
+    const maxEur = Math.round(guide.max / 38 / 50) * 50;
+    return isTr
+      ? `Bu kategori için tipik piyasa bütçe beklentisi: €${minEur.toLocaleString()} - €${maxEur.toLocaleString()} aralığındadır.`
+      : `Typical market budget benchmark for this category: €${minEur.toLocaleString()} - €${maxEur.toLocaleString()}.`;
+  }
+  if (currency === "GBP") {
+    const minGbp = Math.round(guide.min / 44 / 50) * 50;
+    const maxGbp = Math.round(guide.max / 44 / 50) * 50;
+    return isTr
+      ? `Bu kategori için tipik piyasa bütçe beklentisi: £${minGbp.toLocaleString()} - £${maxGbp.toLocaleString()} aralığındadır.`
+      : `Typical market budget benchmark for this category: £${minGbp.toLocaleString()} - £${maxGbp.toLocaleString()}.`;
+  }
+
+  return isTr
+    ? `Bu kategori için tipik piyasa bütçe beklentisi: ${guide.min.toLocaleString("tr-TR")} ₺ - ${guide.max.toLocaleString("tr-TR")} ₺ aralığındadır.`
+    : `Typical market budget benchmark for this category: ${guide.min.toLocaleString()} TRY - ${guide.max.toLocaleString()} TRY.`;
+}
+
+const BLUEPRINT_TEMPLATE_TR = `### 1. Proje Amacı ve Kapsamı
+Bu projenin temel amacı, ölçeklenebilir ve modern standartlara uygun bir çözüm geliştirmektir. Kullanıcı deneyimini en üst seviyeye çıkarmak ve operasyonel verimliliği artırmak hedeflenmektedir.
+
+### 2. Teknik Gereksinimler ve Mimari
+- Modern teknoloji yığını ile temiz, modüler ve sürdürülebilir mimari kurulumu
+- Güvenli veri yönetimi, performans optimizasyonu ve kararlı API entegrasyonları
+- Mobil uyumlu (responsive) ve web erişilebilirlik standartlarına uygun arayüz tasarımı
+
+### 3. Teslim Edilecek Çıktılar
+- Eksiksiz, çalışır kaynak kod deposu ve dağıtım (deployment) rehberi
+- Doğrulanmış test kapsamı ve canlı ortam kurulum desteği
+- Gerekli teknik mimari dokümantasyon ve devir teslim dokümanı
+
+### 4. İletişim ve Süreç Beklentisi
+- Düzenli sprint toplantıları veya haftalık şeffaf ilerleme raporlamaları
+- Git (GitHub / GitLab) üzerinden şeffaf kod inceleme (code review) akışı`;
+
+const BLUEPRINT_TEMPLATE_EN = `### 1. Project Goals & Overview
+The primary objective of this project is to deliver a scalable, robust, and modern software solution aimed at optimizing user experience and operational efficiency.
+
+### 2. Technical Architecture & Requirements
+- Clean, modular, and maintainable architecture utilizing modern industry best practices
+- Secure data handling, high performance optimization, and reliable API integrations
+- Fully responsive, accessible, and well-tested component design
+
+### 3. Key Deliverables
+- Complete, production-ready source code repository and deployment guide
+- Comprehensive test coverage and production rollout verification
+- Technical architectural documentation and clean handover notes
+
+### 4. Communication & Milestone Cadence
+- Regular milestone check-ins and structured asynchronous progress reports
+- Transparent pull request and code review workflow via GitHub / GitLab`;
 
 export function ListingWizardForm({ categories, locale, userId }: ListingWizardFormProps) {
   const isTr = locale === "tr";
@@ -66,7 +172,36 @@ export function ListingWizardForm({ categories, locale, userId }: ListingWizardF
   const [workPreference, setWorkPreference] = useState<string>("REMOTE");
   const [preferredLanguage, setPreferredLanguage] = useState<string>("any");
 
-  // LocalStorage Draft Persistence
+  const [hasDraftNotice, setHasDraftNotice] = useState(false);
+  const [draftTitleNotice, setDraftTitleNotice] = useState("");
+  const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
+
+  const handleInsertBlueprintTemplate = () => {
+    const template = isTr ? BLUEPRINT_TEMPLATE_TR : BLUEPRINT_TEMPLATE_EN;
+    if (!scope.trim()) {
+      setScope(template);
+    } else {
+      setScope((prev) => `${prev.trim()}\n\n${template}`);
+    }
+  };
+
+  const handleToggleTagSuggestion = (tag: string) => {
+    const currentTags = tagsInput
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean);
+    const exists = currentTags.some((t) => t.toLowerCase() === tag.toLowerCase());
+    if (exists) {
+      const nextTags = currentTags.filter((t) => t.toLowerCase() !== tag.toLowerCase());
+      setTagsInput(nextTags.join(", "));
+    } else {
+      if (currentTags.length >= 10) return;
+      const nextTags = [...currentTags, tag];
+      setTagsInput(nextTags.join(", "));
+    }
+  };
+
+  // LocalStorage Draft Persistence Check
   useEffect(() => {
     try {
       let saved = localStorage.getItem(draftKey);
@@ -75,28 +210,47 @@ export function ListingWizardForm({ categories, locale, userId }: ListingWizardF
       }
       if (saved) {
         const d = JSON.parse(saved);
-        if (d.categoryId) setCategoryId(d.categoryId);
-        if (d.title) setTitle(d.title);
-        if (d.summary) setSummary(d.summary);
-        if (d.scope) setScope(d.scope);
-        if (d.tagsInput) setTagsInput(d.tagsInput);
-        if (d.budgetMode) setBudgetMode(d.budgetMode);
-        if (d.budgetCurrency) setBudgetCurrency(d.budgetCurrency);
-        if (d.budgetMin) setBudgetMin(d.budgetMin);
-        if (d.budgetMax) setBudgetMax(d.budgetMax);
-        if (d.timelineMode) setTimelineMode(d.timelineMode);
-        if (d.timelineValue) setTimelineValue(d.timelineValue);
-        if (d.timelineUnit) setTimelineUnit(d.timelineUnit);
-        if (d.targetDate) setTargetDate(d.targetDate);
-        if (d.projectType) setProjectType(d.projectType);
-        if (d.projectStage) setProjectStage(d.projectStage);
-        if (d.workPreference) setWorkPreference(d.workPreference);
-        if (d.preferredLanguage) setPreferredLanguage(d.preferredLanguage);
+        if (d.title || d.summary || d.scope) {
+          if (d.categoryId) setCategoryId(d.categoryId);
+          if (d.title) setTitle(d.title);
+          if (d.summary) setSummary(d.summary);
+          if (d.scope) setScope(d.scope);
+          if (d.tagsInput) setTagsInput(d.tagsInput);
+          if (d.budgetMode) setBudgetMode(d.budgetMode);
+          if (d.budgetCurrency) setBudgetCurrency(d.budgetCurrency);
+          if (d.budgetMin) setBudgetMin(d.budgetMin);
+          if (d.budgetMax) setBudgetMax(d.budgetMax);
+          if (d.timelineMode) setTimelineMode(d.timelineMode);
+          if (d.timelineValue) setTimelineValue(d.timelineValue);
+          if (d.timelineUnit) setTimelineUnit(d.timelineUnit);
+          if (d.targetDate) setTargetDate(d.targetDate);
+          if (d.projectType) setProjectType(d.projectType);
+          if (d.projectStage) setProjectStage(d.projectStage);
+          if (d.workPreference) setWorkPreference(d.workPreference);
+          if (d.preferredLanguage) setPreferredLanguage(d.preferredLanguage);
+
+          setDraftTitleNotice(d.title || "");
+          setHasDraftNotice(true);
+        }
       }
     } catch {
       // ignore
     }
   }, [draftKey, userId]);
+
+  const handleDiscardDraft = () => {
+    try {
+      localStorage.removeItem(draftKey);
+      localStorage.removeItem("operis_listing_draft");
+      setTitle("");
+      setSummary("");
+      setScope("");
+      setTagsInput("");
+      setHasDraftNotice(false);
+    } catch {
+      // ignore
+    }
+  };
 
   useEffect(() => {
     try {
@@ -312,7 +466,9 @@ export function ListingWizardForm({ categories, locale, userId }: ListingWizardF
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || (isTr ? "İlan yayınlanamadı." : "Failed to publish listing."));
+        throw new Error(
+          data.error || (isTr ? "İlan yayınlanamadı." : "Failed to publish listing.")
+        );
       }
 
       try {
@@ -370,6 +526,16 @@ export function ListingWizardForm({ categories, locale, userId }: ListingWizardF
       />
 
       <div className="relative z-10 space-y-8">
+        {/* Draft Recovery Bar */}
+        <DraftRecoveryBar
+          isOpen={hasDraftNotice}
+          draftTitle={draftTitleNotice}
+          locale={locale}
+          onRestore={() => setHasDraftNotice(false)}
+          onDiscard={handleDiscardDraft}
+          onDismiss={() => setHasDraftNotice(false)}
+        />
+
         {/* 3-Stage Visual Stepper Header */}
         <div className="space-y-4">
           <div className="grid grid-cols-3 gap-2 sm:gap-3">
@@ -561,17 +727,29 @@ export function ListingWizardForm({ categories, locale, userId }: ListingWizardF
 
             {/* Detailed Scope */}
             <div className="space-y-2">
-              <div className="flex items-center justify-between text-xs">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                 <label className="font-semibold text-[var(--color-text-primary)]">
                   {isTr ? "Detaylı Proje Kapsamı *" : "Detailed Project Scope *"}
                 </label>
-                <span
-                  className={`font-mono text-[11px] ${
-                    scope.length < 200 ? "text-amber-400 font-bold" : "text-emerald-400"
-                  }`}
-                >
-                  {scope.length} / 6000 ({isTr ? "en az 200 karakter" : "min: 200 chars"})
-                </span>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleInsertBlueprintTemplate}
+                    className="inline-flex items-center gap-1.5 text-[11px] font-medium text-cyan-400 hover:text-cyan-300 transition-colors cursor-pointer bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 px-2.5 py-1 rounded-lg"
+                  >
+                    <FileCode className="h-3.5 w-3.5" />
+                    <span>
+                      {isTr ? "Şablon Ekle (4 Bölümlü İskelet)" : "Insert Blueprint Template"}
+                    </span>
+                  </button>
+                  <span
+                    className={`font-mono text-[11px] ${
+                      scope.length < 200 ? "text-amber-400 font-bold" : "text-emerald-400"
+                    }`}
+                  >
+                    {scope.length} / 6000 ({isTr ? "en az 200 karakter" : "min: 200 chars"})
+                  </span>
+                </div>
               </div>
               <TextArea
                 value={scope}
@@ -610,6 +788,46 @@ export function ListingWizardForm({ categories, locale, userId }: ListingWizardF
                   ? "Kullanılacak dilleri veya kütüphaneleri virgülle ayırarak yazın (en fazla 10 etiket)."
                   : "Comma-separated keywords (max 10 tags)."}
               </p>
+
+              {/* Quick Tech Chips */}
+              <div className="space-y-1.5 pt-1">
+                <div className="text-[11px] font-medium text-[var(--color-text-secondary)] flex items-center gap-1.5">
+                  <Sparkles className="h-3 w-3 text-cyan-400" />
+                  <span>
+                    {isTr ? "Önerilen Popüler Yetkinlikler:" : "Suggested Skills for Category:"}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {(
+                    (selectedCategory?.slug && CATEGORY_TECH_SUGGESTIONS[selectedCategory.slug]) ||
+                    DEFAULT_TECH_SUGGESTIONS
+                  ).map((suggestion) => {
+                    const isSelected = tagsInput
+                      .split(",")
+                      .map((t) => t.trim().toLowerCase())
+                      .includes(suggestion.toLowerCase());
+                    return (
+                      <button
+                        key={suggestion}
+                        type="button"
+                        onClick={() => handleToggleTagSuggestion(suggestion)}
+                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer border ${
+                          isSelected
+                            ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40 shadow-xs"
+                            : "bg-[var(--color-surface-hover)]/40 text-[var(--color-text-secondary)] border-[var(--color-border-subtle)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]"
+                        }`}
+                      >
+                        {isSelected ? (
+                          <Check className="h-3 w-3 text-cyan-400" />
+                        ) : (
+                          <Plus className="h-3 w-3 text-[var(--color-text-tertiary)]" />
+                        )}
+                        <span>{suggestion}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
 
             {/* Special Parameters Checkboxes */}
@@ -646,14 +864,38 @@ export function ListingWizardForm({ categories, locale, userId }: ListingWizardF
                   value={projectType}
                   onChange={(e) => setProjectType(e.target.value)}
                   options={[
-                    { value: "new_build", label: isTr ? "Sıfırdan Yeni Proje" : "New Build / Green-field" },
-                    { value: "improvement", label: isTr ? "Mevcut Projeyi Geliştirme" : "Feature Improvement" },
-                    { value: "bug_fix", label: isTr ? "Hata Çözümü & Optimizasyon" : "Bug Fix & Optimization" },
-                    { value: "migration", label: isTr ? "Altyapı / Versiyon Geçişi" : "Migration & Upgrade" },
-                    { value: "integration", label: isTr ? "API & Servis Entegrasyonu" : "API & Integration" },
-                    { value: "consulting", label: isTr ? "Teknik Mimari & Danışmanlık" : "Technical Consulting" },
-                    { value: "audit", label: isTr ? "Güvenlik & Kod Denetimi" : "Security & Code Audit" },
-                    { value: "maintenance", label: isTr ? "Sürekli Bakım & Destek" : "Ongoing Maintenance" },
+                    {
+                      value: "new_build",
+                      label: isTr ? "Sıfırdan Yeni Proje" : "New Build / Green-field",
+                    },
+                    {
+                      value: "improvement",
+                      label: isTr ? "Mevcut Projeyi Geliştirme" : "Feature Improvement",
+                    },
+                    {
+                      value: "bug_fix",
+                      label: isTr ? "Hata Çözümü & Optimizasyon" : "Bug Fix & Optimization",
+                    },
+                    {
+                      value: "migration",
+                      label: isTr ? "Altyapı / Versiyon Geçişi" : "Migration & Upgrade",
+                    },
+                    {
+                      value: "integration",
+                      label: isTr ? "API & Servis Entegrasyonu" : "API & Integration",
+                    },
+                    {
+                      value: "consulting",
+                      label: isTr ? "Teknik Mimari & Danışmanlık" : "Technical Consulting",
+                    },
+                    {
+                      value: "audit",
+                      label: isTr ? "Güvenlik & Kod Denetimi" : "Security & Code Audit",
+                    },
+                    {
+                      value: "maintenance",
+                      label: isTr ? "Sürekli Bakım & Destek" : "Ongoing Maintenance",
+                    },
                   ]}
                 />
               </div>
@@ -666,11 +908,26 @@ export function ListingWizardForm({ categories, locale, userId }: ListingWizardF
                   value={projectStage}
                   onChange={(e) => setProjectStage(e.target.value)}
                   options={[
-                    { value: "idea", label: isTr ? "Fikir Aşaması (Kavramsal)" : "Idea / Conceptual" },
-                    { value: "requirements_ready", label: isTr ? "Gereksinimler Hazır" : "Requirements Ready" },
-                    { value: "design_ready", label: isTr ? "Tasarım / UI/UX Hazır" : "Design / Wireframes Ready" },
-                    { value: "existing_code", label: isTr ? "Mevcut Kod Tabanı Var" : "Existing Codebase" },
-                    { value: "production_system", label: isTr ? "Canlıda Çalışan Sistem" : "Production System" },
+                    {
+                      value: "idea",
+                      label: isTr ? "Fikir Aşaması (Kavramsal)" : "Idea / Conceptual",
+                    },
+                    {
+                      value: "requirements_ready",
+                      label: isTr ? "Gereksinimler Hazır" : "Requirements Ready",
+                    },
+                    {
+                      value: "design_ready",
+                      label: isTr ? "Tasarım / UI/UX Hazır" : "Design / Wireframes Ready",
+                    },
+                    {
+                      value: "existing_code",
+                      label: isTr ? "Mevcut Kod Tabanı Var" : "Existing Codebase",
+                    },
+                    {
+                      value: "production_system",
+                      label: isTr ? "Canlıda Çalışan Sistem" : "Production System",
+                    },
                   ]}
                 />
               </div>
@@ -734,6 +991,21 @@ export function ListingWizardForm({ categories, locale, userId }: ListingWizardF
                 <div className="flex items-center gap-1.5 text-xs font-bold text-[var(--color-text-primary)]">
                   <Coins className="h-4 w-4 text-emerald-400" />
                   <span>{isTr ? "Bütçe Yapısı" : "Budget Structure"}</span>
+                </div>
+
+                {/* Market Benchmark Guidance Helper */}
+                <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-2.5 flex items-start gap-2 text-xs">
+                  <TrendingUp className="h-3.5 w-3.5 text-cyan-400 shrink-0 mt-0.5" />
+                  <div className="text-[var(--color-text-secondary)] text-[11px] leading-relaxed">
+                    <span className="font-semibold text-cyan-300 block mb-0.5">
+                      {isTr ? "Piyasa Referans Rehberi" : "Market Benchmark Guide"}
+                    </span>
+                    {getMarketGuidance(
+                      selectedCategory?.slug || "web-development",
+                      budgetCurrency,
+                      isTr
+                    )}
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-3 gap-1.5">
@@ -870,12 +1142,31 @@ export function ListingWizardForm({ categories, locale, userId }: ListingWizardF
             </div>
 
             {/* Quick Preview Card */}
-            <div className="rounded-2xl border border-blue-500/20 bg-blue-500/5 p-4 space-y-1.5 text-xs">
-              <div className="font-bold text-blue-400">
-                {isTr ? "İlan Özeti" : "Listing Summary"}
+            <div className="rounded-2xl border border-blue-500/20 bg-blue-500/5 p-4 space-y-2.5 text-xs">
+              <div className="flex items-center justify-between">
+                <div className="font-bold text-blue-400 flex items-center gap-1.5">
+                  <Sparkles className="h-4 w-4" />
+                  <span>
+                    {isTr ? "İlan Özeti & Canlı Görünüm" : "Listing Summary & Live Preview"}
+                  </span>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => setIsPreviewModalOpen(true)}
+                  className="text-xs h-7 px-2.5 gap-1.5 border-blue-500/30 text-blue-300 hover:text-white"
+                >
+                  <Eye className="h-3.5 w-3.5" />
+                  <span>{isTr ? "İlanı Canlı Önizle" : "Live Preview Card"}</span>
+                </Button>
               </div>
-              <div className="text-[var(--color-text-primary)] font-semibold truncate">{title}</div>
-              <div className="text-[var(--color-text-secondary)] line-clamp-2">{summary}</div>
+              <div className="text-[var(--color-text-primary)] font-semibold truncate">
+                {title || (isTr ? "(Başlık henüz girilmedi)" : "(No title entered)")}
+              </div>
+              <div className="text-[var(--color-text-secondary)] line-clamp-2">
+                {summary || (isTr ? "(Kısa özet henüz girilmedi)" : "(No summary entered)")}
+              </div>
             </div>
 
             {/* 4 Mandatory Declarations */}
@@ -955,6 +1246,57 @@ export function ListingWizardForm({ categories, locale, userId }: ListingWizardF
             </Button>
           )}
         </div>
+
+        {/* Live Feed Card Preview Modal */}
+        <Dialog
+          isOpen={isPreviewModalOpen}
+          onClose={() => setIsPreviewModalOpen(false)}
+          title={isTr ? "İlan Canlı Akış Önizlemesi" : "Live Feed Card Preview"}
+          description={
+            isTr
+              ? "İlanınız onaylandıktan sonra pazar yeri akışında ve arama sonuçlarında tam olarak bu şekilde görüntülenecektir."
+              : "This is exactly how your project will appear in the marketplace feed and search results."
+          }
+          className="max-w-2xl"
+        >
+          <div className="py-2 pointer-events-none select-none">
+            <ListingCard
+              id="preview-demo-id"
+              slug="onizleme-ilani"
+              title={
+                title.trim() ||
+                (isTr ? "Örnek Proje Başlığı (En Az 20 Karakter)" : "Sample Project Title")
+              }
+              summary={
+                summary.trim() ||
+                (isTr
+                  ? "Bu proje için belirtilen kısa özet bilgisi burada yer alacaktır. Serbest çalışanlar projenizin detaylarına karar vermeden önce ilk olarak bu özeti okuyacaklardır."
+                  : "Short summary of the project will appear here for freelancers to evaluate.")
+              }
+              categoryName={selectedCategory?.name || (isTr ? "Web Geliştirme" : "Web Development")}
+              budgetMode={budgetMode}
+              budgetCurrency={budgetCurrency}
+              budgetMin={budgetMin || null}
+              budgetMax={budgetMax || null}
+              timelineMode={timelineMode}
+              targetDate={targetDate || null}
+              timelineValue={timelineValue ? parseInt(timelineValue, 10) : 2}
+              timelineUnit={timelineUnit}
+              ownerHandle="is-sahibi"
+              ownerDisplayName={isTr ? "İlan Sahibi (Siz)" : "Project Owner (You)"}
+              firstPublishedAt={new Date()}
+              lastActivatedAt={new Date()}
+              activeUntil={new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)}
+              activationSeq={1}
+              locale={locale}
+            />
+          </div>
+          <div className="mt-4 flex justify-end">
+            <Button type="button" variant="secondary" onClick={() => setIsPreviewModalOpen(false)}>
+              {isTr ? "Kapat" : "Close"}
+            </Button>
+          </div>
+        </Dialog>
       </div>
     </div>
   );

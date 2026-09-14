@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { Mail, Lock, ShieldAlert, KeyRound, Eye, EyeOff, Zap } from "lucide-react";
 import { Button } from "../ui/button";
 import { TextInput } from "../ui/text-input";
+import { SocialLoginButtons } from "./social-login-buttons";
+import { TurnstileWidget } from "../security/turnstile-widget";
 
 export interface LoginFormProps {
   locale: string;
@@ -29,9 +31,11 @@ export function LoginForm({ locale, returnUrl }: LoginFormProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [totpCode, setTotpCode] = useState("");
   const [requires2FA, setRequires2FA] = useState(false);
+  const [useBackupCode, setUseBackupCode] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isQuickLoggingIn, setIsQuickLoggingIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
   const defaultRedirect = isTr ? "/tr/akis" : "/en/feed";
   const targetRedirect = getSafeReturnUrl(returnUrl, defaultRedirect);
@@ -52,6 +56,7 @@ export function LoginForm({ locale, returnUrl }: LoginFormProps) {
           email: email.trim(),
           password,
           totpCode: requires2FA ? totpCode.trim() : undefined,
+          turnstileToken,
         }),
       });
 
@@ -182,25 +187,82 @@ export function LoginForm({ locale, returnUrl }: LoginFormProps) {
           </div>
         </>
       ) : (
-        <TextInput
-          label={isTr ? "İki aşamalı doğrulama kodu (2FA)" : "Two-factor code (2FA)"}
-          type="text"
-          value={totpCode}
-          onChange={(e) => setTotpCode(e.target.value)}
-          placeholder="6 haneli kod"
-          required
-          maxLength={6}
-          autoFocus
-          startIcon={<KeyRound className="h-4 w-4" aria-hidden="true" />}
-        />
+        <div className="space-y-2">
+          {!useBackupCode ? (
+            <>
+              <TextInput
+                label={isTr ? "İki aşamalı doğrulama kodu (2FA)" : "Two-factor code (2FA)"}
+                type="text"
+                value={totpCode}
+                onChange={(e) => setTotpCode(e.target.value.replace(/\s+/g, ""))}
+                placeholder="6 haneli kod"
+                required
+                maxLength={6}
+                autoFocus
+                startIcon={<KeyRound className="h-4 w-4" aria-hidden="true" />}
+              />
+              <div className="flex justify-end pt-0.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUseBackupCode(true);
+                    setTotpCode("");
+                  }}
+                  className="text-xs text-blue-400 hover:text-blue-300 hover:underline transition-colors cursor-pointer"
+                >
+                  {isTr
+                    ? "Telefonunuza erişemiyor musunuz? Kurtarma kodu kullanın"
+                    : "Can't access your phone? Use a backup code"}
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <TextInput
+                label={isTr ? "Acil Durum Kurtarma Kodu" : "Emergency Backup Code"}
+                type="text"
+                value={totpCode}
+                onChange={(e) =>
+                  setTotpCode(e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ""))
+                }
+                placeholder="XXXX-XXXX"
+                required
+                maxLength={10}
+                autoFocus
+                startIcon={<KeyRound className="h-4 w-4" aria-hidden="true" />}
+              />
+              <div className="flex justify-between items-center pt-0.5 text-xs">
+                <span className="text-[var(--color-text-tertiary)] text-[11px]">
+                  {isTr ? "8 haneli tek kullanımlık kod" : "8-character single-use code"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUseBackupCode(false);
+                    setTotpCode("");
+                  }}
+                  className="text-blue-400 hover:text-blue-300 hover:underline transition-colors cursor-pointer"
+                >
+                  {isTr ? "Authenticator kodu kullan" : "Use Authenticator app"}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       )}
+
+      {/* Cloudflare Turnstile Bot Defense */}
+      <TurnstileWidget
+        onVerify={(token) => setTurnstileToken(token)}
+        onExpire={() => setTurnstileToken(null)}
+      />
 
       {/* Main Submit Button */}
       <Button
         type="submit"
         variant="primary"
         size="lg"
-        className="w-full text-sm font-semibold mt-2"
+        className="w-full text-sm font-semibold mt-2 cursor-pointer"
         isLoading={isLoading}
       >
         {requires2FA
@@ -211,6 +273,17 @@ export function LoginForm({ locale, returnUrl }: LoginFormProps) {
             ? "Giriş Yap"
             : "Sign In"}
       </Button>
+
+      {/* 5 Circular Social Login Buttons */}
+      {!requires2FA && (
+        <div className="pt-1">
+          <SocialLoginButtons
+            locale={locale}
+            returnUrl={targetRedirect}
+            onError={(msg) => setError(msg)}
+          />
+        </div>
+      )}
 
       {/* Quick Login Section directly under Giriş Yap */}
       <div className="pt-2 space-y-3">

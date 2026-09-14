@@ -47,6 +47,20 @@
   --scrollbar-thumb-hover: rgba(0, 0, 0, 0.32);
   --scrollbar-track: transparent;
 
+  /* CTA Panel Surface Tokens */
+  --cta-card-bg: linear-gradient(
+    135deg,
+    rgba(239, 246, 255, 0.9) 0%,
+    rgba(255, 255, 255, 0.98) 50%,
+    rgba(238, 242, 255, 0.85) 100%
+  );
+  --cta-card-border: rgba(59, 130, 246, 0.28);
+  --cta-card-shadow: 0 20px 45px -15px rgba(59, 130, 246, 0.12);
+  --cta-card-aura: rgba(59, 130, 246, 0.12);
+  --cta-button-sec-bg: #ffffff;
+  --cta-button-sec-text: #121316;
+  --cta-button-sec-border: rgba(200, 200, 194, 0.85);
+
   color-scheme: light;
 }
 
@@ -92,6 +106,20 @@
   --scrollbar-thumb-hover: rgba(255, 255, 255, 0.35);
   --scrollbar-track: transparent;
 
+  /* CTA Panel Surface Tokens */
+  --cta-card-bg: linear-gradient(
+    135deg,
+    rgba(15, 23, 42, 0.65) 0%,
+    rgba(29, 30, 33, 0.85) 50%,
+    rgba(30, 27, 75, 0.55) 100%
+  );
+  --cta-card-border: rgba(59, 130, 246, 0.3);
+  --cta-card-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  --cta-card-aura: rgba(56, 189, 248, 0.15);
+  --cta-button-sec-bg: rgba(38, 40, 45, 0.85);
+  --cta-button-sec-text: #f2f3f5;
+  --cta-button-sec-border: rgba(63, 66, 75, 0.8);
+
   color-scheme: dark;
 }
 
@@ -136,6 +164,20 @@
   --scrollbar-thumb: rgba(255, 255, 255, 0.22);
   --scrollbar-thumb-hover: rgba(255, 255, 255, 0.45);
   --scrollbar-track: transparent;
+
+  /* CTA Panel Surface Tokens */
+  --cta-card-bg: linear-gradient(
+    135deg,
+    rgba(10, 15, 30, 0.75) 0%,
+    rgba(10, 10, 11, 0.9) 50%,
+    rgba(20, 15, 45, 0.65) 100%
+  );
+  --cta-card-border: rgba(59, 130, 246, 0.35);
+  --cta-card-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+  --cta-card-aura: rgba(56, 189, 248, 0.12);
+  --cta-button-sec-bg: rgba(20, 20, 22, 0.9);
+  --cta-button-sec-text: #fafafa;
+  --cta-button-sec-border: rgba(46, 46, 51, 0.8);
 
   color-scheme: dark;
 }
@@ -321,6 +363,37 @@ html::-webkit-scrollbar {
   animation: pulse-subtle 3s ease-in-out infinite;
 }
 
+/* Smooth Tab & Interactive Viewport Transitions */
+@keyframes tab-fade-in {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.99);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-tab-fade {
+  animation: tab-fade-in 320ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes card-fade-cascade {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-card-cascade {
+  animation: card-fade-cascade 350ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
 /* Typography Gradient Masks */
 .text-gradient {
   background: linear-gradient(135deg, var(--text-primary) 30%, var(--text-secondary) 100%);
@@ -347,6 +420,25 @@ html::-webkit-scrollbar {
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--color-border-subtle);
+}
+
+/* CTA High-Impact Card Surface */
+.cta-card-surface {
+  background: var(--cta-card-bg);
+  border: 1px solid var(--cta-card-border);
+  box-shadow: var(--cta-card-shadow);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+}
+
+.cta-button-secondary {
+  background: var(--cta-button-sec-bg);
+  color: var(--cta-button-sec-text);
+  border: 1px solid var(--cta-button-sec-border);
+}
+
+.cta-button-secondary:hover {
+  background: var(--color-surface-hover);
 }
 
 /* Background Atmosphere Grid */

@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { and, desc, eq, or } from "drizzle-orm";
+import { and, desc, eq, lt, or } from "drizzle-orm";
 import { getDb, schema } from "@/src/lib/db";
 import { NotificationService } from "@/src/modules/notifications/service";
 import { inMemoryListings } from "@/src/modules/listings/service";
@@ -127,8 +127,9 @@ export class OfferService {
     const db = getDb();
 
     // 1. Fetch listing and verify active status
-    const isListingUuid =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(input.listingId);
+    const isListingUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      input.listingId
+    );
 
     let listing: {
       id: string;
@@ -155,7 +156,7 @@ export class OfferService {
       }
     }
 
-    if (!listing && process.env.NODE_ENV !== "production") {
+    if (!listing && Boolean(process.env.VITEST)) {
       const memListing = inMemoryListings.find((l) => l.id === input.listingId);
       if (memListing) {
         listing = {
@@ -240,7 +241,10 @@ export class OfferService {
           .select()
           .from(schema.offers)
           .where(
-            and(eq(schema.offers.listingId, listing.id), eq(schema.offers.offerorUserId, offerorUserId))
+            and(
+              eq(schema.offers.listingId, listing.id),
+              eq(schema.offers.offerorUserId, offerorUserId)
+            )
           );
 
         // Rule A: Max 1 PENDING offer
@@ -290,6 +294,7 @@ export class OfferService {
           let lQuery = tx
             .select({
               id: schema.listings.id,
+              title: schema.listings.title,
               status: schema.listings.status,
               activeUntil: schema.listings.activeUntil,
               activationSeq: schema.listings.activationSeq,
@@ -345,6 +350,34 @@ export class OfferService {
             },
           });
 
+          // B16: Single path for offer proposal notification & outbox event within the SAME transaction
+          const [ownerProfile] = await tx
+            .select({ locale: schema.profiles.locale })
+            .from(schema.profiles)
+            .where(eq(schema.profiles.userId, lockedListing.ownerUserId))
+            .limit(1);
+
+          const isEn = ownerProfile?.locale === "en";
+          const deliveryKey = `offer:${insertedOffer.id}:received:user:${lockedListing.ownerUserId}`;
+
+          await NotificationService.createNotification(
+            lockedListing.ownerUserId,
+            "OFFER_RECEIVED",
+            "offer",
+            insertedOffer.id,
+            {
+              title: isEn ? "New Proposal Received" : "Yeni Teklif Alındı",
+              message: isEn
+                ? `A new proposal has been submitted for your project "${lockedListing.title || listing.title}".`
+                : `"${lockedListing.title || listing.title}" projeniz için yeni bir teklif iletildi.`,
+              actionUrl: isEn ? "/en/dashboard/offers/received" : "/tr/panel/teklifler/gelen",
+              offerId: insertedOffer.id,
+              listingId: lockedListing.id,
+            },
+            tx,
+            deliveryKey
+          );
+
           return insertedOffer;
         });
       } catch (err: unknown) {
@@ -354,13 +387,15 @@ export class OfferService {
           errObj?.message?.includes("offers_pending_unique_idx") ||
           errObj?.message?.includes("unique constraint")
         ) {
-          throw new Error("You already have an active pending offer on this listing", { cause: err });
+          throw new Error("You already have an active pending offer on this listing", {
+            cause: err,
+          });
         }
         if (process.env.NODE_ENV === "production") throw err;
       }
     }
 
-    if (!newOffer && process.env.NODE_ENV !== "production") {
+    if (!newOffer && Boolean(process.env.VITEST)) {
       newOffer = {
         id: `offer-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         listingId: listing.id,
@@ -385,52 +420,30 @@ export class OfferService {
       throw new Error("Failed to insert offer");
     }
 
-    // Notify listing owner about the new proposal
-    if (newOffer) {
-      (async () => {
-        try {
-          const [ownerProfile] = await db
-            .select({ locale: schema.profiles.locale })
-            .from(schema.profiles)
-            .where(eq(schema.profiles.userId, listing.ownerUserId))
-            .limit(1);
-
-          const isEn = ownerProfile?.locale === "en";
-          await NotificationService.createNotification(
-            listing.ownerUserId,
-            "OFFER_RECEIVED",
-            "offer",
-            newOffer.id,
-            {
-              title: isEn ? "New Proposal Received" : "Yeni Teklif Alındı",
-              message: isEn
-                ? `A new proposal has been submitted for your project "${listing.title}".`
-                : `"${listing.title}" projeniz için yeni bir teklif iletildi.`,
-              actionUrl: isEn ? "/en/dashboard/offers/received" : "/tr/panel/teklifler/gelen",
-            }
-          );
-        } catch {
-          if (listing.ownerUserId === DEFAULT_USER.id) {
-            const isEn = DEFAULT_USER.profile.locale === "en";
-            NotificationService.createNotification(
-              DEFAULT_USER.id,
-              "OFFER_RECEIVED",
-              "offer",
-              newOffer.id,
-              {
-                title: isEn ? "New Proposal Received" : "Yeni Teklif Alındı",
-                message: isEn
-                  ? `A new proposal has been submitted for your project "${listing.title}".`
-                  : `"${listing.title}" projeniz için yeni bir teklif iletildi.`,
-                actionUrl: isEn ? "/en/dashboard/offers/received" : "/tr/panel/teklifler/gelen",
-              }
-            ).catch(() => {});
-          }
-        }
-      })().catch(() => {});
+    // In-memory synthetic fallback notification for mock unit tests without DB
+    if (!isListingUuid && newOffer) {
+      const isEn =
+        listing.ownerUserId === DEFAULT_USER.id ? DEFAULT_USER.profile.locale === "en" : false;
+      await NotificationService.createNotification(
+        listing.ownerUserId,
+        "OFFER_RECEIVED",
+        "offer",
+        newOffer.id,
+        {
+          title: isEn ? "New Proposal Received" : "Yeni Teklif Alındı",
+          message: isEn
+            ? `A new proposal has been submitted for your project "${listing.title}".`
+            : `"${listing.title}" projeniz için yeni bir teklif iletildi.`,
+          actionUrl: isEn ? "/en/dashboard/offers/received" : "/tr/panel/teklifler/gelen",
+          offerId: newOffer.id,
+          listingId: listing.id,
+        },
+        undefined,
+        `offer:${newOffer.id}:received:user:${listing.ownerUserId}`
+      ).catch(() => {});
     }
 
-    if (newOffer && process.env.NODE_ENV !== "production") {
+    if (newOffer && Boolean(process.env.VITEST)) {
       inMemorySentOffers.unshift({
         offer: newOffer,
         listing: {
@@ -459,6 +472,22 @@ export class OfferService {
       });
     }
 
+    // Fail-open event dispatch to Inngest for delayed stale-offer monitoring
+    try {
+      const { sendInngestEvent } = await import("@/src/lib/inngest/client");
+      sendInngestEvent("operis/offer.submitted", {
+        offerId: newOffer.id,
+        listingId: newOffer.listingId,
+        offerorUserId: newOffer.offerorUserId,
+        createdAt:
+          newOffer.createdAt instanceof Date
+            ? newOffer.createdAt.toISOString()
+            : new Date().toISOString(),
+      }).catch(() => {});
+    } catch {
+      // Fail-open: Never disrupt core offer flow
+    }
+
     return newOffer;
   }
 
@@ -467,106 +496,138 @@ export class OfferService {
    */
   static async updateOffer(offerorUserId: string, rawInput: UpdateOfferInput) {
     const input = updateOfferSchema.parse(rawInput);
-    const isOfferUuid =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(input.offerId);
+    const isOfferUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      input.offerId
+    );
 
     if (isOfferUuid) {
       try {
         const db = getDb();
 
-        const offerRows = await db
-          .select()
-          .from(schema.offers)
-          .where(eq(schema.offers.id, input.offerId))
-          .limit(1);
+        return await db.transaction(async (tx) => {
+          let oQuery = tx.select().from(schema.offers).where(eq(schema.offers.id, input.offerId));
 
-        const offer = offerRows[0];
-      if (!offer) {
-        throw new Error("Offer not found");
-      }
+          if (typeof (oQuery as { for?: unknown }).for === "function") {
+            oQuery = (oQuery as { for: (mode: string) => typeof oQuery }).for("update");
+          }
 
-      // Authorization
-      if (offer.offerorUserId !== offerorUserId) {
-        throw new Error("Unauthorized to edit this offer");
-      }
+          const offerRows = await oQuery.limit(1);
+          const offer = offerRows[0];
+          if (!offer) {
+            throw new Error("Offer not found");
+          }
 
-      if (offer.status !== "PENDING") {
-        throw new Error("Only pending offers can be edited");
-      }
+          // Authorization
+          if (offer.offerorUserId !== offerorUserId) {
+            throw new Error("Unauthorized to edit this offer");
+          }
 
-      // Check listing still active
-      const listingRows = await db
-        .select()
-        .from(schema.listings)
-        .where(eq(schema.listings.id, offer.listingId))
-        .limit(1);
+          if (offer.status !== "PENDING") {
+            throw new Error("Only pending offers can be edited");
+          }
 
-      const listing = listingRows[0];
-      if (!listing) {
-        throw new Error("Associated listing not found");
-      }
+          // Check listing still active
+          const listingRows = await tx
+            .select()
+            .from(schema.listings)
+            .where(eq(schema.listings.id, offer.listingId))
+            .limit(1);
 
-      const now = new Date();
-      if (listing.status !== "ACTIVE" || !listing.activeUntil || listing.activeUntil <= now) {
-        throw new Error("Associated listing is no longer active");
-      }
+          const listing = listingRows[0];
+          if (!listing) {
+            throw new Error("Associated listing not found");
+          }
 
-      return await db.transaction(async (tx) => {
-        // Get highest revision number
-        const existingRevisions = await tx
-          .select({ revisionNo: schema.offerRevisions.revisionNo })
-          .from(schema.offerRevisions)
-          .where(eq(schema.offerRevisions.offerId, offer.id))
-          .orderBy(desc(schema.offerRevisions.revisionNo))
-          .limit(1);
+          const now = new Date();
+          if (listing.status !== "ACTIVE" || !listing.activeUntil || listing.activeUntil <= now) {
+            throw new Error("Associated listing is no longer active");
+          }
 
-        const firstRev = existingRevisions[0];
-        const nextRevNo = firstRev ? firstRev.revisionNo + 1 : 1;
+          // Get highest revision number
+          const existingRevisions = await tx
+            .select({ revisionNo: schema.offerRevisions.revisionNo })
+            .from(schema.offerRevisions)
+            .where(eq(schema.offerRevisions.offerId, offer.id))
+            .orderBy(desc(schema.offerRevisions.revisionNo))
+            .limit(1);
 
-        await tx.insert(schema.offerRevisions).values({
-          offerId: offer.id,
-          revisionNo: nextRevNo,
-          snapshotJson: {
-            message: input.message,
-            budgetCurrency: input.budgetCurrency ?? null,
-            budgetMin: input.budgetMin ?? null,
-            budgetMax: input.budgetMax ?? null,
-            estimatedDurationValue: input.estimatedDurationValue ?? null,
-            estimatedDurationUnit: input.estimatedDurationUnit ?? null,
-          },
+          const firstRev = existingRevisions[0];
+          const nextRevNo = firstRev ? firstRev.revisionNo + 1 : 1;
+
+          await tx.insert(schema.offerRevisions).values({
+            offerId: offer.id,
+            revisionNo: nextRevNo,
+            snapshotJson: {
+              message: input.message,
+              budgetCurrency: input.budgetCurrency ?? null,
+              budgetMin: input.budgetMin ?? null,
+              budgetMax: input.budgetMax ?? null,
+              estimatedDurationValue: input.estimatedDurationValue ?? null,
+              estimatedDurationUnit: input.estimatedDurationUnit ?? null,
+            },
+          });
+
+          const [updatedOffer] = await tx
+            .update(schema.offers)
+            .set({
+              message: input.message,
+              budgetCurrency: input.budgetCurrency ?? null,
+              budgetMin: input.budgetMin ?? null,
+              budgetMax: input.budgetMax ?? null,
+              estimatedDurationValue: input.estimatedDurationValue ?? null,
+              estimatedDurationUnit: input.estimatedDurationUnit ?? null,
+              updatedAt: new Date(),
+            })
+            .where(and(eq(schema.offers.id, offer.id), eq(schema.offers.status, "PENDING")))
+            .returning();
+
+          if (!updatedOffer) {
+            throw new Error("Only pending offers can be edited");
+          }
+
+          try {
+            const ownerProfiles = await tx
+              .select({ locale: schema.profiles.locale })
+              .from(schema.profiles)
+              .where(eq(schema.profiles.userId, listing.ownerUserId))
+              .limit(1);
+            const isEn = ownerProfiles[0]?.locale === "en";
+
+            await NotificationService.createNotification(
+              listing.ownerUserId,
+              "OFFER_UPDATED",
+              "offer",
+              offer.id,
+              {
+                title: isEn ? "Proposal Updated" : "Teklif Güncellendi",
+                message: isEn
+                  ? `A proposal for your project "${listing.title}" has been updated.`
+                  : `"${listing.title}" projeniz için iletilen bir teklif güncellendi.`,
+                actionUrl: isEn ? "/en/dashboard/offers/received" : "/tr/panel/teklifler/gelen",
+              },
+              tx
+            );
+          } catch {
+            // Non-fatal notification failure
+          }
+
+          return updatedOffer;
         });
-
-        const [updatedOffer] = await tx
-          .update(schema.offers)
-          .set({
-            message: input.message,
-            budgetCurrency: input.budgetCurrency ?? null,
-            budgetMin: input.budgetMin ?? null,
-            budgetMax: input.budgetMax ?? null,
-            estimatedDurationValue: input.estimatedDurationValue ?? null,
-            estimatedDurationUnit: input.estimatedDurationUnit ?? null,
-            updatedAt: new Date(),
-          })
-          .where(eq(schema.offers.id, offer.id))
-          .returning();
-
-        return updatedOffer;
-      });
-    } catch (err) {
-      if (process.env.NODE_ENV === "production") {
-        throw err;
-      }
-      if (
-        err instanceof Error &&
-        (err.message.includes("Offer not found") ||
-          err.message.includes("Unauthorized") ||
-          err.message.includes("Only pending") ||
-          err.message.includes("Associated listing"))
-      ) {
-        throw err;
+      } catch (err) {
+        if (process.env.NODE_ENV === "production" || !process.env.VITEST) {
+          throw err;
+        }
+        if (
+          err instanceof Error &&
+          (err.message.includes("Offer not found") ||
+            err.message.includes("Unauthorized") ||
+            err.message.includes("Only pending") ||
+            err.message.includes("Associated listing"))
+        ) {
+          throw err;
+        }
       }
     }
-  }
 
     const item = inMemorySentOffers.find((o) => o.offer.id === input.offerId);
     if (item) {
@@ -589,7 +650,8 @@ export class OfferService {
       const receivedItem = inMemoryReceivedOffers.find((r) => r.offer.id === input.offerId);
       if (receivedItem) {
         receivedItem.offer.message = input.message;
-        if (input.budgetCurrency !== undefined) receivedItem.offer.budgetCurrency = input.budgetCurrency;
+        if (input.budgetCurrency !== undefined)
+          receivedItem.offer.budgetCurrency = input.budgetCurrency;
         if (input.budgetMin !== undefined) receivedItem.offer.budgetMin = input.budgetMin;
         if (input.budgetMax !== undefined) receivedItem.offer.budgetMax = input.budgetMax;
         if (input.estimatedDurationValue !== undefined)
@@ -597,6 +659,21 @@ export class OfferService {
         if (input.estimatedDurationUnit !== undefined)
           receivedItem.offer.estimatedDurationUnit = input.estimatedDurationUnit;
         receivedItem.offer.updatedAt = new Date();
+      }
+
+      const ownerId = (item.listing as { ownerUserId?: string })?.ownerUserId;
+      if (ownerId) {
+        await NotificationService.createNotification(
+          ownerId,
+          "OFFER_UPDATED",
+          "offer",
+          item.offer.id,
+          {
+            title: "Teklif Güncellendi",
+            message: `"${item.listing.title}" projeniz için iletilen bir teklif güncellendi.`,
+            actionUrl: "/tr/panel/teklifler/gelen",
+          }
+        ).catch(() => {});
       }
 
       return item.offer;
@@ -609,18 +686,16 @@ export class OfferService {
    * Withdraws a pending offer by the offeror.
    */
   static async withdrawOffer(offerorUserId: string, offerId: string) {
-    const isOfferUuid =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(offerId);
+    const isOfferUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      offerId
+    );
 
     if (isOfferUuid) {
       try {
         const db = getDb();
 
         const withdrawn = await db.transaction(async (tx) => {
-          let oQuery = tx
-            .select()
-            .from(schema.offers)
-            .where(eq(schema.offers.id, offerId));
+          let oQuery = tx.select().from(schema.offers).where(eq(schema.offers.id, offerId));
 
           if (typeof (oQuery as { for?: unknown }).for === "function") {
             oQuery = (oQuery as { for: (mode: string) => typeof oQuery }).for("update");
@@ -695,7 +770,7 @@ export class OfferService {
           return withdrawn.withdrawn;
         }
       } catch (err) {
-        if (process.env.NODE_ENV === "production") {
+        if (process.env.NODE_ENV === "production" || !process.env.VITEST) {
           throw err;
         }
         if (
@@ -729,7 +804,7 @@ export class OfferService {
 
       const ownerUserId = (item.listing as { ownerUserId?: string })?.ownerUserId;
       if (ownerUserId) {
-        NotificationService.createNotification(
+        await NotificationService.createNotification(
           ownerUserId,
           "OFFER_WITHDRAWN",
           "offer",
@@ -749,12 +824,132 @@ export class OfferService {
   }
 
   /**
+   * System background job: Automatically withdraws an offer that has remained PENDING without employer response.
+   * Invoked by Inngest durable delayed workflow after step.sleep("3 days").
+   */
+  static async autoCancelStaleOffer(offerId: string) {
+    const isOfferUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      offerId
+    );
+
+    if (isOfferUuid) {
+      try {
+        const db = getDb();
+        const [offer] = await db
+          .select()
+          .from(schema.offers)
+          .where(eq(schema.offers.id, offerId))
+          .limit(1);
+
+        if (!offer || offer.status !== "PENDING") {
+          return { offerId, cancelled: false, status: offer?.status ?? "NOT_FOUND" };
+        }
+
+        const [withdrawnRecord] = await db
+          .update(schema.offers)
+          .set({
+            status: "WITHDRAWN",
+            rejectionCode: "STALE_TIMEOUT",
+            rejectionNote: "Automatically withdrawn after 3 days of inactivity",
+            resolvedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(and(eq(schema.offers.id, offerId), eq(schema.offers.status, "PENDING")))
+          .returning();
+
+        if (!withdrawnRecord) {
+          return { offerId, cancelled: false, status: "ALREADY_RESOLVED" };
+        }
+
+        const [listing] = await db
+          .select({
+            title: schema.listings.title,
+            ownerUserId: schema.listings.ownerUserId,
+          })
+          .from(schema.listings)
+          .where(eq(schema.listings.id, offer.listingId))
+          .limit(1);
+
+        if (listing) {
+          const [offerorProfile] = await db
+            .select({ locale: schema.profiles.locale })
+            .from(schema.profiles)
+            .where(eq(schema.profiles.userId, offer.offerorUserId))
+            .limit(1);
+
+          const [ownerProfile] = await db
+            .select({ locale: schema.profiles.locale })
+            .from(schema.profiles)
+            .where(eq(schema.profiles.userId, listing.ownerUserId))
+            .limit(1);
+
+          const isOfferorEn = offerorProfile?.locale === "en";
+          const isOwnerEn = ownerProfile?.locale === "en";
+
+          await NotificationService.createNotification(
+            offer.offerorUserId,
+            "OFFER_WITHDRAWN",
+            "offer",
+            offerId,
+            {
+              listingId: offer.listingId,
+              title: isOfferorEn ? "Proposal Expired" : "Teklif Zaman Aşımı",
+              message: isOfferorEn
+                ? `Your proposal for "${listing.title}" was automatically withdrawn after 3 days without response.`
+                : `"${listing.title}" projesine verdiğiniz teklif yanıtlanmadığı için otomatik olarak geri çekildi.`,
+              actionUrl: isOfferorEn ? "/en/dashboard/offers/sent" : "/tr/panel/teklifler/giden",
+            }
+          ).catch(() => {});
+
+          await NotificationService.createNotification(
+            listing.ownerUserId,
+            "OFFER_WITHDRAWN",
+            "offer",
+            offerId,
+            {
+              listingId: offer.listingId,
+              title: isOwnerEn ? "Proposal Withdrawn (Timeout)" : "Teklif Zaman Aşımı",
+              message: isOwnerEn
+                ? `A proposal on your project "${listing.title}" was withdrawn automatically due to inactivity.`
+                : `"${listing.title}" projenizdeki bir teklif 3 gün boyunca yanıtsız kaldığı için sistem tarafından geri çekildi.`,
+              actionUrl: isOwnerEn ? "/en/dashboard/offers/received" : "/tr/panel/teklifler/gelen",
+            }
+          ).catch(() => {});
+        }
+
+        return { offerId, cancelled: true, status: "WITHDRAWN" };
+      } catch (err) {
+        if (process.env.NODE_ENV === "production") {
+          throw err;
+        }
+      }
+    }
+
+    const item = inMemorySentOffers.find((o) => o.offer.id === offerId);
+    if (item && item.offer.status === "PENDING") {
+      item.offer.status = "WITHDRAWN";
+      item.offer.resolvedAt = new Date();
+      item.offer.updatedAt = new Date();
+      const rec = inMemoryReceivedOffers.find((r) => r.offer.id === offerId);
+      if (rec) {
+        rec.offer.status = "WITHDRAWN";
+        rec.offer.resolvedAt = new Date();
+        rec.offer.updatedAt = new Date();
+      }
+      return { offerId, cancelled: true, status: "WITHDRAWN" };
+    }
+
+    return { offerId, cancelled: false, status: item?.offer.status ?? "NOT_FOUND" };
+  }
+
+  /**
    * Rejects an offer by the listing owner, with optional structured reason code and note.
    */
   static async rejectOffer(listingOwnerUserId: string, rawInput: RejectOfferInput) {
     const input = rejectOfferSchema.parse(rawInput);
-    const isOfferUuid =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(input.offerId);
+    const isOfferUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      input.offerId
+    );
 
     if (isOfferUuid) {
       try {
@@ -840,7 +1035,7 @@ export class OfferService {
 
         return rejectedResult.rejected;
       } catch (err) {
-        if (process.env.NODE_ENV === "production") {
+        if (process.env.NODE_ENV === "production" || !process.env.VITEST) {
           throw err;
         }
         if (
@@ -917,11 +1112,15 @@ export class OfferService {
       return rows.filter(
         (r) => r.offer.status.toLowerCase() === statusFilter.toLowerCase()
       ) as SentOfferDto[];
-    } catch {
+    } catch (err) {
       if (process.env.NODE_ENV === "production") {
-        return [];
+        console.error("Database query failed in getSentOffers:", err);
+        throw new Error("FAILED_TO_FETCH_SENT_OFFERS", { cause: err });
       }
-      // Fall through to in-memory fallback
+      if (!process.env.VITEST) {
+        throw err;
+      }
+      // Fall through to in-memory fallback for Vitest
     }
 
     // In-memory fallback
@@ -977,11 +1176,15 @@ export class OfferService {
         .orderBy(desc(schema.offers.createdAt));
 
       return rows as ReceivedOfferDto[];
-    } catch {
+    } catch (err) {
       if (process.env.NODE_ENV === "production") {
-        return [];
+        console.error("Database query failed in getReceivedOffers:", err);
+        throw new Error("FAILED_TO_FETCH_RECEIVED_OFFERS", { cause: err });
       }
-      // Fall through to in-memory fallback
+      if (!process.env.VITEST) {
+        throw err;
+      }
+      // Fall through to in-memory fallback for Vitest
     }
 
     const filtered = inMemoryReceivedOffers.filter(
@@ -998,25 +1201,28 @@ export class OfferService {
    * the offeror or the listing owner (preventing IDOR).
    */
   static async getOfferById(viewerUserId: string, offerId: string) {
-    const isOfferUuid =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(offerId);
+    const isOfferUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      offerId
+    );
 
     if (!isOfferUuid) {
-      const sent = inMemorySentOffers.find((s) => s.offer.id === offerId);
-      if (sent) {
-        const ownerId = (sent.listing as { ownerUserId?: string }).ownerUserId;
-        if (sent.offer.offerorUserId !== viewerUserId && ownerId && ownerId !== viewerUserId) {
-          return null;
+      if (process.env.VITEST) {
+        const sent = inMemorySentOffers.find((s) => s.offer.id === offerId);
+        if (sent) {
+          const ownerId = (sent.listing as { ownerUserId?: string }).ownerUserId;
+          if (sent.offer.offerorUserId !== viewerUserId && ownerId && ownerId !== viewerUserId) {
+            return null;
+          }
+          return {
+            offer: sent.offer,
+            listing: sent.listing as unknown as typeof schema.listings.$inferSelect,
+            offerorProfile: {
+              userId: sent.offer.offerorUserId,
+              handle: "demokullanici",
+              displayName: "Demir Yıldız",
+            } as unknown as typeof schema.profiles.$inferSelect,
+          };
         }
-        return {
-          offer: sent.offer,
-          listing: sent.listing as unknown as typeof schema.listings.$inferSelect,
-          offerorProfile: {
-            userId: sent.offer.offerorUserId,
-            handle: "demokullanici",
-            displayName: "Demir Yıldız",
-          } as unknown as typeof schema.profiles.$inferSelect,
-        };
       }
       return null;
     }
@@ -1073,8 +1279,12 @@ export class OfferService {
       }
     }
 
-    const isUserUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(offerorUserId);
-    const dbKey = input.idempotencyKey ? `batch:offers:${offerorUserId}:${input.idempotencyKey}` : null;
+    const isUserUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      offerorUserId
+    );
+    const dbKey = input.idempotencyKey
+      ? `batch:offers:${offerorUserId}:${input.idempotencyKey}`
+      : null;
 
     if (dbKey && isUserUuid) {
       try {
@@ -1114,7 +1324,12 @@ export class OfferService {
         ) {
           throw err;
         }
-        if (err && typeof err === "object" && "code" in err && (err as { code: string }).code === "23505") {
+        if (
+          err &&
+          typeof err === "object" &&
+          "code" in err &&
+          (err as { code: string }).code === "23505"
+        ) {
           throw new Error(
             isEn
               ? "A batch submission with this idempotency key is already in progress or completed."
@@ -1304,8 +1519,13 @@ export class OfferService {
   /**
    * Retrieves quick offer templates with database persistence and starter fallback.
    */
-  static async getUserOfferTemplatesAsync(userId: string, locale?: string): Promise<OfferTemplateDto[]> {
-    const isUserUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
+  static async getUserOfferTemplatesAsync(
+    userId: string,
+    locale?: string
+  ): Promise<OfferTemplateDto[]> {
+    const isUserUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      userId
+    );
     if (isUserUuid) {
       try {
         const db = getDb();
@@ -1321,8 +1541,7 @@ export class OfferService {
             userId: r.userId,
             name: r.name,
             message: r.message,
-            budgetCurrency:
-              (r.budgetCurrency as "TRY" | "USD" | "EUR" | "GBP" | null) || null,
+            budgetCurrency: (r.budgetCurrency as "TRY" | "USD" | "EUR" | "GBP" | null) || null,
             budgetMin: r.budgetMin,
             budgetMax: r.budgetMax,
             estimatedDurationValue: r.estimatedDurationValue,
@@ -1341,8 +1560,13 @@ export class OfferService {
   /**
    * Saves or updates a quick offer template with database persistence and strict ownership validation.
    */
-  static async saveOfferTemplateAsync(userId: string, rawInput: OfferTemplateInput): Promise<OfferTemplateDto> {
-    const isUserUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
+  static async saveOfferTemplateAsync(
+    userId: string,
+    rawInput: OfferTemplateInput
+  ): Promise<OfferTemplateDto> {
+    const isUserUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      userId
+    );
     const inputId = rawInput.id;
     const isInputUuid =
       typeof inputId === "string" &&
@@ -1413,7 +1637,9 @@ export class OfferService {
    * Deletes a quick offer template from the database and memory with accurate result representation.
    */
   static async deleteOfferTemplateAsync(userId: string, templateId: string): Promise<boolean> {
-    const isUserUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
+    const isUserUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      userId
+    );
     const isTemplateUuid =
       typeof templateId === "string" &&
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(templateId);
@@ -1425,10 +1651,7 @@ export class OfferService {
         const deletedRows = await db
           .delete(schema.offerTemplates)
           .where(
-            and(
-              eq(schema.offerTemplates.id, templateId),
-              eq(schema.offerTemplates.userId, userId)
-            )
+            and(eq(schema.offerTemplates.id, templateId), eq(schema.offerTemplates.userId, userId))
           )
           .returning({ id: schema.offerTemplates.id });
         dbDeleted = deletedRows.length > 0;
@@ -1444,5 +1667,58 @@ export class OfferService {
 
     const memDeleted = OfferService.deleteOfferTemplate(userId, templateId);
     return dbDeleted || memDeleted;
+  }
+
+  /**
+   * T-13: Fetches revision history for a specific offer.
+   * Requires viewer to be either the offeror or the listing owner (IDOR protection).
+   */
+  static async getOfferRevisions(viewerUserIdOrOfferId: string, offerId?: string) {
+    const targetOfferId = offerId ?? viewerUserIdOrOfferId;
+    const viewerUserId = offerId ? viewerUserIdOrOfferId : "";
+    if (!targetOfferId) return [];
+
+    if (viewerUserId) {
+      const offerData = await OfferService.getOfferById(viewerUserId, targetOfferId);
+      if (!offerData) {
+        throw new Error("UNAUTHORIZED_OFFER_REVISIONS_VIEW");
+      }
+    }
+
+    try {
+      const db = getDb();
+      return await db
+        .select({
+          id: schema.offerRevisions.id,
+          offerId: schema.offerRevisions.offerId,
+          revisionNo: schema.offerRevisions.revisionNo,
+          snapshotJson: schema.offerRevisions.snapshotJson,
+          createdAt: schema.offerRevisions.createdAt,
+        })
+        .from(schema.offerRevisions)
+        .where(eq(schema.offerRevisions.offerId, targetOfferId))
+        .orderBy(desc(schema.offerRevisions.revisionNo));
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Cleans up expired idempotency keys older than their expiration timestamp.
+   */
+  static async cleanupExpiredIdempotencyKeys(referenceTime: Date = new Date()): Promise<number> {
+    try {
+      const db = getDb();
+      const deleted = await db
+        .delete(schema.idempotencyKeys)
+        .where(lt(schema.idempotencyKeys.expiresAt, referenceTime))
+        .returning({ key: schema.idempotencyKeys.key });
+      return deleted.length;
+    } catch (err) {
+      if (process.env.NODE_ENV === "production") {
+        throw err;
+      }
+      return 0;
+    }
   }
 }

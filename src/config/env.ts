@@ -18,14 +18,45 @@ export const envSchema = z.object({
 
   PII_ENCRYPTION_KEY_CURRENT: hexKeySchema,
   PII_ENCRYPTION_KEY_PREVIOUS: hexKeySchema.optional().or(z.literal("")),
+  PII_KEYRING_JSON: z
+    .string()
+    .optional()
+    .refine(
+      (val) => {
+        if (!val) return true;
+        try {
+          const parsed = JSON.parse(val);
+          if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return false;
+          for (const [k, v] of Object.entries(parsed)) {
+            if (!/^[a-zA-Z0-9_-]{1,32}$/.test(k)) return false;
+            if (typeof v !== "string" || !/^[0-9a-fA-F]{64}$/.test(v)) return false;
+          }
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      { message: "PII_KEYRING_JSON must be valid JSON mapping keyId (1-32 chars) to 64-hex key" }
+    ),
+  PII_CURRENT_KEY_ID: z
+    .string()
+    .regex(
+      /^[a-zA-Z0-9_-]{1,32}$/,
+      "PII_CURRENT_KEY_ID must be 1-32 alphanumeric/underscore/dash chars"
+    )
+    .default("k1"),
   PII_HMAC_KEY: hexKeySchema,
 
   EMAIL_PROVIDER: z.enum(["mock", "resend", "smtp"]).default("mock"),
   EMAIL_FROM: z.string().email().default("noreply@operis.pro"),
   EMAIL_API_KEY: z.string().optional(),
+  RESEND_API_KEY: z.string().optional(),
 
   SMS_PROVIDER: z.enum(["mock", "twilio", "netgsm"]).default("mock"),
   SMS_API_KEY: z.string().optional(),
+  NETGSM_USERCODE: z.string().optional(),
+  NETGSM_PASSWORD: z.string().optional(),
+  NETGSM_HEADER: z.string().optional(),
 
   OBSERVABILITY_PII_REDACTION: z
     .string()
@@ -44,6 +75,35 @@ export const envSchema = z.object({
     .string()
     .transform((val) => val === "true")
     .default("false"),
+
+  NEXT_PUBLIC_SUPABASE_URL: z.string().url().optional(),
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().optional(),
+  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: z.string().optional(),
+
+  // Clerk Authentication
+  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: z.string().optional(),
+  CLERK_SECRET_KEY: z.string().optional(),
+  CLERK_WEBHOOK_SIGNING_SECRET: z.string().optional(),
+
+  // Analytics (PostHog)
+  NEXT_PUBLIC_POSTHOG_KEY: z.string().optional(),
+  NEXT_PUBLIC_POSTHOG_HOST: z.string().optional().default("https://eu.i.posthog.com"),
+
+  // Cloudflare Turnstile Bot Shield
+  NEXT_PUBLIC_TURNSTILE_SITE_KEY: z.string().optional(),
+  TURNSTILE_SECRET_KEY: z.string().optional(),
+
+  // Error Tracking (Sentry)
+  NEXT_PUBLIC_SENTRY_DSN: z.string().optional(),
+  SENTRY_AUTH_TOKEN: z.string().optional(),
+
+  // Serverless Redis & Rate Limiting (Upstash)
+  UPSTASH_REDIS_REST_URL: z.string().optional(),
+  UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
+
+  // Serverless Background Workflows & Queues (Inngest)
+  INNGEST_EVENT_KEY: z.string().optional(),
+  INNGEST_SIGNING_KEY: z.string().optional(),
 
   // Legal operator fields
   LEGAL_ENTITY_NAME: z.string().min(1),

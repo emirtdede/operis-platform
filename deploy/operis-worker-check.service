@@ -1,0 +1,15 @@
+[Unit]
+Description=Operis Worker Healthcheck & Observer Probe
+After=operis-worker.service
+
+[Service]
+Type=oneshot
+User=operis
+Group=operis
+WorkingDirectory=/var/www/operis
+Environment=NODE_ENV=production
+Environment=WORKER_HEARTBEAT_FILE=/run/operis/operis-worker-heartbeat.json
+ExecStart=/usr/bin/pnpm tsx scripts/check-worker-health.ts --probe-db
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=operis-worker-check

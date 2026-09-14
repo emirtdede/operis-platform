@@ -1,7 +1,17 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { X, Zap, Sparkles, SlidersHorizontal, Check, AlertCircle, ArrowRight } from "lucide-react";
+import {
+  X,
+  Zap,
+  Sparkles,
+  SlidersHorizontal,
+  Check,
+  AlertCircle,
+  ArrowRight,
+  BookmarkPlus,
+  Trash2,
+} from "lucide-react";
 import { Button } from "../ui/button";
 import { TextArea } from "../ui/text-area";
 import { TextInput } from "../ui/text-input";
@@ -91,6 +101,12 @@ export function QuickOfferDrawer({
   const [timelineValue, setTimelineValue] = useState("2");
   const [timelineUnit, setTimelineUnit] = useState<"DAYS" | "WEEKS" | "MONTHS">("WEEKS");
 
+  // Save template state
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [templateSaveName, setTemplateSaveName] = useState("");
+  const [isSavingTemplate, setIsSavingTemplate] = useState(false);
+  const [templateSaveError, setTemplateSaveError] = useState<string | null>(null);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -162,6 +178,75 @@ export function QuickOfferDrawer({
     }
   }, [isOpen, locale, isTr, applyTemplate]);
 
+  // Save current proposal as new template
+  const handleSaveAsTemplate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!templateSaveName.trim()) return;
+    setIsSavingTemplate(true);
+    setTemplateSaveError(null);
+    try {
+      const res = await fetch("/api/offers/templates", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-locale": locale,
+        },
+        body: JSON.stringify({
+          name: templateSaveName.trim(),
+          message: message.trim(),
+          budgetCurrency: budgetMin || budgetMax ? budgetCurrency : null,
+          budgetMin: budgetMin || null,
+          budgetMax: budgetMax || null,
+          estimatedDurationValue: timelineValue ? parseInt(timelineValue, 10) : null,
+          estimatedDurationUnit: timelineValue ? timelineUnit : null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(
+          data.error || (isTr ? "Şablon kaydedilemedi." : "Failed to save template.")
+        );
+      }
+      setShowSaveModal(false);
+      setTemplateSaveName("");
+      // Refresh templates
+      const updatedRes = await fetch(`/api/offers/templates?locale=${locale}`, {
+        headers: { "x-locale": locale },
+      });
+      if (updatedRes.ok) {
+        const d = await updatedRes.json();
+        if (d.templates) {
+          setTemplates(d.templates);
+          if (data.template?.id) {
+            setSelectedTemplateId(data.template.id);
+          }
+        }
+      }
+    } catch (err: unknown) {
+      setTemplateSaveError(err instanceof Error ? err.message : "Error");
+    } finally {
+      setIsSavingTemplate(false);
+    }
+  };
+
+  const handleDeleteTemplate = async (tplId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      const res = await fetch(`/api/offers/templates?id=${tplId}`, {
+        method: "DELETE",
+        headers: { "x-locale": locale },
+      });
+      if (res.ok) {
+        setTemplates((prev) => prev.filter((t) => t.id !== tplId));
+        if (selectedTemplateId === tplId && templates.length > 0) {
+          applyTemplate(templates[0]!);
+        }
+      }
+    } catch {
+      // ignore
+    }
+  };
+
   // Escape key to close
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -208,9 +293,7 @@ export function QuickOfferDrawer({
 
     if ((budgetMin && parseFloat(budgetMin) < 0) || (budgetMax && parseFloat(budgetMax) < 0)) {
       setError(
-        isTr
-          ? "Bütçe tutarları sıfırdan küçük olamaz."
-          : "Budget amounts cannot be negative."
+        isTr ? "Bütçe tutarları sıfırdan küçük olamaz." : "Budget amounts cannot be negative."
       );
       return;
     }
@@ -225,11 +308,7 @@ export function QuickOfferDrawer({
     }
 
     if (timelineValue && parseInt(timelineValue, 10) <= 0) {
-      setError(
-        isTr
-          ? "Tahmini süre en az 1 olmalıdır."
-          : "Estimated duration must be at least 1."
-      );
+      setError(isTr ? "Tahmini süre en az 1 olmalıdır." : "Estimated duration must be at least 1.");
       return;
     }
 
@@ -384,24 +463,55 @@ export function QuickOfferDrawer({
                   </span>
                 </div>
 
-                <div className="flex flex-wrap gap-2">
-                  {templates.map((tpl) => (
-                    <button
-                      key={tpl.id}
-                      type="button"
-                      onClick={() => {
-                        applyTemplate(tpl);
-                        hasUserEditedRef.current = false;
-                      }}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer border ${
-                        selectedTemplateId === tpl.id
-                          ? "bg-blue-500/15 border-blue-500/40 text-blue-400 font-semibold"
-                          : "bg-[var(--color-surface-hover)] border-[var(--color-border-subtle)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
-                      }`}
-                    >
-                      {tpl.name}
-                    </button>
-                  ))}
+                <div className="flex flex-wrap items-center gap-2">
+                  {templates.map((tpl) => {
+                    const isCustom = !tpl.id.startsWith("default-");
+                    return (
+                      <div
+                        key={tpl.id}
+                        onClick={() => {
+                          applyTemplate(tpl);
+                          hasUserEditedRef.current = false;
+                        }}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer border ${
+                          selectedTemplateId === tpl.id
+                            ? "bg-blue-500/15 border-blue-500/40 text-blue-400 font-semibold"
+                            : "bg-[var(--color-surface-hover)] border-[var(--color-border-subtle)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+                        }`}
+                      >
+                        <span>{tpl.name}</span>
+                        {isCustom && (
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteTemplate(tpl.id, e)}
+                            title={isTr ? "Şablonu Sil" : "Delete Preset"}
+                            className="text-[var(--color-text-tertiary)] hover:text-red-400 p-0.5 rounded transition-colors"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  <button
+                    type="button"
+                    onClick={() => setShowSaveModal(true)}
+                    disabled={message.length < 50}
+                    title={
+                      message.length < 50
+                        ? isTr
+                          ? "Şablon kaydetmek için en az 50 karakter yazınız"
+                          : "Write at least 50 characters to save as preset"
+                        : isTr
+                          ? "Bu teklifi yeni şablon olarak kaydet"
+                          : "Save this offer as new preset"
+                    }
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs border border-dashed border-blue-500/40 text-blue-400 hover:bg-blue-500/10 disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
+                  >
+                    <BookmarkPlus className="h-3.5 w-3.5" />
+                    <span>{isTr ? "+ Şablon Yap" : "+ Save Preset"}</span>
+                  </button>
                 </div>
               </div>
 
@@ -554,6 +664,84 @@ export function QuickOfferDrawer({
           )}
         </div>
       </div>
+
+      {/* Save Template Modal */}
+      {showSaveModal && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in"
+        >
+          <form
+            onSubmit={handleSaveAsTemplate}
+            className="relative w-full max-w-sm rounded-3xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)] p-6 shadow-2xl space-y-4"
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-[var(--color-text-primary)]">
+                {isTr ? "Yeni Teklif Şablonu Kaydet" : "Save as Offer Preset"}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowSaveModal(false)}
+                className="p-1 rounded-lg text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)]"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-[var(--color-text-secondary)]">
+              {isTr
+                ? "Mevcut teklif metniniz ve ticari şartlarınız gelecekteki ilanlara hızlı teklif verebilmeniz için hesabınıza kaydedilecektir."
+                : "Your current message and terms will be saved to your account for one-click reuse."}
+            </p>
+
+            {templateSaveError && (
+              <div className="p-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-xs text-red-400">
+                {templateSaveError}
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-[var(--color-text-secondary)]">
+                {isTr ? "Şablon Adı" : "Preset Name"}
+              </label>
+              <TextInput
+                value={templateSaveName}
+                onChange={(e) => setTemplateSaveName(e.target.value)}
+                placeholder={isTr ? "Örn: React & Next.js Projeleri" : "e.g., Full Stack Web Apps"}
+                required
+                className="text-xs"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setShowSaveModal(false)}
+                disabled={isSavingTemplate}
+              >
+                {isTr ? "Vazgeç" : "Cancel"}
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                size="sm"
+                disabled={isSavingTemplate || !templateSaveName.trim()}
+              >
+                {isSavingTemplate
+                  ? isTr
+                    ? "Kaydediliyor..."
+                    : "Saving..."
+                  : isTr
+                    ? "Kaydet"
+                    : "Save"}
+              </Button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

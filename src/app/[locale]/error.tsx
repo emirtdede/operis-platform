@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import * as Sentry from "@sentry/nextjs";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -45,6 +46,7 @@ export default function GlobalErrorBoundary({
       : "500 — Something Went Wrong | Operis";
     // Log error securely without exposing PII
     console.error("Application error captured by boundary:", error.message);
+    Sentry.captureException(error);
   }, [error, isTr]);
 
   const handleCopyCode = () => {

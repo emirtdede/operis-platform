@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { History } from "lucide-react";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
+import { OfferRevisionsModal } from "../offers/offer-revisions-modal";
 import { AvatarInitials } from "../ui/avatar-initials";
 import { Dialog } from "../ui/dialog";
 import { Select } from "../ui/select";
@@ -37,6 +39,8 @@ export interface ReceivedOffersDashboardProps {
 export function ReceivedOffersDashboard({ initialOffers, locale }: ReceivedOffersDashboardProps) {
   const isTr = locale === "tr";
   const [offers, setOffers] = useState<ReceivedOfferItem[]>(initialOffers);
+  const [filter, setFilter] = useState<string>("all");
+  const [selectedOfferForRevisions, setSelectedOfferForRevisions] = useState<string | null>(null);
 
   // Accept Modal State
   const [acceptingOffer, setAcceptingOffer] = useState<ReceivedOfferItem | null>(null);
@@ -49,6 +53,23 @@ export function ReceivedOffersDashboard({ initialOffers, locale }: ReceivedOffer
   const [rejectionNote, setRejectionNote] = useState<string>("");
   const [isRejecting, setIsRejecting] = useState(false);
   const [rejectError, setRejectError] = useState<string | null>(null);
+
+  const filteredOffers = offers.filter((o) => {
+    if (filter === "all") return true;
+    if (filter === "cancelled") {
+      return (
+        o.status === "CANCELLED_ENGAGEMENT" ||
+        o.status === "CANCELLED" ||
+        o.status === "EXPIRED_LISTING" ||
+        o.status === "EXPIRED_LISTING_INACTIVE" ||
+        o.status === "VOID_MODERATION"
+      );
+    }
+    if (filter === "rejected") {
+      return o.status.toLowerCase().startsWith("rejected");
+    }
+    return o.status.toLowerCase() === filter.toLowerCase();
+  });
 
   const handleAcceptConfirm = async () => {
     if (!acceptingOffer) return;
@@ -65,9 +86,29 @@ export function ReceivedOffersDashboard({ initialOffers, locale }: ReceivedOffer
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to accept offer");
 
+      if (!data?.engagement?.id) {
+        throw new Error(
+          isTr ? "Eşleşme kaydı oluşturulamadı." : "Failed to retrieve engagement ID."
+        );
+      }
+
+      setOffers((prev) =>
+        prev.map((o) => {
+          if (o.id === acceptingOffer.id) {
+            return { ...o, status: "ACCEPTED", engagementId: data.engagement.id };
+          }
+          if (o.listingId === acceptingOffer.listingId && o.status === "PENDING") {
+            return { ...o, status: "REJECTED_OTHER_SELECTED" };
+          }
+          return o;
+        })
+      );
+
       // Redirect to match page
       const targetPath = getLocalizedWorkspacePath(data.engagement.id, locale);
-      window.location.href = targetPath;
+      if (typeof window !== "undefined") {
+        window.location.href = targetPath;
+      }
     } catch (err: unknown) {
       setAcceptError(err instanceof Error ? err.message : "Error accepting offer");
       setIsAccepting(false);
@@ -107,27 +148,85 @@ export function ReceivedOffersDashboard({ initialOffers, locale }: ReceivedOffer
 
   return (
     <div className="space-y-6">
-      {offers.length === 0 ? (
+      {/* Filter Tabs */}
+      <div className="flex items-center gap-1 border-b border-[var(--color-border-subtle)] pb-4 overflow-x-auto">
+        {(["all", "pending", "accepted", "rejected", "cancelled", "withdrawn"] as const).map(
+          (f) => (
+            <button
+              key={f}
+              type="button"
+              onClick={() => setFilter(f)}
+              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                filter === f
+                  ? "bg-[var(--color-surface-hover)] text-[var(--color-text-primary)] font-semibold"
+                  : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+              }`}
+            >
+              {f === "all"
+                ? isTr
+                  ? "Tümü"
+                  : "All"
+                : f === "pending"
+                  ? isTr
+                    ? "Beklemede"
+                    : "Pending"
+                  : f === "accepted"
+                    ? isTr
+                      ? "Kabul Edilenler"
+                      : "Accepted"
+                    : f === "rejected"
+                      ? isTr
+                        ? "Reddedilenler"
+                        : "Rejected"
+                      : f === "cancelled"
+                        ? isTr
+                          ? "İptal Edilenler"
+                          : "Cancelled"
+                        : isTr
+                          ? "Geri Çekilenler"
+                          : "Withdrawn"}
+            </button>
+          )
+        )}
+      </div>
+
+      {filteredOffers.length === 0 ? (
         <div className="rounded-3xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/70 backdrop-blur-xl p-8 sm:p-12 text-center shadow-sm">
-          <EmptyState
-            title={isTr ? "Henüz teklif alınmadı" : "No received offers yet"}
-            description={
-              isTr
-                ? "İlanlarınıza teklif geldiğinde bu ekranda listelenecektir."
-                : "Offers submitted to your listings will appear here."
-            }
-            action={
-              <Link href={isTr ? "/tr/panel/ilanlarim" : "/en/dashboard/listings"}>
-                <Button variant="secondary">
-                  {isTr ? "İlanlarımı İncele" : "View My Listings"}
+          {offers.length === 0 ? (
+            <EmptyState
+              title={isTr ? "Henüz teklif alınmadı" : "No received offers yet"}
+              description={
+                isTr
+                  ? "İlanlarınıza teklif geldiğinde bu ekranda listelenecektir."
+                  : "Offers submitted to your listings will appear here."
+              }
+              action={
+                <Link href={isTr ? "/tr/panel/ilanlarim" : "/en/dashboard/listings"}>
+                  <Button variant="secondary">
+                    {isTr ? "İlanlarımı İncele" : "View My Listings"}
+                  </Button>
+                </Link>
+              }
+            />
+          ) : (
+            <EmptyState
+              title={isTr ? "Teklif bulunamadı" : "No offers found"}
+              description={
+                isTr
+                  ? "Seçilen filtreye uygun gelen teklif bulunmuyor."
+                  : "No incoming proposals match this filter criteria."
+              }
+              action={
+                <Button variant="secondary" onClick={() => setFilter("all")}>
+                  {isTr ? "Tüm Teklifleri Göster" : "Show All Offers"}
                 </Button>
-              </Link>
-            }
-          />
+              }
+            />
+          )}
         </div>
       ) : (
         <div className="space-y-4">
-          {offers.map((offer) => {
+          {filteredOffers.map((offer) => {
             const dateStr = new Date(offer.createdAt).toLocaleDateString(isTr ? "tr-TR" : "en-US");
 
             return (
@@ -153,18 +252,49 @@ export function ReceivedOffersDashboard({ initialOffers, locale }: ReceivedOffer
                   </Link>
 
                   <div className="flex items-center gap-2">
-                    <Badge
-                      variant={
-                        offer.status === "ACCEPTED"
-                          ? "primary"
-                          : offer.status === "PENDING"
-                            ? "secondary"
-                            : "outline"
+                    {(() => {
+                      let badgeVariant: "success" | "secondary" | "danger" | "neutral" | "outline" =
+                        "outline";
+                      let badgeLabel = offer.status;
+
+                      if (offer.status === "ACCEPTED") {
+                        badgeVariant = "success";
+                        badgeLabel = isTr ? "Kabul Edildi" : "Accepted";
+                      } else if (offer.status === "PENDING") {
+                        badgeVariant = "secondary";
+                        badgeLabel = isTr ? "Beklemede" : "Pending";
+                      } else if (
+                        offer.status === "CANCELLED_ENGAGEMENT" ||
+                        offer.status === "CANCELLED"
+                      ) {
+                        badgeVariant = "danger";
+                        badgeLabel = isTr ? "İş İptal Edildi" : "Cancelled";
+                      } else if (
+                        offer.status === "EXPIRED_LISTING" ||
+                        offer.status === "EXPIRED_LISTING_INACTIVE"
+                      ) {
+                        badgeVariant = "neutral";
+                        badgeLabel = isTr ? "İlan Süresi Doldu" : "Listing Expired";
+                      } else if (offer.status === "VOID_MODERATION") {
+                        badgeVariant = "danger";
+                        badgeLabel = isTr ? "Yönetimce İptal" : "Voided by Admin";
+                      } else if (offer.status === "REJECTED_OTHER_SELECTED") {
+                        badgeVariant = "neutral";
+                        badgeLabel = isTr ? "Başka Teklif Seçildi" : "Other Selected";
+                      } else if (offer.status.toLowerCase().startsWith("rejected")) {
+                        badgeVariant = "danger";
+                        badgeLabel = isTr ? "Reddedildi" : "Rejected";
+                      } else if (offer.status === "WITHDRAWN") {
+                        badgeVariant = "outline";
+                        badgeLabel = isTr ? "Geri Çekildi" : "Withdrawn";
                       }
-                      size="sm"
-                    >
-                      {offer.status}
-                    </Badge>
+
+                      return (
+                        <Badge variant={badgeVariant} size="sm">
+                          {badgeLabel}
+                        </Badge>
+                      );
+                    })()}
                     <span className="text-xs text-[var(--color-text-tertiary)]">{dateStr}</span>
                   </div>
                 </div>
@@ -197,6 +327,18 @@ export function ReceivedOffersDashboard({ initialOffers, locale }: ReceivedOffer
                         {offer.estimatedDurationValue} {offer.estimatedDurationUnit}
                       </span>
                     )}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSelectedOfferForRevisions(offer.id)}
+                      title={isTr ? "Revizyon Geçmişi" : "Revision History"}
+                    >
+                      <History className="h-3.5 w-3.5 mr-1" />
+                      {isTr ? "Geçmiş" : "History"}
+                    </Button>
                   </div>
 
                   {/* Actions for PENDING offers */}
@@ -342,6 +484,15 @@ export function ReceivedOffersDashboard({ initialOffers, locale }: ReceivedOffer
             </div>
           </div>
         </Dialog>
+      )}
+      {/* Offer Revisions Modal */}
+      {selectedOfferForRevisions && (
+        <OfferRevisionsModal
+          offerId={selectedOfferForRevisions}
+          isOpen={Boolean(selectedOfferForRevisions)}
+          onClose={() => setSelectedOfferForRevisions(null)}
+          locale={locale}
+        />
       )}
     </div>
   );

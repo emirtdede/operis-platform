@@ -168,77 +168,90 @@ export const listingWizardSchema = z
 
 export type ListingWizardInput = z.infer<typeof listingWizardSchema>;
 
-export const updateListingInputSchema = z.object({
-  title: z
-    .string()
-    .trim()
-    .min(20, "Title must be at least 20 characters")
-    .max(120, "Title cannot exceed 120 characters")
-    .refine((val) => !EMOJI_REGEX.test(val), "Title cannot contain emojis")
-    .refine(validateNoCapsSpam, "Title cannot be all uppercase letters")
-    .refine(
-      (val) => validateContentAppropriateness(val).isValid,
-      "Başlık topluluk kurallarına aykırı veya uygunsuz ifadeler içeremez"
-    )
-    .optional(),
-  summary: z
-    .string()
-    .trim()
-    .min(80, "Summary must be at least 80 characters")
-    .max(280, "Summary cannot exceed 280 characters")
-    .refine((val) => !EMOJI_REGEX.test(val), "Summary cannot contain emojis")
-    .refine(
-      (val) => validateContentAppropriateness(val).isValid,
-      "Özet topluluk kurallarına aykırı veya uygunsuz ifadeler içeremez"
-    )
-    .optional(),
-  scope: z
-    .string()
-    .trim()
-    .min(200, "Scope must be at least 200 characters to provide sufficient project detail")
-    .max(6000, "Scope cannot exceed 6000 characters")
-    .refine((val) => !EMOJI_REGEX.test(val), "Scope cannot contain emojis")
-    .refine(
-      (val) => validateContentAppropriateness(val).isValid,
-      "Kapsam metni topluluk kurallarına aykırı veya uygunsuz ifadeler içeremez"
-    )
-    .optional(),
-  tags: z
-    .array(
-      z
-        .string()
-        .max(32, "Tag cannot exceed 32 characters")
-        .trim()
-        .refine((val) => !EMOJI_REGEX.test(val), "Tag cannot contain emojis")
-    )
-    .max(8, "You can select at most 8 technology tags")
-    .optional(),
-  budgetMin: z
-    .union([z.string(), z.number()])
-    .optional()
-    .nullable()
-    .refine(
-      (val) => {
-        if (val === undefined || val === null || val === "") return true;
-        const num = typeof val === "string" ? parseFloat(val) : Number(val);
-        return !isNaN(num) && isFinite(num) && num > 0;
-      },
-      { message: "Minimum budget must be a positive number" }
-    ),
-  budgetMax: z
-    .union([z.string(), z.number()])
-    .optional()
-    .nullable()
-    .refine(
-      (val) => {
-        if (val === undefined || val === null || val === "") return true;
-        const num = typeof val === "string" ? parseFloat(val) : Number(val);
-        return !isNaN(num) && isFinite(num) && num > 0;
-      },
-      { message: "Maximum budget must be a positive number" }
-    ),
-  budgetMode: z.enum(BUDGET_MODES).optional(),
-})
+export const updateListingInputSchema = z
+  .object({
+    title: z
+      .string()
+      .trim()
+      .min(20, "Title must be at least 20 characters")
+      .max(120, "Title cannot exceed 120 characters")
+      .refine((val) => !EMOJI_REGEX.test(val), "Title cannot contain emojis")
+      .refine(validateNoCapsSpam, "Title cannot be all uppercase letters")
+      .refine(
+        (val) => validateContentAppropriateness(val).isValid,
+        "Başlık topluluk kurallarına aykırı veya uygunsuz ifadeler içeremez"
+      )
+      .optional(),
+    summary: z
+      .string()
+      .trim()
+      .min(80, "Summary must be at least 80 characters")
+      .max(280, "Summary cannot exceed 280 characters")
+      .refine((val) => !EMOJI_REGEX.test(val), "Summary cannot contain emojis")
+      .refine(
+        (val) => validateContentAppropriateness(val).isValid,
+        "Özet topluluk kurallarına aykırı veya uygunsuz ifadeler içeremez"
+      )
+      .optional(),
+    scope: z
+      .string()
+      .trim()
+      .min(200, "Scope must be at least 200 characters to provide sufficient project detail")
+      .max(6000, "Scope cannot exceed 6000 characters")
+      .refine((val) => !EMOJI_REGEX.test(val), "Scope cannot contain emojis")
+      .refine(
+        (val) => validateContentAppropriateness(val).isValid,
+        "Kapsam metni topluluk kurallarına aykırı veya uygunsuz ifadeler içeremez"
+      )
+      .optional(),
+    tags: z
+      .array(
+        z
+          .string()
+          .max(32, "Tag cannot exceed 32 characters")
+          .trim()
+          .refine((val) => !EMOJI_REGEX.test(val), "Tag cannot contain emojis")
+      )
+      .max(8, "You can select at most 8 technology tags")
+      .optional(),
+    budgetMin: z
+      .union([z.string(), z.number()])
+      .optional()
+      .nullable()
+      .refine(
+        (val) => {
+          if (val === undefined || val === null || val === "") return true;
+          if (typeof val === "number") return !isNaN(val) && isFinite(val) && val > 0;
+          if (typeof val === "string") {
+            const trimmed = val.trim();
+            if (!/^\d+(\.\d{1,2})?$/.test(trimmed)) return false;
+            const num = Number(trimmed);
+            return !isNaN(num) && isFinite(num) && num > 0;
+          }
+          return false;
+        },
+        { message: "Minimum budget must be a positive valid number" }
+      ),
+    budgetMax: z
+      .union([z.string(), z.number()])
+      .optional()
+      .nullable()
+      .refine(
+        (val) => {
+          if (val === undefined || val === null || val === "") return true;
+          if (typeof val === "number") return !isNaN(val) && isFinite(val) && val > 0;
+          if (typeof val === "string") {
+            const trimmed = val.trim();
+            if (!/^\d+(\.\d{1,2})?$/.test(trimmed)) return false;
+            const num = Number(trimmed);
+            return !isNaN(num) && isFinite(num) && num > 0;
+          }
+          return false;
+        },
+        { message: "Maximum budget must be a positive valid number" }
+      ),
+    budgetMode: z.enum(BUDGET_MODES).optional(),
+  })
   .refine(
     (data) => {
       if (
@@ -262,6 +275,25 @@ export const updateListingInputSchema = z.object({
     {
       message: "Minimum budget cannot exceed maximum budget",
       path: ["budgetMin"],
+    }
+  )
+  .refine(
+    (data) => {
+      if (data.budgetMode === "FIXED_RANGE" || data.budgetMode === "HOURLY_RANGE") {
+        if (data.budgetMin === null || data.budgetMax === null) {
+          return false;
+        }
+      }
+      if (data.budgetMode === "FIXED_EXACT" || data.budgetMode === "HOURLY_EXACT") {
+        if (data.budgetMin === null && data.budgetMax === null) {
+          return false;
+        }
+      }
+      return true;
+    },
+    {
+      message: "Budget amounts cannot be null for exact or range budget modes",
+      path: ["budgetMode"],
     }
   );
 

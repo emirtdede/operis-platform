@@ -1,14 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { eq, or } from "drizzle-orm";
 import { getDb, schema } from "@/src/lib/db";
 import { createPasswordResetToken } from "@/src/modules/auth/password-reset";
 import { EmailAdapter } from "@/src/lib/email";
-import {
-  checkRateLimit,
-  getClientIp,
-  rateLimitExceededResponse,
-} from "@/src/lib/security/rate-limit";
+import { hashEmailBlindIndex } from "@/src/lib/crypto";
+import { evaluateSecurityAccessAsync, getClientIp } from "@/src/lib/security/rate-limit";
+import { verifyTurnstileToken } from "@/src/lib/security/turnstile";
 
 const createForgotPasswordSchema = (isEn: boolean) =>
   z.object({
@@ -23,20 +21,38 @@ export async function POST(req: Request) {
   const headerLocale = req.headers.get("x-locale");
   const isEnHeader = headerLocale === "en";
 
-  const limitCheck = checkRateLimit(`auth:forgot-pwd:${ip}`, 3, 15 * 60 * 1000);
-  if (!limitCheck.success) {
-    return rateLimitExceededResponse(
-      limitCheck.reset,
-      isEnHeader
-        ? "Too many password reset requests. Please try again later."
-        : "Kısa sürede çok fazla şifre sıfırlama isteği gönderildi. Lütfen daha sonra tekrar deneyiniz."
-    );
+  const access = await evaluateSecurityAccessAsync({
+    ip,
+    purpose: "auth:forgot-pwd",
+    limit: 3,
+    windowMs: 15 * 60 * 1000,
+    isEn: isEnHeader,
+  });
+  if (!access.allowed) {
+    return access.response;
   }
 
   try {
     const body = await req.json();
     const isEnCandidate = body?.locale === "en" || isEnHeader;
-    const { email, locale: requestedLocale } = createForgotPasswordSchema(isEnCandidate).parse(body);
+
+    // Verify Cloudflare Turnstile token (fail-open in dev/testing)
+    const turnstileResult = await verifyTurnstileToken(body?.turnstileToken, ip);
+    if (!turnstileResult.success) {
+      return NextResponse.json(
+        {
+          error:
+            turnstileResult.error ||
+            (isEnCandidate
+              ? "Bot verification failed. Please refresh."
+              : "Bot doğrulaması başarısız oldu. Lütfen yenileyiniz."),
+        },
+        { status: 403 }
+      );
+    }
+
+    const { email, locale: requestedLocale } =
+      createForgotPasswordSchema(isEnCandidate).parse(body);
     const cleanEmail = email.toLowerCase().trim();
 
     let resetToken: string | null = null;
@@ -44,6 +60,7 @@ export async function POST(req: Request) {
 
     try {
       const db = getDb();
+      const emailHmac = hashEmailBlindIndex(cleanEmail);
       const userRows = await db
         .select({
           id: schema.users.id,
@@ -52,7 +69,7 @@ export async function POST(req: Request) {
         })
         .from(schema.users)
         .leftJoin(schema.profiles, eq(schema.users.id, schema.profiles.userId))
-        .where(eq(schema.users.email, cleanEmail))
+        .where(or(eq(schema.users.emailHmac, emailHmac), eq(schema.users.email, cleanEmail)))
         .limit(1);
 
       const user = userRows[0];
@@ -80,17 +97,27 @@ export async function POST(req: Request) {
     }
 
     if (resetToken) {
-      const appUrl = process.env.APP_URL || "http://localhost:3000";
+      const rawAppUrl =
+        process.env.APP_URL ||
+        process.env.NEXT_PUBLIC_APP_URL ||
+        (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+      const appUrl = rawAppUrl.replace(/\/+$/, "");
       const isEn = userLocale === "en";
       const resetPath = isEn ? "/en/reset-password" : "/tr/sifre-sifirla";
       const resetLink = `${appUrl}${resetPath}?token=${encodeURIComponent(resetToken)}`;
       try {
         await EmailAdapter.sendTransactionalEmail({
           to: cleanEmail,
+          template: "password_reset",
+          locale: isEn ? "en" : "tr",
           subject: isEn ? "Operis - Password Reset Request" : "Operis - Şifre Sıfırlama Talebi",
           body: isEn
             ? `Hello,\n\nA request has been made to reset the password for your account. Click the link below to set a new password:\n\n${resetLink}\n\nThis link is valid for 1 hour. If you did not make this request, you can safely ignore this email.`
             : `Merhaba,\n\nHesabınız için bir şifre sıfırlama talebinde bulunuldu. Şifrenizi yenilemek için aşağıdaki bağlantıya tıklayınız:\n\n${resetLink}\n\nBu bağlantı 1 saat boyunca geçerlidir. Eğer bu talebi siz yapmadıysanız, bu e-postayı dikkate almayınız.`,
+          variables: {
+            resetLink,
+            token: resetToken,
+          },
         });
       } catch {
         // Non-blocking transactional dispatch
@@ -122,7 +149,9 @@ export async function POST(req: Request) {
     const message =
       err instanceof z.ZodError
         ? err.issues[0]?.message || (isEn ? "Invalid email." : "Geçersiz e-posta.")
-        : isEn ? "An error occurred during request." : "İşlem sırasında bir hata oluştu.";
+        : isEn
+          ? "An error occurred during request."
+          : "İşlem sırasında bir hata oluştu.";
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }

@@ -1,15 +1,28 @@
 import crypto from "node:crypto";
 import { getEnv } from "@/src/config/env";
 
+import {
+  encryptEnvelopeV2,
+  decryptEnvelopeV2,
+  type EnvelopeAadContext,
+  PiiCryptoError,
+} from "./envelope";
+
+export { encryptEnvelopeV2, decryptEnvelopeV2, type EnvelopeAadContext, PiiCryptoError };
+
 const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 12; // Standard 96-bit IV for AES-GCM
 
 /**
  * Encrypts private identity plaintext using AES-256-GCM.
- * Output format: hex(iv):hex(authTag):hex(ciphertext)
+ * When AAD context is provided, produces Envelope v2 format (v2:keyId:iv:tag:cipher).
+ * Fallback format without context: hex(iv):hex(authTag):hex(ciphertext)
  */
-export function encryptPii(plaintext: string): string {
+export function encryptPii(plaintext: string, context?: EnvelopeAadContext): string {
   if (!plaintext) return "";
+  if (context) {
+    return encryptEnvelopeV2(plaintext, context);
+  }
   const env = getEnv();
   const key = Buffer.from(env.PII_ENCRYPTION_KEY_CURRENT, "hex");
   const iv = crypto.randomBytes(IV_LENGTH);
@@ -23,39 +36,18 @@ export function encryptPii(plaintext: string): string {
 
 /**
  * Decrypts AES-256-GCM encrypted private identity data.
- * Supports current key and optional previous key for zero-downtime key rotation.
+ * Supports Envelope v2 (with verified AAD context) and legacy 3-part format.
  */
-export function decryptPii(encryptedText: string): string {
+export function decryptPii(encryptedText: string, context?: EnvelopeAadContext): string {
   if (!encryptedText) return "";
-  const parts = encryptedText.split(":");
-  if (parts.length !== 3) {
-    throw new Error("Invalid encrypted data format");
-  }
-
-  const [ivHex, authTagHex, cipherHex] = parts;
-  const iv = Buffer.from(ivHex!, "hex");
-  const authTag = Buffer.from(authTagHex!, "hex");
-  const ciphertext = Buffer.from(cipherHex!, "hex");
-
-  const env = getEnv();
-  const keysToTry = [env.PII_ENCRYPTION_KEY_CURRENT];
-  if (env.PII_ENCRYPTION_KEY_PREVIOUS) {
-    keysToTry.push(env.PII_ENCRYPTION_KEY_PREVIOUS);
-  }
-
-  for (const keyHex of keysToTry) {
+  if (encryptedText.startsWith("v2:") || encryptedText.includes(":")) {
     try {
-      const key = Buffer.from(keyHex, "hex");
-      const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
-      decipher.setAuthTag(authTag);
-      const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
-      return decrypted.toString("utf8");
+      return decryptEnvelopeV2(encryptedText, context);
     } catch {
-      // Try next key if key rotation in progress
+      throw new Error("Failed to decrypt PII: authentication verification failed");
     }
   }
-
-  throw new Error("Failed to decrypt PII: authentication verification failed");
+  throw new Error("Invalid encrypted data format");
 }
 
 /**
@@ -133,10 +125,37 @@ export function sha256(content: string | Buffer): string {
   return crypto.createHash("sha256").update(content).digest("hex");
 }
 
+/**
+ * Generates an HMAC-SHA256 blind index of an email address.
+ * Enables deterministic database lookup without storing plaintext email.
+ */
+export function hashEmailBlindIndex(email: string): string {
+  const env = getEnv();
+  const key = Buffer.from(env.PII_HMAC_KEY, "hex");
+  const normalized = email.trim().toLowerCase();
+  return crypto.createHmac("sha256", key).update(normalized).digest("hex");
+}
+
+export function encryptEmail(email: string, context?: EnvelopeAadContext): string {
+  if (!email) return "";
+  return encryptPii(email.trim().toLowerCase(), context);
+}
+
+export function decryptEmail(encryptedEmail: string, context?: EnvelopeAadContext): string {
+  if (!encryptedEmail) return "";
+  return decryptPii(encryptedEmail, context);
+}
+
 export const CryptoService = {
   encryptPii,
   decryptPii,
+  encryptEnvelopeV2,
+  decryptEnvelopeV2,
+  PiiCryptoError,
   hashPhoneBlindIndex,
+  hashEmailBlindIndex,
+  encryptEmail,
+  decryptEmail,
   hashPassword,
   verifyPassword,
   generateSecureToken,

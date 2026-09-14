@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Eye, MousePointerClick } from "lucide-react";
+import { Eye, MousePointerClick, History } from "lucide-react";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
 import { EmptyState } from "../ui/empty-state";
+import { ListingRevisionsModal } from "../listings/listing-revisions-modal";
 import { getLocalizedWorkspacePath, getLocalizedListingPath } from "@/src/lib/i18n/routes";
 import { Locale } from "@/src/lib/i18n/config";
 
@@ -30,14 +31,22 @@ export interface OwnerListingItem {
 export interface OwnerListingsDashboardProps {
   initialListings: OwnerListingItem[];
   locale: string;
+  hasLoadError?: boolean;
 }
 
-export function OwnerListingsDashboard({ initialListings, locale }: OwnerListingsDashboardProps) {
+export function OwnerListingsDashboard({
+  initialListings,
+  locale,
+  hasLoadError,
+}: OwnerListingsDashboardProps) {
   const isTr = locale === "tr";
   const [listings, setListings] = useState<OwnerListingItem[]>(initialListings);
   const [tab, setTab] = useState<"all" | "active" | "inactive" | "matched">("all");
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [selectedListingForRevisions, setSelectedListingForRevisions] = useState<string | null>(
+    null
+  );
 
   const filteredListings = listings.filter((l) => {
     if (tab === "all") return true;
@@ -140,6 +149,19 @@ export function OwnerListingsDashboard({ initialListings, locale }: OwnerListing
 
   return (
     <div className="space-y-6">
+      {hasLoadError && (
+        <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-400 flex items-center justify-between">
+          <span>
+            {isTr
+              ? "İlanlarınız yüklenirken bir sorun oluştu. Lütfen sayfayı yenileyiniz."
+              : "An error occurred while loading your listings. Please refresh the page."}
+          </span>
+          <Button variant="secondary" size="sm" onClick={() => window.location.reload()}>
+            {isTr ? "Yeniden Dene" : "Retry"}
+          </Button>
+        </div>
+      )}
+
       {/* Top Bar: Status Filter Tabs */}
       <div className="flex items-center gap-1 border-b border-[var(--color-border-subtle)] pb-4 overflow-x-auto">
         {(["all", "active", "inactive", "matched"] as const).map((t) => (
@@ -335,6 +357,15 @@ export function OwnerListingsDashboard({ initialListings, locale }: OwnerListing
                       {isTr ? "Teklifler" : "Offers"}
                     </Button>
                   </Link>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSelectedListingForRevisions(listing.id)}
+                    title={isTr ? "Revizyon Geçmişi" : "Revision History"}
+                  >
+                    <History className="h-3.5 w-3.5 mr-1" />
+                    {isTr ? "Geçmiş" : "History"}
+                  </Button>
 
                   {listing.status === "ACTIVE" && (
                     <Link
@@ -349,6 +380,16 @@ export function OwnerListingsDashboard({ initialListings, locale }: OwnerListing
                       </Button>
                     </Link>
                   )}
+
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedListingForRevisions(listing.id)}
+                    className="text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+                  >
+                    <History className="mr-1.5 h-3.5 w-3.5" />
+                    {isTr ? "Revizyonlar" : "Revisions"}
+                  </Button>
 
                   {listing.status === "ACTIVE" && (
                     <Button
@@ -397,6 +438,15 @@ export function OwnerListingsDashboard({ initialListings, locale }: OwnerListing
             );
           })}
         </div>
+      )}
+
+      {selectedListingForRevisions && (
+        <ListingRevisionsModal
+          listingId={selectedListingForRevisions}
+          isOpen={Boolean(selectedListingForRevisions)}
+          onClose={() => setSelectedListingForRevisions(null)}
+          locale={locale}
+        />
       )}
     </div>
   );

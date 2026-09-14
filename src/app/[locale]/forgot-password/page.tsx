@@ -15,9 +15,7 @@ export async function generateMetadata({
   const { locale } = await params;
   const isTr = locale === "tr";
 
-  const title = isTr
-    ? "Şifremi Unuttum — Güvenli Sıfırlama | Operis"
-    : "Forgot Password — Secure Recovery | Operis";
+  const title = isTr ? "Şifremi Unuttum — Güvenli Sıfırlama" : "Forgot Password — Secure Recovery";
   const description = isTr
     ? "Operis hesabınızın şifresini güvenle sıfırlamak için kayıtlı e-posta adresinizi girin."
     : "Enter your registered email address to securely reset your Operis account password.";

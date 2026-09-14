@@ -14,7 +14,7 @@ export async function generateMetadata({
   const isTr = locale === "tr";
 
   return {
-    title: isTr ? "İhlal & Kötüye Kullanım Bildirimi | Operis" : "Submit Abuse Report | Operis",
+    title: isTr ? "İhlal & Kötüye Kullanım Bildirimi" : "Submit Abuse Report",
     description: isTr
       ? "Şüpheli ilanları, dolandırıcılık girişimlerini veya kural ihlallerini Operis güvenlik ekibine bildirin."
       : "Report scam listings, abuse, or policy violations directly to Operis security moderators.",

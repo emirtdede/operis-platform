@@ -45,7 +45,12 @@ export default async function AdminOffersPage(props: {
         </div>
       </div>
 
-      <OffersTableClient initialOffers={result.items} total={result.total} />
+      <OffersTableClient
+        initialOffers={result.items}
+        total={result.total}
+        currentPage={result.page}
+        totalPages={result.totalPages}
+      />
     </div>
   );
 }

@@ -1,11 +1,8 @@
 import { NextResponse } from "next/server";
 import { AuthService } from "@/src/modules/auth/service";
 import { SESSION_COOKIE_NAME, SESSION_MAX_AGE_SECONDS } from "@/src/modules/auth/session";
-import {
-  checkRateLimit,
-  getClientIp,
-  rateLimitExceededResponse,
-} from "@/src/lib/security/rate-limit";
+import { evaluateSecurityAccessAsync, getClientIp } from "@/src/lib/security/rate-limit";
+import { verifyTurnstileToken } from "@/src/lib/security/turnstile";
 
 function normalizeE164Phone(rawPhone: string): string {
   if (!rawPhone) return rawPhone;
@@ -24,21 +21,39 @@ function normalizeE164Phone(rawPhone: string): string {
 
 export async function POST(req: Request) {
   const ip = getClientIp(req);
-  const limitCheck = checkRateLimit(`auth:register:${ip}`, 5, 10 * 60 * 1000);
   const locale = req.headers.get("x-locale") || "tr";
   const isEn = locale === "en";
 
-  if (!limitCheck.success) {
-    return rateLimitExceededResponse(
-      limitCheck.reset,
-      isEn
-        ? "Too many registration attempts. Please try again later."
-        : "Kısa sürede çok fazla kayıt denemesi yapıldı. Lütfen daha sonra tekrar deneyiniz."
-    );
+  const access = await evaluateSecurityAccessAsync({
+    ip,
+    purpose: "auth:register",
+    limit: 5,
+    windowMs: 10 * 60 * 1000,
+    isEn,
+  });
+
+  if (!access.allowed) {
+    return access.response;
   }
 
   try {
     const raw = await req.json();
+
+    // Verify Cloudflare Turnstile token (fail-open in dev/testing)
+    const turnstileResult = await verifyTurnstileToken(raw?.turnstileToken, ip);
+    if (!turnstileResult.success) {
+      return NextResponse.json(
+        {
+          error:
+            turnstileResult.error ||
+            (isEn
+              ? "Bot verification failed. Please refresh."
+              : "Bot doğrulaması başarısız oldu. Lütfen yenileyiniz."),
+        },
+        { status: 403 }
+      );
+    }
+
     const legalConsents = raw.legalConsents || {};
 
     const normalized = {
@@ -66,10 +81,17 @@ export async function POST(req: Request) {
 
     const result = await AuthService.register(normalized);
 
+    // If user opted into marketing/announcements, register in Resend dynamic pool
+    if (raw.marketingConsent === true || raw.newsletterAccepted === true) {
+      const { ResendPoolService } = await import("@/src/modules/email/resend-pool-service");
+      await ResendPoolService.optInUser(result.user.id, result.user.email).catch(() => {});
+    }
+
     const response = NextResponse.json(
       {
         success: true,
         user: result.user,
+        phoneChallengeId: result.phoneChallengeId || null,
       },
       { status: 201 }
     );
@@ -86,7 +108,12 @@ export async function POST(req: Request) {
     return response;
   } catch (err: unknown) {
     const isEn = (req.headers.get("x-locale") || "tr") === "en";
-    let message = err instanceof Error ? err.message : isEn ? "Registration failed" : "Kayıt işlemi başarısız oldu";
+    let message =
+      err instanceof Error
+        ? err.message
+        : isEn
+          ? "Registration failed"
+          : "Kayıt işlemi başarısız oldu";
 
     if (!isEn) {
       if (message.includes("email address already exists")) {

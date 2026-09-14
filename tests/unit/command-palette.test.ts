@@ -55,4 +55,21 @@ describe("Developer Command Palette (Cmd+K / Ctrl+K) Specifications", () => {
       expect(results[0]?.title).toBeDefined();
     }
   });
+
+  it("integrates /api/listings/search route handler with ListingService.searchListingsFullText", async () => {
+    const { setDbForTesting, resetDbForTesting } = await import("@/src/lib/db");
+    const { createAdminDbFixture } = await import("@/tests/helpers/admin-db-fixture");
+    setDbForTesting(createAdminDbFixture());
+
+    try {
+      const { GET } = await import("@/src/app/api/listings/search/route");
+      const req = new Request("http://localhost:3000/api/listings/search?q=Next.js&locale=tr");
+      const res = await GET(req);
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(Array.isArray(data.items)).toBe(true);
+    } finally {
+      resetDbForTesting();
+    }
+  });
 });

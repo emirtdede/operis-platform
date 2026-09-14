@@ -12,8 +12,8 @@ export async function generateMetadata({
   const isTr = locale === "tr";
 
   const title = isTr
-    ? "Yasal ve Güven Merkezi — Şeffaflık & Hukuki Zırh | Operis"
-    : "Legal & Trust Center — Transparency & Protection | Operis";
+    ? "Yasal ve Güven Merkezi — Şeffaflık & Hukuki Zırh"
+    : "Legal & Trust Center — Transparency & Protection";
   const description = isTr
     ? "Operis'in kar amacı gütmeyen, sıfır komisyonlu ve dava muafiyetli tüm yasal sözleşmeleri, KVKK aydınlatma metinleri ve fikri mülkiyet politikaları dizini."
     : "Comprehensive index of Operis terms of service, zero-commission policies, KVKK/GDPR notices, IP protection, and lawsuit immunity frameworks.";

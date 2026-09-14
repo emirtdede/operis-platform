@@ -7,6 +7,7 @@ import { ShieldCheck, Hash, CheckCircle2 } from "lucide-react";
 import { LegalService } from "@/src/modules/legal/service";
 import { Locale } from "@/src/lib/i18n/config";
 import { Badge } from "@/src/components/ui/badge";
+import { ReadingProgressBar } from "@/src/components/ui/reading-progress-bar";
 
 import { TR_TO_INTERNAL_LEGAL_SLUG, getLocalizedLegalPath } from "@/src/lib/i18n/routes";
 
@@ -361,6 +362,9 @@ export default async function LegalDocumentPage({
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-12 sm:px-6 lg:px-8 space-y-8">
+      {/* Reading Progress Indicator */}
+      <ReadingProgressBar />
+
       {/* Schema.org Structured Data */}
       <script
         type="application/ld+json"

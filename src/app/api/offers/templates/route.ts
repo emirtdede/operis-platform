@@ -3,9 +3,9 @@ import { z } from "zod";
 import { getSession } from "@/src/modules/auth/session";
 import { OfferService } from "@/src/modules/offers/service";
 import {
-  checkRateLimit,
+  evaluateSecurityAccessAsync,
   getClientIp,
-  rateLimitExceededResponse,
+  normalizeIp,
 } from "@/src/lib/security/rate-limit";
 
 export async function GET(req: Request) {
@@ -17,21 +17,25 @@ export async function GET(req: Request) {
     const session = await getSession();
     if (!session) {
       return NextResponse.json(
-        { error: isEn ? "Sign in to view templates." : "Şablonları görüntülemek için oturum açın." },
+        {
+          error: isEn
+            ? "Sign in to view your templates."
+            : "Şablonlarınızı görebilmek için oturum açın.",
+        },
         { status: 401 }
       );
     }
 
-    const templates = await OfferService.getUserOfferTemplatesAsync(session.userId, locale);
+    const templates = await OfferService.getUserOfferTemplates(session.userId);
     return NextResponse.json({ templates }, { status: 200 });
   } catch (err: unknown) {
     const message =
       err instanceof Error
         ? err.message
         : isEn
-          ? "Failed to load templates."
-          : "Şablonlar yüklenemedi.";
-    return NextResponse.json({ error: message }, { status: 400 });
+          ? "Failed to fetch templates."
+          : "Şablonlar yüklenirken bir sorun oluştu.";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
@@ -49,14 +53,16 @@ export async function POST(req: Request) {
       );
     }
 
-    const limitCheck = checkRateLimit(`offer:templates:${session.userId}:${ip}`, 30, 60 * 1000);
-    if (!limitCheck.success) {
-      return rateLimitExceededResponse(
-        limitCheck.reset,
-        isEn
-          ? "Too many template actions. Please wait a moment."
-          : "Çok fazla işlem yapıldı. Lütfen biraz bekleyiniz."
-      );
+    const access = await evaluateSecurityAccessAsync({
+      ip,
+      purpose: "offer:templates",
+      subject: `${session.userId}:${normalizeIp(ip)}`,
+      limit: 30,
+      windowMs: 60 * 1000,
+      isEn,
+    });
+    if (!access.allowed) {
+      return access.response;
     }
 
     const body = await req.json();
@@ -114,14 +120,16 @@ export async function DELETE(req: Request) {
       );
     }
 
-    const limitCheck = checkRateLimit(`offer:templates:del:${session.userId}:${ip}`, 30, 60 * 1000);
-    if (!limitCheck.success) {
-      return rateLimitExceededResponse(
-        limitCheck.reset,
-        isEn
-          ? "Too many template actions. Please wait a moment."
-          : "Çok fazla işlem yapıldı. Lütfen biraz bekleyiniz."
-      );
+    const access = await evaluateSecurityAccessAsync({
+      ip,
+      purpose: "offer:templates:del",
+      subject: `${session.userId}:${normalizeIp(ip)}`,
+      limit: 30,
+      windowMs: 60 * 1000,
+      isEn,
+    });
+    if (!access.allowed) {
+      return access.response;
     }
 
     let templateId = searchParams.get("id");

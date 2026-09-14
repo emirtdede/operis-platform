@@ -12,8 +12,8 @@ export async function generateMetadata({
   const isTr = locale === "tr";
 
   const title = isTr
-    ? "Marka Kılavuzu & Medya Kiti — Resmi Varlıklar | Operis"
-    : "Brand Guidelines & Media Kit — Official Assets | Operis";
+    ? "Marka Kılavuzu & Medya Kiti — Resmi Varlıklar"
+    : "Brand Guidelines & Media Kit — Official Assets";
   const description = isTr
     ? "Operis'in resmi vektör logoları, O-stream sembolü, optik kalibrasyon standartları, renk paleti ve marka kullanım kuralları."
     : "Official vector logos, calibrated O-stream symbol, optical kerning standards, color tokens, and brand usage rules for Operis.";

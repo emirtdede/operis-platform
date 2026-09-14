@@ -16,7 +16,7 @@ export async function generateMetadata({
   const isTr = locale === "tr";
 
   return {
-    title: isTr ? "İlanı Düzenle | Operis" : "Edit Listing | Operis",
+    title: isTr ? "İlanı Düzenle" : "Edit Listing",
     description: isTr
       ? "Proje ilanınızın kapsamını, bütçesini ve detaylarını güncelleyin."
       : "Update your project listing scope, budget, and details.",

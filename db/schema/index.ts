@@ -14,6 +14,8 @@ import {
   uniqueIndex,
   index,
   char,
+  check,
+  bigint,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
@@ -27,9 +29,17 @@ export const users = pgTable("users", {
   status: varchar("status", { length: 30 }).default("ACTIVE").notNull(), // ACTIVE, SUSPENDED, DELETED
   twoFactorEnabled: boolean("two_factor_enabled").default(false).notNull(),
   twoFactorSecret: varchar("two_factor_secret", { length: 255 }),
+  twoFactorBackupCodes: text("two_factor_backup_codes")
+    .array()
+    .default(sql`'{}'::text[]`)
+    .notNull(),
+  authVersion: integer("auth_version").default(1).notNull(),
+  emailEnc: text("email_enc"),
+  emailHmac: varchar("email_hmac", { length: 64 }),
+  clerkUserId: varchar("clerk_user_id", { length: 255 }).unique(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-});
+}).enableRLS();
 
 // 2. User Private Identity (Encrypted PII + Blind Index)
 export const userPrivateIdentity = pgTable("user_private_identity", {
@@ -126,6 +136,11 @@ export const categoryFollows = pgTable(
 );
 
 // 8. Listing Templates (Wizard Schemas)
+/**
+ * @reserved @dormant
+ * Currently, listing creation wizard schemas are defined statically in `src/modules/listings/wizard.ts`.
+ * This table is retained in the schema for backward compatibility and planned future CMS/dynamic form builder support.
+ */
 export const listingTemplates = pgTable("listing_templates", {
   id: uuid("id").defaultRandom().primaryKey(),
   categoryId: uuid("category_id")
@@ -186,6 +201,10 @@ export const listings = pgTable(
     index("listings_category_feed_idx").on(table.categoryId, table.status, table.lastActivatedAt),
     index("listings_owner_status_idx").on(table.ownerUserId, table.status),
     index("listings_search_multi_idx").on(table.status, table.title),
+    check(
+      "listings_budget_integrity_chk",
+      sql`status = 'DRAFT' OR (budget_mode IN ('EXACT', 'FIXED_EXACT', 'HOURLY_EXACT') AND budget_min IS NOT NULL AND budget_max IS NOT NULL AND budget_min = budget_max AND budget_min > 0 AND budget_currency IS NOT NULL) OR (budget_mode IN ('RANGE', 'FIXED_RANGE', 'HOURLY_RANGE') AND budget_min IS NOT NULL AND budget_max IS NOT NULL AND budget_min > 0 AND budget_max >= budget_min AND budget_currency IS NOT NULL) OR (budget_mode IN ('OPEN_BID', 'NEGOTIABLE', 'REQUEST_GUIDANCE') AND (budget_min IS NULL OR budget_min > 0) AND (budget_max IS NULL OR budget_max > 0) AND (budget_min IS NULL OR budget_max IS NULL OR budget_max >= budget_min))`
+    ),
   ]
 );
 
@@ -204,9 +223,7 @@ export const listingRevisions = pgTable(
     snapshotJson: jsonb("snapshot_json").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
-  (table) => [
-    uniqueIndex("listing_revisions_uniq_idx").on(table.listingId, table.revisionNo),
-  ]
+  (table) => [uniqueIndex("listing_revisions_uniq_idx").on(table.listingId, table.revisionNo)]
 );
 
 // 11. Listing Status Events
@@ -237,7 +254,7 @@ export const offers = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     listingActivationSeq: integer("listing_activation_seq").notNull(),
     status: varchar("status", { length: 30 }).default("PENDING").notNull(),
-    // PENDING, ACCEPTED, REJECTED, REJECTED_OTHER_SELECTED, WITHDRAWN, EXPIRED_LISTING, VOID_MODERATION
+    // PENDING, ACCEPTED, REJECTED, REJECTED_OTHER_SELECTED, WITHDRAWN, EXPIRED_LISTING, VOID_MODERATION, CANCELLED_ENGAGEMENT
     message: text("message").notNull(),
     budgetCurrency: char("budget_currency", { length: 3 }),
     budgetMin: numeric("budget_min", { precision: 18, scale: 2 }),
@@ -276,9 +293,7 @@ export const offerRevisions = pgTable(
     snapshotJson: jsonb("snapshot_json").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
-  (table) => [
-    uniqueIndex("offer_revisions_uniq_idx").on(table.offerId, table.revisionNo),
-  ]
+  (table) => [uniqueIndex("offer_revisions_uniq_idx").on(table.offerId, table.revisionNo)]
 );
 
 // 13b. Offer Templates
@@ -299,36 +314,43 @@ export const offerTemplates = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
-  (table) => [
-    index("offer_templates_user_idx").on(table.userId),
-  ]
+  (table) => [index("offer_templates_user_idx").on(table.userId)]
 );
 
 // 14. Engagements (Matches)
-export const engagements = pgTable("engagements", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  listingId: uuid("listing_id")
-    .unique()
-    .notNull()
-    .references(() => listings.id),
-  acceptedOfferId: uuid("accepted_offer_id")
-    .unique()
-    .notNull()
-    .references(() => offers.id),
-  ownerUserId: uuid("owner_user_id")
-    .notNull()
-    .references(() => users.id),
-  freelancerUserId: uuid("freelancer_user_id")
-    .notNull()
-    .references(() => users.id),
-  status: varchar("status", { length: 30 }).default("MATCHED").notNull(),
-  // MATCHED, COMPLETION_PENDING, COMPLETED, CANCELLED
-  matchedAt: timestamp("matched_at", { withTimezone: true }).defaultNow().notNull(),
-  completedAt: timestamp("completed_at", { withTimezone: true }),
-  cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
-  listingTitleSnapshot: varchar("listing_title_snapshot", { length: 120 }).notNull(),
-  listingCategorySnapshot: varchar("listing_category_snapshot", { length: 80 }).notNull(),
-});
+export const engagements = pgTable(
+  "engagements",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    listingId: uuid("listing_id")
+      .notNull()
+      .references(() => listings.id),
+    acceptedOfferId: uuid("accepted_offer_id")
+      .notNull()
+      .references(() => offers.id),
+    ownerUserId: uuid("owner_user_id")
+      .notNull()
+      .references(() => users.id),
+    freelancerUserId: uuid("freelancer_user_id")
+      .notNull()
+      .references(() => users.id),
+    status: varchar("status", { length: 30 }).default("MATCHED").notNull(),
+    // MATCHED, COMPLETION_PENDING, COMPLETED, CANCELLED
+    matchedAt: timestamp("matched_at", { withTimezone: true }).defaultNow().notNull(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    listingTitleSnapshot: varchar("listing_title_snapshot", { length: 120 }).notNull(),
+    listingCategorySnapshot: varchar("listing_category_snapshot", { length: 80 }).notNull(),
+  },
+  (table) => [
+    uniqueIndex("engagements_active_listing_idx")
+      .on(table.listingId)
+      .where(sql`${table.status} != 'CANCELLED'`),
+    uniqueIndex("engagements_active_accepted_offer_idx")
+      .on(table.acceptedOfferId)
+      .where(sql`${table.status} != 'CANCELLED'`),
+  ]
+);
 
 // 15. Engagement Completion Marks (Bilateral mutual confirmation)
 export const engagementCompletionMarks = pgTable(
@@ -385,24 +407,47 @@ export const notifications = pgTable("notifications", {
     .references(() => users.id, { onDelete: "cascade" }),
   type: varchar("type", { length: 50 }).notNull(),
   payloadJson: jsonb("payload_json").notNull(),
+  deliveryKey: varchar("delivery_key", { length: 191 }).unique(),
   readAt: timestamp("read_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
 // 19. Outbox Events (Idempotent transactional notification outbox)
-export const outboxEvents = pgTable("outbox_events", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  type: varchar("type", { length: 50 }).notNull(),
-  aggregateType: varchar("aggregate_type", { length: 50 }).notNull(),
-  aggregateId: uuid("aggregate_id").notNull(),
-  payloadJson: jsonb("payload_json").notNull(),
-  status: varchar("status", { length: 30 }).default("PENDING").notNull(), // PENDING, PROCESSING, SENT, FAILED, DEAD
-  attemptCount: integer("attempt_count").default(0).notNull(),
-  nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }).defaultNow().notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+export const outboxEvents = pgTable(
+  "outbox_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    type: varchar("type", { length: 50 }).notNull(),
+    aggregateType: varchar("aggregate_type", { length: 50 }).notNull(),
+    aggregateId: uuid("aggregate_id").notNull(),
+    payloadJson: jsonb("payload_json").notNull(),
+    status: varchar("status", { length: 30 }).default("PENDING").notNull(), // PENDING, PROCESSING, SENT, FAILED, DEAD
+    attemptCount: integer("attempt_count").default(0).notNull(),
+    nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }).defaultNow().notNull(),
+    leaseToken: uuid("lease_token"),
+    leaseUntil: timestamp("lease_until", { withTimezone: true }),
+    deliveryKey: varchar("delivery_key", { length: 191 }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [uniqueIndex("outbox_delivery_key_unique_idx").on(table.deliveryKey)]
+);
+
+// 19b. Notification Fanout Progress (Persistent cursor for radar & category fan-out - B16)
+export const notificationFanoutProgress = pgTable("notification_fanout_progress", {
+  eventId: uuid("event_id")
+    .primaryKey()
+    .references(() => outboxEvents.id, { onDelete: "cascade" }),
+  phase: varchar("phase", { length: 16 }).notNull(), // 'RADAR' | 'CATEGORY' | 'DONE'
+  lastUserId: uuid("last_user_id"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
 // 20. Legal Documents (Versioned metadata & hash)
+/**
+ * @reserved @dormant
+ * Currently, legal terms and privacy policies are maintained via localized static markdown/JSON resources.
+ * User acceptances are tracked in `legalAcceptances`. This table is reserved for future dynamic legal versioning and publishing.
+ */
 export const legalDocuments = pgTable("legal_documents", {
   id: uuid("id").defaultRandom().primaryKey(),
   documentKey: varchar("document_key", { length: 50 }).notNull(),
@@ -489,8 +534,184 @@ export const idempotencyKeys = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   },
+  (table) => [index("idempotency_keys_user_action_idx").on(table.userId, table.action)]
+);
+
+// 26. Contact Messages
+export const contactMessages = pgTable(
+  "contact_messages",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    name: varchar("name", { length: 120 }).notNull(),
+    email: varchar("email", { length: 255 }).notNull(),
+    subject: varchar("subject", { length: 255 }).notNull(),
+    message: text("message").notNull(),
+    locale: varchar("locale", { length: 5 }).default("tr").notNull(),
+    ipAddress: varchar("ip_address", { length: 64 }),
+    status: varchar("status", { length: 30 }).default("NEW").notNull(), // NEW, READ, REPLIED, ARCHIVED
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
   (table) => [
-    index("idempotency_keys_user_action_idx").on(table.userId, table.action),
+    index("contact_messages_created_idx").on(table.createdAt),
+    index("contact_messages_status_idx").on(table.status),
   ]
 );
 
+// 27. OTP Challenges (Atomic and persistent phone verification - B12)
+export const otpChallenges = pgTable(
+  "otp_challenges",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    purpose: varchar("purpose", { length: 40 }).notNull(),
+    targetPhoneHmac: text("target_phone_hmac"),
+    codeDigest: text("code_digest").notNull(),
+    keyVersion: integer("key_version").default(1).notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    attemptCount: integer("attempt_count").default(0).notNull(),
+    consumedAt: timestamp("consumed_at", { withTimezone: true }),
+    supersededAt: timestamp("superseded_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("otp_challenges_user_purpose_idx").on(table.userId, table.purpose),
+    index("otp_challenges_expires_idx").on(table.expiresAt),
+  ]
+);
+
+// 28. IP Blocks (Persistent centralized IP blocklist - B18)
+export const ipBlocks = pgTable(
+  "ip_blocks",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    ip: varchar("ip", { length: 64 }).notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    reason: varchar("reason", { length: 255 }),
+    actorId: uuid("actor_id").references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("ip_blocks_ip_idx").on(table.ip),
+    index("ip_blocks_revoked_expires_idx").on(table.revokedAt, table.expiresAt),
+  ]
+);
+
+// 29. Rate Limits (Persistent centralized rate limit buckets - B12)
+export const rateLimits = pgTable(
+  "rate_limits",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    purpose: varchar("purpose", { length: 60 }).notNull(),
+    subjectDigest: text("subject_digest").notNull(),
+    windowStart: timestamp("window_start", { withTimezone: true }).notNull(),
+    count: integer("count").default(1).notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    uniqueIndex("rate_limits_purpose_subject_window_idx").on(
+      table.purpose,
+      table.subjectDigest,
+      table.windowStart
+    ),
+    index("rate_limits_expires_idx").on(table.expiresAt),
+  ]
+);
+
+// 30. Export Jobs (Persistent privacy data export jobs with checksum & expiration - B26)
+export const exportJobs = pgTable(
+  "export_jobs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    status: varchar("status", { length: 30 }).default("PENDING").notNull(), // PENDING, PROCESSING, READY, FAILED, EXPIRED
+    formatVersion: integer("format_version").default(2).notNull(),
+    attemptCount: integer("attempt_count").default(0).notNull(),
+    nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }).defaultNow().notNull(),
+    leaseToken: uuid("lease_token"),
+    leaseUntil: timestamp("lease_until", { withTimezone: true }),
+    lastProgressAt: timestamp("last_progress_at", { withTimezone: true }),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    snapshotStartedAt: timestamp("snapshot_started_at", { withTimezone: true }),
+    progress: integer("progress").default(0).notNull(),
+    manifestJson: jsonb("manifest_json"),
+    fileContent: text("file_content"),
+    checksumSha256: varchar("checksum_sha256", { length: 64 }),
+    fileSizeBytes: bigint("file_size_bytes", { mode: "number" }),
+    errorCode: varchar("error_code", { length: 64 }),
+    resultAttempt: integer("result_attempt"),
+    partCount: integer("part_count"),
+    errorMessage: text("error_message"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("export_jobs_user_status_created_idx").on(table.userId, table.status, table.createdAt),
+    uniqueIndex("export_jobs_one_active_user_idx")
+      .on(table.userId)
+      .where(sql`status IN ('PENDING', 'PROCESSING')`),
+  ]
+);
+
+// 31. Export Job Parts (Encrypted 1MiB payload parts - B26)
+export const exportJobParts = pgTable(
+  "export_job_parts",
+  {
+    jobId: uuid("job_id")
+      .notNull()
+      .references(() => exportJobs.id, { onDelete: "cascade" }),
+    attemptNo: integer("attempt_no").notNull(),
+    partNo: integer("part_no").notNull(),
+    payloadEnc: text("payload_enc").notNull(),
+    plaintextSha256: char("plaintext_sha256", { length: 64 }).notNull(),
+    byteLength: integer("byte_length").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.jobId, table.attemptNo, table.partNo] })]
+);
+
+// 32. Maintenance Identity (Singleton table for deployment tracking - B26/K01)
+export const maintenanceIdentity = pgTable(
+  "maintenance_identity",
+  {
+    isSingleton: boolean("is_singleton").default(true).primaryKey(),
+    deploymentId: uuid("deployment_id").defaultRandom().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (_table) => [check("maintenance_identity_singleton_check", sql`is_singleton = true`)]
+);
+
+// 33. Resend Contact Pool (Dynamic 1000-seat contact pool & consent management)
+export const resendContactPool = pgTable(
+  "resend_contact_pool",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" })
+      .unique(),
+    email: varchar("email", { length: 255 }).notNull(),
+    status: varchar("status", { length: 30 }).default("PENDING").notNull(), // 'PENDING' | 'IN_POOL' | 'OPTED_OUT' | 'BOUNCED'
+    resendContactId: varchar("resend_contact_id", { length: 100 }),
+    consentGivenAt: timestamp("consent_given_at", { withTimezone: true }).defaultNow().notNull(),
+    syncedAt: timestamp("synced_at", { withTimezone: true }),
+    unsubscribedAt: timestamp("unsubscribed_at", { withTimezone: true }),
+    bouncedAt: timestamp("bounced_at", { withTimezone: true }),
+    bounceReason: text("bounce_reason"),
+    lastActiveAt: timestamp("last_active_at", { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("resend_contact_pool_user_id_idx").on(table.userId),
+    index("resend_contact_pool_status_active_idx").on(table.status, table.lastActiveAt),
+    index("resend_contact_pool_email_idx").on(table.email),
+    uniqueIndex("resend_contact_pool_resend_id_idx")
+      .on(table.resendContactId)
+      .where(sql`resend_contact_id IS NOT NULL`),
+  ]
+);

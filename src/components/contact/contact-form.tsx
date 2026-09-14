@@ -5,6 +5,7 @@ import { Mail, User, Send, CheckCircle2, AlertCircle } from "lucide-react";
 import { Button } from "../ui/button";
 import { TextInput } from "../ui/text-input";
 import { TextArea } from "../ui/text-area";
+import { TurnstileWidget } from "../security/turnstile-widget";
 import { EMOJI_REGEX, validateContentAppropriateness } from "@/src/lib/security/content-moderator";
 
 export interface ContactFormProps {
@@ -22,6 +23,7 @@ export function ContactForm({ locale }: ContactFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,12 +64,14 @@ export function ContactForm({ locale }: ContactFormProps) {
           email: email.trim(),
           subject: subject.trim(),
           message: message.trim(),
+          turnstileToken,
           locale: locale === "en" ? "en" : "tr",
         }),
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || (isTr ? "Mesaj iletilemedi." : "Failed to send message."));
+      if (!res.ok)
+        throw new Error(data.error || (isTr ? "Mesaj iletilemedi." : "Failed to send message."));
 
       setIsSuccess(true);
       setName("");
@@ -116,6 +120,18 @@ export function ContactForm({ locale }: ContactFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {/* Direct SLA Commitment Banner */}
+      <div className="rounded-2xl border border-blue-500/20 bg-blue-500/5 p-3.5 text-xs text-[var(--color-text-secondary)] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <span className="font-semibold text-blue-400">
+          {isTr ? "Doğrudan Yanıt Taahhüdü (SLA):" : "Direct Response Guarantee (SLA):"}
+        </span>
+        <span className="text-[11px] text-[var(--color-text-muted)] font-medium">
+          {isTr
+            ? "Güvenlik İhbarı: < 2 Saat • Teknik Destek: < 6 Saat • Genel: < 24 Saat"
+            : "Security: < 2h • Technical: < 6h • General: < 24h"}
+        </span>
+      </div>
+
       {error && (
         <div className="flex items-center gap-2.5 rounded-xl border border-red-500/20 bg-red-500/10 p-3.5 text-xs text-red-400">
           <AlertCircle className="h-4 w-4 shrink-0 text-red-400" aria-hidden="true" />
@@ -163,6 +179,12 @@ export function ContactForm({ locale }: ContactFormProps) {
         }
         required
         rows={5}
+      />
+
+      {/* Cloudflare Turnstile Bot Defense */}
+      <TurnstileWidget
+        onVerify={(token) => setTurnstileToken(token)}
+        onExpire={() => setTurnstileToken(null)}
       />
 
       <Button

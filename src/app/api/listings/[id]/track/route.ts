@@ -1,20 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ListingService } from "@/src/modules/listings/service";
 import {
-  checkRateLimit,
+  evaluateSecurityAccessAsync,
   getClientIp,
-  rateLimitExceededResponse,
+  normalizeIp,
 } from "@/src/lib/security/rate-limit";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const ip = getClientIp(req);
   const isEn = (req.headers.get("x-locale") || "tr") === "en";
-  const limitCheck = checkRateLimit(`track:${ip}`, 120, 60 * 1000);
-  if (!limitCheck.success) {
-    return rateLimitExceededResponse(
-      limitCheck.reset,
-      isEn ? "Too many requests. Please wait." : "Çok fazla işlem yapıldı. Lütfen bekleyin."
-    );
+  const access = await evaluateSecurityAccessAsync({
+    ip,
+    purpose: "track",
+    subject: normalizeIp(ip),
+    limit: 120,
+    windowMs: 60 * 1000,
+    isEn,
+  });
+  if (!access.allowed) {
+    return access.response;
   }
 
   try {

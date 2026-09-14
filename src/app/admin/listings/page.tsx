@@ -11,7 +11,13 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function AdminListingsPage(props: {
-  searchParams?: Promise<{ page?: string; limit?: string; search?: string; status?: string; categoryId?: string }>;
+  searchParams?: Promise<{
+    page?: string;
+    limit?: string;
+    search?: string;
+    status?: string;
+    categoryId?: string;
+  }>;
 }) {
   const sp = await props.searchParams;
   const page = sp?.page ? parseInt(sp.page, 10) : 1;
@@ -46,7 +52,12 @@ export default async function AdminListingsPage(props: {
         </div>
       </div>
 
-      <ListingsTableClient initialListings={result.items} total={result.total} />
+      <ListingsTableClient
+        initialListings={result.items}
+        total={result.total}
+        currentPage={result.page}
+        totalPages={result.totalPages}
+      />
     </div>
   );
 }

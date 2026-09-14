@@ -1,31 +1,55 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Database, Cpu, Clock, Zap, RefreshCw, Trash2, CheckCircle2, X, Gauge } from "lucide-react";
+import {
+  Database,
+  Cpu,
+  Clock,
+  Zap,
+  RefreshCw,
+  Trash2,
+  CheckCircle2,
+  AlertCircle,
+  X,
+  Gauge,
+} from "lucide-react";
 import { triggerSystemOptimizationAction } from "@/src/modules/admin/actions";
 
 export function MonitoringClient() {
-  const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<{ success: boolean; message: string } | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const handleTrigger = (action: "purge_sessions" | "run_expiry" | "retry_outbox" | "ping_db") => {
     startTransition(async () => {
       const res = await triggerSystemOptimizationAction(action);
-      setActionMessage(res.message);
-      setTimeout(() => setActionMessage(null), 5000);
+      setFeedback({ success: res.success, message: res.message });
+      setTimeout(() => setFeedback(null), 6000);
     });
   };
 
   return (
     <div className="space-y-6">
       {/* Alert Banner */}
-      {actionMessage && (
-        <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs flex items-center justify-between">
+      {feedback && (
+        <div
+          className={`p-3.5 rounded-xl text-xs flex items-center justify-between border ${
+            feedback.success
+              ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+              : "bg-red-500/10 border-red-500/30 text-red-400"
+          }`}
+        >
           <div className="flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4" />
-            <span>{actionMessage}</span>
+            {feedback.success ? (
+              <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+            ) : (
+              <AlertCircle className="h-4 w-4 shrink-0 text-red-400" />
+            )}
+            <span>{feedback.message}</span>
           </div>
-          <button onClick={() => setActionMessage(null)} className="text-emerald-300">
+          <button
+            onClick={() => setFeedback(null)}
+            className={feedback.success ? "text-emerald-300" : "text-red-300"}
+          >
             <X className="h-4 w-4" />
           </button>
         </div>

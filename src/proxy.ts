@@ -46,15 +46,21 @@ const TR_EXACT_REDIRECTS: Record<string, string> = {
   "/tr/listings/new": "/tr/ilanlar/yeni",
   "/tr/login": "/tr/giris",
   "/tr/register": "/tr/kayit",
+  "/tr/dashboard": "/tr/panel/ilanlarim",
+  "/tr/panel": "/tr/panel/ilanlarim",
   "/tr/dashboard/listings": "/tr/panel/ilanlarim",
   "/tr/panel/ilanlar": "/tr/panel/ilanlarim",
   "/tr/dashboard/offers/received": "/tr/panel/teklifler/gelen",
   "/tr/dashboard/offers/sent": "/tr/panel/teklifler/gonderilen",
   "/tr/panel/teklifler/giden": "/tr/panel/teklifler/gonderilen",
   "/tr/dashboard/settings": "/tr/panel/ayarlar",
+  "/tr/ayarlar": "/tr/panel/ayarlar",
   "/tr/dashboard/security": "/tr/panel/guvenlik",
+  "/tr/guvenlik": "/tr/panel/guvenlik",
   "/tr/dashboard/notifications": "/tr/panel/bildirimler",
+  "/tr/bildirimler": "/tr/panel/bildirimler",
   "/tr/dashboard/categories": "/tr/panel/kategorilerim",
+  "/tr/kategorilerim": "/tr/panel/kategorilerim",
   "/tr/legal/terms": "/tr/yasal/kullanim-kosullari",
   "/tr/legal/privacy": "/tr/yasal/gizlilik-ve-kvkk",
   "/tr/legal/matching-disclaimer": "/tr/yasal/eslestirme-ve-sorumluluk-reddi",
@@ -150,7 +156,11 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(redirectUrl, 301);
   }
 
-  if (pathname.startsWith("/admin")) {
+  if (
+    pathname.startsWith("/api") ||
+    pathname.startsWith("/admin") ||
+    pathname.startsWith("/sso-callback")
+  ) {
     return NextResponse.next();
   }
 
@@ -158,9 +168,20 @@ export function proxy(request: NextRequest) {
   return intlMiddleware(request);
 }
 
-export default proxy;
+import { clerkMiddleware } from "@clerk/nextjs/server";
+
+const clerkHandler = clerkMiddleware(async (_auth, req) => {
+  return proxy(req);
+});
+
+export default function middleware(request: NextRequest, event: any) {
+  if (process.env.CLERK_SECRET_KEY && process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY) {
+    return clerkHandler(request, event);
+  }
+  return proxy(request);
+}
 
 export const config = {
-  // Match internationalized pathnames, excluding api, admin, static files, and assets
-  matcher: ["/", "/(tr|en)/:path*", "/((?!api|admin|_next|_vercel|.*\\..*).*)"],
+  // Match internationalized pathnames, API routes for Clerk auth, excluding admin, static files, and assets
+  matcher: ["/", "/(tr|en)/:path*", "/((?!admin|_next|_vercel|.*\\..*).*)"],
 };

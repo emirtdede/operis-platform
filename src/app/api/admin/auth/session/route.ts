@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { createSessionToken, SESSION_COOKIE_NAME, getSession } from "@/src/modules/auth/session";
 
-import { checkRateLimit, getClientIp, rateLimitExceededResponse } from "@/src/lib/security/rate-limit";
+import { evaluateSecurityAccessAsync, getClientIp } from "@/src/lib/security/rate-limit";
 
 export async function GET() {
   const session = await getSession();
@@ -14,12 +14,15 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   const ip = getClientIp(request);
-  const limitCheck = checkRateLimit(`auth:admin-session:${ip}`, 5, 15 * 60 * 1000);
-  if (!limitCheck.success) {
-    return rateLimitExceededResponse(
-      limitCheck.reset,
-      "Çok fazla yönetici girişi denemesi yapıldı. Lütfen 15 dakika sonra tekrar deneyiniz."
-    );
+  const security = await evaluateSecurityAccessAsync({
+    ip,
+    purpose: "auth:admin-session",
+    limit: 5,
+    windowMs: 15 * 60 * 1000,
+    isEn: false,
+  });
+  if (!security.allowed) {
+    return security.response;
   }
 
   try {
@@ -32,16 +35,12 @@ export async function POST(request: NextRequest) {
       totpCode,
     } = body;
 
-    const configuredKey =
-      process.env.ADMIN_MASTER_KEY ||
-      (process.env.NODE_ENV === "development" || process.env.VITEST
-        ? "operis-admin-secret-key-2026"
-        : null);
+    const configuredKey = process.env.ADMIN_MASTER_KEY;
 
     if (!configuredKey) {
       return NextResponse.json(
         { error: "Yönetici oturum anahtarı sistemde tanımlanmamış." },
-        { status: 500 }
+        { status: 503 }
       );
     }
 
@@ -112,12 +111,11 @@ export async function POST(request: NextRequest) {
               { status: 401 }
             );
           }
-          const { verifyTotpCode } = await import("@/src/modules/auth/totp");
-          if (!verifyTotpCode(existingUser.twoFactorSecret, code)) {
-            return NextResponse.json(
-              { error: "Geçersiz 2FA doğrulama kodu." },
-              { status: 401 }
-            );
+          const { verifyTotpCode, decryptTotpSecret } = await import("@/src/modules/auth/totp");
+          if (
+            !verifyTotpCode(decryptTotpSecret(existingUser.id, existingUser.twoFactorSecret), code)
+          ) {
+            return NextResponse.json({ error: "Geçersiz 2FA doğrulama kodu." }, { status: 401 });
           }
         }
 

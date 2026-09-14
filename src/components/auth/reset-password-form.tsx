@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Lock, CheckCircle2, AlertCircle, Eye, EyeOff } from "lucide-react";
 import { Button } from "../ui/button";
 import { TextInput } from "../ui/text-input";
+import { TurnstileWidget } from "../security/turnstile-widget";
 
 export interface ResetPasswordFormProps {
   locale: string;
@@ -22,6 +23,7 @@ export function ResetPasswordForm({ locale }: ResetPasswordFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
   if (!token) {
     return (
@@ -96,7 +98,7 @@ export function ResetPasswordForm({ locale }: ResetPasswordFormProps) {
           "Content-Type": "application/json",
           "x-locale": locale,
         },
-        body: JSON.stringify({ token, password, locale }),
+        body: JSON.stringify({ token, password, locale, turnstileToken }),
       });
 
       const data = await res.json();
@@ -203,6 +205,12 @@ export function ResetPasswordForm({ locale }: ResetPasswordFormProps) {
         placeholder="••••••••••••"
         required
         startIcon={<Lock className="h-4 w-4" aria-hidden="true" />}
+      />
+
+      {/* Cloudflare Turnstile Bot Defense */}
+      <TurnstileWidget
+        onVerify={(token) => setTurnstileToken(token)}
+        onExpire={() => setTurnstileToken(null)}
       />
 
       <Button

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Globe, Sun, Moon, Contrast, Check } from "lucide-react";
 import { useTheme, Theme } from "./theme-provider";
 import { Locale } from "@/src/lib/i18n/config";
@@ -10,7 +10,6 @@ import { getAlternateLocalePath } from "@/src/lib/i18n/routes";
 export function FooterQuickSettings() {
   const pathname = usePathname() || "/";
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { theme, setTheme } = useTheme();
 
   const isTr = pathname.startsWith("/tr");
@@ -61,7 +60,10 @@ export function FooterQuickSettings() {
     }
 
     const nextPath = getAlternateLocalePath(pathname, newLocale);
-    const qs = searchParams ? searchParams.toString() : "";
+    const qs =
+      typeof window !== "undefined" && window.location.search
+        ? window.location.search.replace(/^\?/, "")
+        : "";
     const targetUrl = qs ? `${nextPath}?${qs}` : nextPath;
     router.push(targetUrl);
   };

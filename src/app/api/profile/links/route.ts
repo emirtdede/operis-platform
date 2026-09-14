@@ -3,9 +3,9 @@ import { z } from "zod";
 import { getSession } from "@/src/modules/auth/session";
 import { ProfileService } from "@/src/modules/profiles/service";
 import {
-  checkRateLimit,
+  evaluateSecurityAccessAsync,
   getClientIp,
-  rateLimitExceededResponse,
+  normalizeIp,
 } from "@/src/lib/security/rate-limit";
 
 export async function POST(req: Request) {
@@ -25,17 +25,30 @@ export async function POST(req: Request) {
       );
     }
 
-    const limitCheck = checkRateLimit(`profile:links:${session.userId}:${ip}`, 30, 60 * 1000);
-    if (!limitCheck.success) {
-      return rateLimitExceededResponse(
-        limitCheck.reset,
-        isEn
-          ? "Too many link updates. Please wait a moment."
-          : "Çok fazla bağlantı güncelleme işlemi yapıldı. Lütfen biraz bekleyin."
+    const access = await evaluateSecurityAccessAsync({
+      ip,
+      purpose: "profile:links",
+      subject: `${session.userId}:${normalizeIp(ip)}`,
+      limit: 30,
+      windowMs: 60 * 1000,
+      isEn,
+    });
+    if (!access.allowed) {
+      return access.response;
+    }
+
+    if (!Array.isArray(body?.links)) {
+      return NextResponse.json(
+        {
+          error: isEn
+            ? "Invalid links payload. Expected an array of links."
+            : "Geçersiz bağlantı verisi. Bağlantılar bir dizi (array) olmalıdır.",
+        },
+        { status: 400 }
       );
     }
 
-    const links = Array.isArray(body.links) ? body.links : [];
+    const links = body.links;
     await ProfileService.updateLinks(session.userId, links);
 
     return NextResponse.json(

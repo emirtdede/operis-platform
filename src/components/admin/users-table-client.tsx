@@ -1,24 +1,51 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { Search, X, ArrowUpDown } from "lucide-react";
+import { useState, useTransition, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Search, X, ArrowUpDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { AdminUserItem } from "@/src/modules/admin/service";
 
 interface UsersTableClientProps {
   initialUsers: AdminUserItem[];
   total: number;
+  currentPage?: number;
+  totalPages?: number;
 }
 
-export function UsersTableClient({ initialUsers, total }: UsersTableClientProps) {
+export function UsersTableClient({
+  initialUsers,
+  total,
+  currentPage = 1,
+  totalPages = 1,
+}: UsersTableClientProps) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
   const [users, setUsers] = useState<AdminUserItem[]>(initialUsers);
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("ALL");
-  const [roleFilter, setRoleFilter] = useState("ALL");
+  const [search, setSearch] = useState(searchParams.get("search") || "");
+  const [statusFilter, setStatusFilter] = useState(searchParams.get("status") || "ALL");
+  const [roleFilter, setRoleFilter] = useState(searchParams.get("role") || "ALL");
   const [sortField, setSortField] = useState<"createdAt" | "email" | "displayName">("createdAt");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [selectedUser, setSelectedUser] = useState<AdminUserItem | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const [, startTransition] = useTransition();
+
+  useEffect(() => {
+    setUsers(initialUsers);
+  }, [initialUsers]);
+
+  const updateUrl = (updates: Record<string, string | null>) => {
+    const params = new URLSearchParams(searchParams.toString());
+    Object.entries(updates).forEach(([k, v]) => {
+      if (!v || v === "ALL") {
+        params.delete(k);
+      } else {
+        params.set(k, v);
+      }
+    });
+    router.push(`?${params.toString()}`);
+  };
 
   // Filter & Sort
   const filteredUsers = users
@@ -113,22 +140,32 @@ export function UsersTableClient({ initialUsers, total }: UsersTableClientProps)
 
       {/* Control Bar: Search & Filters */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-2xl bg-[#12141a] border border-slate-800">
-        <div className="relative flex-1 max-w-md">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            updateUrl({ search: search.trim(), page: "1" });
+          }}
+          className="relative flex-1 max-w-md"
+        >
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Ad, @kullanıcıadı veya e-posta ile ara..."
+            placeholder="Ad, @kullanıcıadı veya e-posta ile ara (Enter)..."
             className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-9 pr-3 py-1.5 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-blue-500 transition-colors"
           />
-        </div>
+        </form>
 
         <div className="flex items-center gap-2.5">
           {/* Status Filter */}
           <select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => {
+              const val = e.target.value;
+              setStatusFilter(val);
+              updateUrl({ status: val, page: "1" });
+            }}
             className="bg-slate-900 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-blue-500"
           >
             <option value="ALL">Tüm Durumlar</option>
@@ -139,7 +176,11 @@ export function UsersTableClient({ initialUsers, total }: UsersTableClientProps)
           {/* Role Filter */}
           <select
             value={roleFilter}
-            onChange={(e) => setRoleFilter(e.target.value)}
+            onChange={(e) => {
+              const val = e.target.value;
+              setRoleFilter(val);
+              updateUrl({ role: val, page: "1" });
+            }}
             className="bg-slate-900 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-blue-500"
           >
             <option value="ALL">Tüm Roller</option>
@@ -305,6 +346,36 @@ export function UsersTableClient({ initialUsers, total }: UsersTableClientProps)
               })}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      {/* Pagination Footer */}
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 bg-[#12141a] border border-slate-800 rounded-2xl text-xs text-slate-400">
+        <div>
+          Toplam <span className="text-white font-semibold">{total.toLocaleString()}</span>{" "}
+          kullanıcı • Sayfa <span className="text-white font-semibold">{currentPage}</span> /{" "}
+          <span className="text-white font-semibold">{totalPages}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => updateUrl({ page: String(currentPage - 1) })}
+            disabled={currentPage <= 1}
+            className="px-3 py-1.5 rounded-lg border border-slate-800 bg-slate-900 text-slate-300 hover:text-white hover:bg-slate-800 disabled:opacity-40 disabled:pointer-events-none transition-colors flex items-center gap-1 cursor-pointer"
+          >
+            <ChevronLeft className="h-3.5 w-3.5" />
+            <span>Önceki</span>
+          </button>
+          <span className="px-2 font-mono text-slate-300">{currentPage}</span>
+          <button
+            type="button"
+            onClick={() => updateUrl({ page: String(currentPage + 1) })}
+            disabled={currentPage >= totalPages}
+            className="px-3 py-1.5 rounded-lg border border-slate-800 bg-slate-900 text-slate-300 hover:text-white hover:bg-slate-800 disabled:opacity-40 disabled:pointer-events-none transition-colors flex items-center gap-1 cursor-pointer"
+          >
+            <span>Sonraki</span>
+            <ChevronRight className="h-3.5 w-3.5" />
+          </button>
         </div>
       </div>
 

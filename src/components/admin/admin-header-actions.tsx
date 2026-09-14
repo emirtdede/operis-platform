@@ -24,6 +24,22 @@ export function AdminHeaderActions({ currentRole }: AdminHeaderActionsProps) {
 
   const handleLogout = () => {
     startTransition(async () => {
+      try {
+        if (
+          typeof window !== "undefined" &&
+          (window as unknown as { Clerk?: { signOut?: () => Promise<void> } }).Clerk?.signOut
+        ) {
+          try {
+            await (
+              window as unknown as { Clerk: { signOut: () => Promise<void> } }
+            ).Clerk.signOut();
+          } catch {
+            // Ignore Clerk client signOut error
+          }
+        }
+      } catch {
+        // Ignore
+      }
       await fetch("/api/auth/logout", { method: "POST" });
       window.location.href = "/tr";
     });

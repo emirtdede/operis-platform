@@ -1,7 +1,7 @@
 import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import { getDb, schema } from "@/src/lib/db";
 import { inMemoryListings } from "@/src/modules/listings/service";
-import { DEFAULT_USER } from "@/src/modules/auth/demo-user";
+import { evaluateListingVisibility } from "@/src/modules/listings/visibility";
 
 export interface FeedQueryParams {
   mode?: "following" | "all";
@@ -11,6 +11,17 @@ export interface FeedQueryParams {
   cursor?: string | null;
   limit?: number;
   locale?: "tr" | "en";
+  last24Hours?: boolean;
+  budgetSpecific?: boolean;
+  budgetMode?: "SPECIFIED" | "OPEN_OFFER" | "UNSPECIFIED" | string;
+  timelineMode?:
+    | "TARGET_DATE"
+    | "ESTIMATED_DURATION"
+    | "FLEXIBLE"
+    | "IN_NEGOTIATION"
+    | "SPECIFIC_DATE"
+    | "DURATION_ESTIMATE"
+    | string;
 }
 
 export interface FeedListingItem {
@@ -73,7 +84,6 @@ export class FeedService {
     let items: FeedListingItem[] = [];
     let nextCursor: string | null = null;
     let hasMore = false;
-    let dbSuccess = false;
     let followedCategoryIds: string[] = [];
 
     try {
@@ -173,6 +183,67 @@ export class FeedService {
             sql`array_to_string(${schema.listings.tags}, ' ') ILIKE ${pattern}`
           )!
         );
+      }
+
+      // Server-side filter: last 24 hours (B21, K04)
+      if (params.last24Hours) {
+        const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        conditions.push(sql`${schema.listings.lastActivatedAt} >= ${twentyFourHoursAgo}`);
+      }
+
+      // Server-side filter: budget mode & specified budget (B21, K04, M01)
+      if (params.budgetSpecific) {
+        conditions.push(
+          sql`(${schema.listings.budgetMode} IN ('FIXED_EXACT', 'FIXED_RANGE', 'HOURLY_EXACT', 'HOURLY_RANGE', 'EXACT', 'RANGE') AND ${schema.listings.budgetMin} IS NOT NULL)`
+        );
+      } else if (params.budgetMode) {
+        if (params.budgetMode === "SPECIFIED") {
+          conditions.push(
+            sql`(${schema.listings.budgetMode} IN ('FIXED_EXACT', 'FIXED_RANGE', 'HOURLY_EXACT', 'HOURLY_RANGE', 'EXACT', 'RANGE') AND ${schema.listings.budgetMin} IS NOT NULL)`
+          );
+        } else if (params.budgetMode === "OPEN_OFFER" || params.budgetMode === "UNSPECIFIED") {
+          conditions.push(
+            sql`${schema.listings.budgetMode} IN ('NEGOTIABLE', 'REQUEST_GUIDANCE', 'OPEN_BID')`
+          );
+        } else if (params.budgetMode === "FIXED" || params.budgetMode === "FIXED_BUDGET") {
+          conditions.push(
+            sql`${schema.listings.budgetMode} IN ('FIXED_EXACT', 'FIXED_RANGE', 'EXACT', 'RANGE')`
+          );
+        } else if (params.budgetMode === "HOURLY") {
+          conditions.push(sql`${schema.listings.budgetMode} IN ('HOURLY_EXACT', 'HOURLY_RANGE')`);
+        } else if (params.budgetMode === "EXACT") {
+          conditions.push(
+            sql`${schema.listings.budgetMode} IN ('EXACT', 'FIXED_EXACT', 'HOURLY_EXACT')`
+          );
+        } else if (params.budgetMode === "RANGE") {
+          conditions.push(
+            sql`${schema.listings.budgetMode} IN ('RANGE', 'FIXED_RANGE', 'HOURLY_RANGE')`
+          );
+        } else if (params.budgetMode === "OPEN_BID") {
+          conditions.push(
+            sql`${schema.listings.budgetMode} IN ('OPEN_BID', 'NEGOTIABLE', 'REQUEST_GUIDANCE')`
+          );
+        } else {
+          conditions.push(eq(schema.listings.budgetMode, params.budgetMode));
+        }
+      }
+
+      // Server-side filter: timeline mode (B21, K04, M01)
+      if (params.timelineMode) {
+        if (params.timelineMode === "TARGET_DATE" || params.timelineMode === "SPECIFIC_DATE") {
+          conditions.push(sql`${schema.listings.timelineMode} IN ('SPECIFIC_DATE', 'TARGET_DATE')`);
+        } else if (
+          params.timelineMode === "ESTIMATED_DURATION" ||
+          params.timelineMode === "DURATION_ESTIMATE"
+        ) {
+          conditions.push(
+            sql`${schema.listings.timelineMode} IN ('DURATION_ESTIMATE', 'ESTIMATED_DURATION')`
+          );
+        } else if (params.timelineMode === "FLEXIBLE" || params.timelineMode === "IN_NEGOTIATION") {
+          conditions.push(sql`${schema.listings.timelineMode} IN ('FLEXIBLE', 'IN_NEGOTIATION')`);
+        } else {
+          conditions.push(eq(schema.listings.timelineMode, params.timelineMode));
+        }
       }
 
       // Mutual block exclusions if viewer is logged in
@@ -280,153 +351,8 @@ export class FeedService {
         clickCount: r.clickCount ?? 0,
         tags: r.tags ?? [],
       }));
-      dbSuccess = true;
     } catch {
-      // Database unavailable or errored; fallback to inMemoryListings below
-    }
-
-    if (
-      !dbSuccess &&
-      typeof process !== "undefined" &&
-      process.env.NODE_ENV !== "production" &&
-      !process.env.VITEST &&
-      process.env.NODE_ENV !== "test" &&
-      items.length === 0 &&
-      inMemoryListings.length > 0
-    ) {
-      if (mode === "following" && (!params.userId || followedCategoryIds.length === 0)) {
-        return {
-          items: [],
-          nextCursor: null,
-          hasMore: false,
-          hasFollowedCategories: false,
-        };
-      }
-
-      const nowMem = new Date();
-      let filteredInMem = inMemoryListings.filter(
-        (l) =>
-          l.status === "ACTIVE" &&
-          Boolean(l.activeUntil && new Date(l.activeUntil) > nowMem) &&
-          (l.ownerUserId !== DEFAULT_USER.id || DEFAULT_USER.status === "ACTIVE")
-      );
-
-      if (mode === "following" && followedCategoryIds.length > 0) {
-        filteredInMem = filteredInMem.filter((l) => followedCategoryIds.includes(l.categoryId));
-      }
-
-      if (normalizedCategorySlugs && normalizedCategorySlugs.length > 0) {
-        filteredInMem = filteredInMem.filter((l) => {
-          let slug = "web-development";
-          if (l.categoryId === "cat_mobile_dev") slug = "mobile-development";
-          else if (l.categoryId === "cat_backend_dev") slug = "backend-api";
-          return normalizedCategorySlugs.includes(slug);
-        });
-      }
-
-      if (params.search) {
-        const q = params.search.toLowerCase();
-        filteredInMem = filteredInMem.filter(
-          (l) =>
-            l.title.toLowerCase().includes(q) ||
-            l.summary.toLowerCase().includes(q) ||
-            (Array.isArray(l.tags) && l.tags.some((t) => t.toLowerCase().includes(q)))
-        );
-      }
-
-      // Sort by lastActivatedAt DESC, id DESC
-      filteredInMem.sort((a, b) => {
-        const dateA = a.lastActivatedAt ? new Date(a.lastActivatedAt).getTime() : 0;
-        const dateB = b.lastActivatedAt ? new Date(b.lastActivatedAt).getTime() : 0;
-        if (dateB !== dateA) return dateB - dateA;
-        return b.id.localeCompare(a.id);
-      });
-
-      // Cursor filtering
-      if (params.cursor) {
-        try {
-          const decoded = JSON.parse(Buffer.from(params.cursor, "base64").toString("utf-8"));
-          if (decoded.lastActivatedAt && decoded.id) {
-            const cursorTime = new Date(decoded.lastActivatedAt).getTime();
-            filteredInMem = filteredInMem.filter((l) => {
-              const lTime = l.lastActivatedAt ? new Date(l.lastActivatedAt).getTime() : 0;
-              return lTime < cursorTime || (lTime === cursorTime && l.id < decoded.id);
-            });
-          }
-        } catch {
-          // ignore invalid cursor
-        }
-      }
-
-      const inMemHasMore = filteredInMem.length > limit;
-      const sliced = inMemHasMore ? filteredInMem.slice(0, limit) : filteredInMem;
-
-      let inMemNextCursor: string | null = null;
-      if (inMemHasMore && sliced.length > 0) {
-        const last = sliced[sliced.length - 1];
-        if (last && last.lastActivatedAt) {
-          inMemNextCursor = Buffer.from(
-            JSON.stringify({
-              lastActivatedAt: new Date(last.lastActivatedAt).toISOString(),
-              id: last.id,
-            })
-          ).toString("base64");
-        }
-      }
-
-      const inMemItems: FeedListingItem[] = sliced.map((l) => {
-        let categoryName = locale === "tr" ? "Web Geliştirme" : "Web Development";
-        let categorySlug = "web-development";
-        let ownerDisplayName = "Demir Yıldız";
-        let ownerHandle = "demokullanici";
-
-        if (l.categoryId === "cat_mobile_dev") {
-          categoryName = locale === "tr" ? "Mobil Uygulama" : "Mobile Development";
-          categorySlug = "mobile-development";
-          ownerDisplayName = "Mehmet Kaan";
-          ownerHandle = "mehmetkaan";
-        } else if (l.categoryId === "cat_backend_dev") {
-          categoryName = locale === "tr" ? "Backend & API" : "Backend Development";
-          categorySlug = "backend-api";
-          ownerDisplayName = "Selin Yılmaz";
-          ownerHandle = "selinyilmaz";
-        }
-
-        return {
-          id: l.id,
-          slug: l.slug,
-          title: l.title,
-          summary: l.summary,
-          scope: l.scope,
-          categoryId: l.categoryId,
-          categorySlug,
-          categoryName,
-          budgetMode: l.budgetMode,
-          budgetCurrency: l.budgetCurrency,
-          budgetMin: l.budgetMin,
-          budgetMax: l.budgetMax,
-          timelineMode: l.timelineMode,
-          targetDate: l.targetDate,
-          timelineValue: l.timelineValue,
-          timelineUnit: l.timelineUnit,
-          ownerHandle,
-          ownerDisplayName,
-          firstPublishedAt: l.firstPublishedAt,
-          lastActivatedAt: l.lastActivatedAt,
-          activeUntil: l.activeUntil ?? new Date(),
-          activationSeq: l.activationSeq,
-          viewCount: l.viewCount ?? 0,
-          clickCount: l.clickCount ?? 0,
-          tags: l.tags,
-        };
-      });
-
-      return {
-        items: inMemItems,
-        nextCursor: inMemNextCursor,
-        hasMore: inMemHasMore,
-        hasFollowedCategories: mode === "following" ? followedCategoryIds.length > 0 : undefined,
-      };
+      // Database query error; return current items
     }
 
     return {
@@ -438,9 +364,9 @@ export class FeedService {
   }
 
   /**
-   * Retrieves single listing details by slug, enforcing visibility and block rules.
+   * Retrieves single listing details by slug, enforcing visibility and block rules (Fixes B03).
    */
-  static async getListingBySlug(slug: string, viewerUserId?: string) {
+  static async getListingBySlug(slug: string, viewerUserId?: string, viewerRole?: string) {
     try {
       const db = getDb();
       const rows = await db
@@ -460,10 +386,25 @@ export class FeedService {
       if (firstRow) {
         const { listing, category, ownerProfile } = firstRow;
 
-        // Check block rule if viewer is logged in
-        if (viewerUserId && viewerUserId !== listing.ownerUserId) {
-          const blockExists = await db
-            .select({ id: schema.blocks.blockerUserId })
+        const viewerBlockedUserIds: string[] = [];
+        const viewerBlockedByUserIds: string[] = [];
+        let effectiveRole = viewerRole;
+
+        if (viewerUserId) {
+          if (!effectiveRole) {
+            const [viewerUser] = await db
+              .select({ role: schema.users.role })
+              .from(schema.users)
+              .where(eq(schema.users.id, viewerUserId))
+              .limit(1);
+            effectiveRole = viewerUser?.role;
+          }
+
+          const blockRows = await db
+            .select({
+              blockerId: schema.blocks.blockerUserId,
+              blockedId: schema.blocks.blockedUserId,
+            })
             .from(schema.blocks)
             .where(
               or(
@@ -476,10 +417,23 @@ export class FeedService {
                   eq(schema.blocks.blockedUserId, viewerUserId)
                 )
               )
-            )
-            .limit(1);
+            );
 
-          if (blockExists.length > 0) return null;
+          for (const b of blockRows) {
+            if (b.blockerId === viewerUserId) viewerBlockedUserIds.push(b.blockedId);
+            if (b.blockedId === viewerUserId) viewerBlockedByUserIds.push(b.blockerId);
+          }
+        }
+
+        const visibility = evaluateListingVisibility(listing, {
+          userId: viewerUserId,
+          role: effectiveRole,
+          blockedUserIds: viewerBlockedUserIds,
+          blockedByUserIds: viewerBlockedByUserIds,
+        });
+
+        if (!visibility.visible) {
+          return null;
         }
 
         return {
@@ -492,127 +446,33 @@ export class FeedService {
       // In-memory fallback
     }
 
-    if (process.env.NODE_ENV === "production") {
-      return null;
-    }
+    if (process.env.VITEST && inMemoryListings.length > 0) {
+      const inMem = inMemoryListings.find((l) => l.slug === slug);
+      if (inMem) {
+        const visibility = evaluateListingVisibility(
+          inMem as unknown as typeof schema.listings.$inferSelect,
+          {
+            userId: viewerUserId,
+            role: viewerRole,
+          }
+        );
+        if (!visibility.visible) {
+          return null;
+        }
 
-    const inMem = inMemoryListings.find((l) => l.slug === slug);
-    if (inMem) {
-      if (inMem.ownerUserId === DEFAULT_USER.id && DEFAULT_USER.status !== "ACTIVE") {
-        return null;
+        return {
+          listing: inMem as unknown as typeof schema.listings.$inferSelect,
+          category: {
+            id: inMem.categoryId,
+            key: inMem.categoryId,
+          } as unknown as typeof schema.categories.$inferSelect,
+          ownerProfile: {
+            userId: inMem.ownerUserId,
+            displayName: "Demir Yıldız",
+            handle: "demokullanici",
+          } as unknown as typeof schema.profiles.$inferSelect,
+        };
       }
-      return {
-        listing: {
-          id: inMem.id,
-          ownerUserId: inMem.ownerUserId,
-          slug: inMem.slug,
-          status: inMem.status,
-          categoryId: inMem.categoryId,
-          title: inMem.title,
-          summary: inMem.summary,
-          scope: inMem.scope,
-          answersJson: inMem.answersJson ?? {},
-          tags: inMem.tags ?? [],
-          budgetMode: inMem.budgetMode,
-          budgetCurrency: inMem.budgetCurrency,
-          budgetMin: inMem.budgetMin,
-          budgetMax: inMem.budgetMax,
-          timelineMode: inMem.timelineMode,
-          targetDate: inMem.targetDate,
-          timelineValue: inMem.timelineValue,
-          timelineUnit: inMem.timelineUnit,
-          activationSeq: inMem.activationSeq,
-          viewCount: inMem.viewCount ?? 0,
-          clickCount: inMem.clickCount ?? 0,
-          firstPublishedAt: inMem.firstPublishedAt,
-          lastActivatedAt: inMem.lastActivatedAt,
-          activeUntil: inMem.activeUntil,
-          createdAt: inMem.firstPublishedAt,
-          updatedAt: inMem.lastActivatedAt,
-        } as unknown as typeof schema.listings.$inferSelect,
-        category: {
-          id: inMem.categoryId,
-          key:
-            inMem.categoryId === "cat_mobile_dev"
-              ? "mobile-development"
-              : inMem.categoryId === "cat_backend_dev"
-                ? "backend-api"
-                : "web-development",
-          nameTr:
-            inMem.categoryId === "cat_mobile_dev"
-              ? "Mobil Uygulama"
-              : inMem.categoryId === "cat_backend_dev"
-                ? "Backend & API"
-                : "Web Geliştirme",
-          nameEn:
-            inMem.categoryId === "cat_mobile_dev"
-              ? "Mobile Development"
-              : inMem.categoryId === "cat_backend_dev"
-                ? "Backend Development"
-                : "Web Development",
-          descriptionTr:
-            inMem.categoryId === "cat_mobile_dev"
-              ? "iOS ve Android mobil projeleri"
-              : inMem.categoryId === "cat_backend_dev"
-                ? "Dağıtık arka yüz ve veri tabanı sistemleri"
-                : "Modern web uygulamaları ve arayüzler",
-          descriptionEn:
-            inMem.categoryId === "cat_mobile_dev"
-              ? "iOS and Android mobile apps"
-              : inMem.categoryId === "cat_backend_dev"
-                ? "Distributed backends and APIs"
-                : "Modern web apps and frontends",
-          discipline: "SOFTWARE",
-          icon: "globe",
-          sortOrder: 1,
-          createdAt: new Date(),
-        } as unknown as typeof schema.categories.$inferSelect,
-        ownerProfile: {
-          id: `profile-${inMem.ownerUserId}`,
-          userId: inMem.ownerUserId,
-          displayName:
-            inMem.ownerUserId === "usr_mock_mehmet_kaan"
-              ? "Mehmet Kaan"
-              : inMem.ownerUserId === "usr_mock_selin_yilmaz"
-                ? "Selin Yılmaz"
-                : "Demir Yıldız",
-          handle:
-            inMem.ownerUserId === "usr_mock_mehmet_kaan"
-              ? "mehmetkaan"
-              : inMem.ownerUserId === "usr_mock_selin_yilmaz"
-                ? "selinyilmaz"
-                : "demokullanici",
-          bio:
-            inMem.ownerUserId === "usr_mock_mehmet_kaan"
-              ? "Cross-platform mobil geliştirici ve Flutter uzmanı."
-              : inMem.ownerUserId === "usr_mock_selin_yilmaz"
-                ? "Go ve PostgreSQL ile yüksek trafikli mikroservis mimarı."
-                : "Kıdemli Yazılım Mühendisi & Bağımsız Geliştirici",
-          location: "İstanbul, TR",
-          avatarUrl: null,
-          title:
-            inMem.ownerUserId === "usr_mock_mehmet_kaan"
-              ? "Mobile Developer"
-              : inMem.ownerUserId === "usr_mock_selin_yilmaz"
-                ? "Backend Engineer"
-                : "Full-stack Developer",
-          githubUrl: "https://github.com/demiryildiz",
-          linkedinUrl: null,
-          portfolioUrl: null,
-          upworkUrl: null,
-          fiverrUrl: null,
-          bionlukUrl: null,
-          freelancerUrl: null,
-          behanceUrl: "https://behance.net/demiryildiz",
-          dribbbleUrl: null,
-          figmaUrl: null,
-          gitlabUrl: null,
-          mediumUrl: null,
-          xUrl: null,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        } as unknown as typeof schema.profiles.$inferSelect,
-      };
     }
 
     return null;

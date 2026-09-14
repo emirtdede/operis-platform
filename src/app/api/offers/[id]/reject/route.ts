@@ -2,24 +2,26 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/src/modules/auth/session";
 import { OfferService } from "@/src/modules/offers/service";
 import {
-  checkRateLimit,
+  evaluateSecurityAccessAsync,
   getClientIp,
-  rateLimitExceededResponse,
+  normalizeIp,
 } from "@/src/lib/security/rate-limit";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const ip = getClientIp(req);
-  const limitCheck = checkRateLimit(`offer:reject:${ip}`, 30, 60 * 1000);
   const locale = req.headers.get("x-locale") || "tr";
   const isEn = locale === "en";
 
-  if (!limitCheck.success) {
-    return rateLimitExceededResponse(
-      limitCheck.reset,
-      isEn
-        ? "Too many requests. Please wait a moment."
-        : "Çok fazla işlem denendi. Lütfen biraz bekleyin."
-    );
+  const access = await evaluateSecurityAccessAsync({
+    ip,
+    purpose: "offer:reject",
+    subject: normalizeIp(ip),
+    limit: 30,
+    windowMs: 60 * 1000,
+    isEn,
+  });
+  if (!access.allowed) {
+    return access.response;
   }
 
   try {

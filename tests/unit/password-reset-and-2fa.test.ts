@@ -83,9 +83,8 @@ describe("Cryptographic Stateless Password Reset Engine", () => {
 
 describe("Verification and Token Isolation (B01, B06, B07)", () => {
   it("strictly isolates session tokens from email verification and reset tokens", async () => {
-    const { createEmailVerificationToken, verifyEmailVerificationToken } = await import(
-      "@/src/modules/auth/verification"
-    );
+    const { createEmailVerificationToken, verifyEmailVerificationToken } =
+      await import("@/src/modules/auth/verification");
     const { verifySessionToken } = await import("@/src/modules/auth/session");
 
     const userId = "11111111-1111-1111-1111-111111111111";
@@ -103,9 +102,8 @@ describe("Verification and Token Isolation (B01, B06, B07)", () => {
   });
 
   it("handles phone OTP verification lifecycle without premature consumption (B07)", async () => {
-    const { storePhoneOtp, verifyPhoneOtp, consumePhoneOtp } = await import(
-      "@/src/modules/auth/verification"
-    );
+    const { storePhoneOtp, verifyPhoneOtp, consumePhoneOtp } =
+      await import("@/src/modules/auth/verification");
 
     const userId = "22222222-2222-2222-2222-222222222222";
     const code = "987654";
@@ -128,4 +126,3 @@ describe("Verification and Token Isolation (B01, B06, B07)", () => {
     expect(valid3).toBe(false);
   });
 });
-

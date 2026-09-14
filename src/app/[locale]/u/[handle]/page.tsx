@@ -18,7 +18,10 @@ import { Badge } from "@/src/components/ui/badge";
 import { EmptyState } from "@/src/components/ui/empty-state";
 import { Button } from "@/src/components/ui/button";
 import { ProfileShareButton } from "@/src/components/profile/profile-share-button";
+import { ProfileActionsMenu } from "@/src/components/profile/profile-actions-menu";
+import { getSession } from "@/src/modules/auth/session";
 import { getLocalizedProfilePath } from "@/src/lib/i18n/routes";
+import { serializeJsonLd } from "@/src/lib/security/json-ld";
 
 export async function generateMetadata({
   params,
@@ -85,7 +88,10 @@ export default async function PublicProfilePage({
   setRequestLocale(locale);
 
   const isTr = locale === "tr";
-  const profile = await ProfileService.getPublicProfileByHandle(handle);
+  const [profile, session] = await Promise.all([
+    ProfileService.getPublicProfileByHandle(handle),
+    getSession(),
+  ]);
 
   if (!profile) {
     notFound();
@@ -141,7 +147,7 @@ export default async function PublicProfilePage({
       {/* Schema.org Structured Data */}
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
       />
 
       {/* Navigation Breadcrumb */}
@@ -194,8 +200,15 @@ export default async function PublicProfilePage({
             </div>
           </div>
 
-          <div className="shrink-0 self-start sm:self-center">
+          <div className="shrink-0 self-start sm:self-center flex items-center gap-2">
             <ProfileShareButton locale={locale} />
+            <ProfileActionsMenu
+              targetUserId={profile.userId}
+              targetHandle={profile.handle}
+              targetDisplayName={profile.displayName}
+              locale={locale}
+              isSelf={Boolean(session?.userId && session.userId === profile.userId)}
+            />
           </div>
         </header>
 

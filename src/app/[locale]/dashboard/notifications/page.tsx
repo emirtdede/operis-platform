@@ -18,7 +18,7 @@ export async function generateMetadata({
   const isTr = locale === "tr";
 
   return {
-    title: isTr ? "Bildirim Merkezi | Operis" : "Notification Center | Operis",
+    title: isTr ? "Bildirim Merkezi" : "Notification Center",
     description: isTr
       ? "İlanlarınıza gelen teklifler, eşleşmeler ve platform bildirimleri."
       : "Proposals, matches, and system alerts for your account.",

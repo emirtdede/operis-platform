@@ -33,6 +33,10 @@ export const ROUTE_MAP = {
     tr: "/tr/kayit",
     en: "/en/register",
   },
+  dashboard: {
+    tr: "/tr/panel/ilanlarim",
+    en: "/en/dashboard/listings",
+  },
   dashboardListings: {
     tr: "/tr/panel/ilanlarim",
     en: "/en/dashboard/listings",
@@ -158,11 +162,15 @@ export const TR_TO_INTERNAL_LEGAL_SLUG: Record<string, string> = {
   "uyusmazlik-cozumu": "dispute-resolution",
 };
 
+function normalizeLocale(locale: Locale | string): Locale {
+  return String(locale).toLowerCase().startsWith("tr") ? "tr" : "en";
+}
+
 /**
  * Generates a localized path for standard routes.
  */
 export function getLocalizedRoute(route: RouteKey, locale: Locale | string): string {
-  const normLocale: Locale = locale === "tr" ? "tr" : "en";
+  const normLocale = normalizeLocale(locale);
   const entry = ROUTE_MAP[route];
   return entry ? entry[normLocale] : `/${normLocale}`;
 }
@@ -171,28 +179,28 @@ export function getLocalizedRoute(route: RouteKey, locale: Locale | string): str
  * Generates a localized listing detail path.
  */
 export function getLocalizedListingPath(slug: string, locale: Locale | string): string {
-  return locale === "tr" ? `/tr/ilanlar/${slug}` : `/en/listings/${slug}`;
+  return normalizeLocale(locale) === "tr" ? `/tr/ilanlar/${slug}` : `/en/listings/${slug}`;
 }
 
 /**
  * Generates a localized public profile path.
  */
 export function getLocalizedProfilePath(handle: string, locale: Locale | string): string {
-  return locale === "tr" ? `/tr/profil/${handle}` : `/en/profile/${handle}`;
+  return normalizeLocale(locale) === "tr" ? `/tr/profil/${handle}` : `/en/profile/${handle}`;
 }
 
 /**
  * Generates a localized workspace path.
  */
 export function getLocalizedWorkspacePath(id: string, locale: Locale | string): string {
-  return locale === "tr" ? `/tr/calisma-alani/${id}` : `/en/workspace/${id}`;
+  return normalizeLocale(locale) === "tr" ? `/tr/calisma-alani/${id}` : `/en/workspace/${id}`;
 }
 
 /**
  * Generates a localized legal document path.
  */
 export function getLocalizedLegalPath(docKey: string, locale: Locale | string): string {
-  const normLocale: Locale = locale === "tr" ? "tr" : "en";
+  const normLocale = normalizeLocale(locale);
   const slugConfig = LEGAL_SLUGS[docKey];
   const slug = slugConfig ? slugConfig[normLocale] : docKey;
   return normLocale === "tr" ? `/tr/yasal/${slug}` : `/en/legal/${slug}`;
@@ -202,7 +210,7 @@ export function getLocalizedLegalPath(docKey: string, locale: Locale | string): 
  * Converts any current pathname to the target locale, preserving localized slugs.
  */
 export function getAlternateLocalePath(pathname: string, targetLocale: Locale | string): string {
-  const normTarget: Locale = targetLocale === "tr" ? "tr" : "en";
+  const normTarget = normalizeLocale(targetLocale);
   // Normalize pathname without trailing slash
   const cleanPath = pathname.replace(/\/$/, "");
 
@@ -219,13 +227,17 @@ export function getAlternateLocalePath(pathname: string, targetLocale: Locale | 
   }
 
   // Check listings edit: /tr/ilanlar/:slug/duzenle or /en/listings/:slug/edit
-  const trListingEditMatch = cleanPath.match(/^\/tr\/ilanlar\/(.+)\/duzenle$/);
+  const trListingEditMatch = cleanPath.match(
+    /^\/tr\/(?:ilanlar|listings)\/(.+)\/(?:duzenle|edit)$/
+  );
   if (trListingEditMatch?.[1]) {
     return normTarget === "en"
       ? `/en/listings/${trListingEditMatch[1]}/edit`
       : `/tr/ilanlar/${trListingEditMatch[1]}/duzenle`;
   }
-  const enListingEditMatch = cleanPath.match(/^\/en\/listings\/(.+)\/edit$/);
+  const enListingEditMatch = cleanPath.match(
+    /^\/en\/(?:listings|ilanlar)\/(.+)\/(?:edit|duzenle)$/
+  );
   if (enListingEditMatch?.[1]) {
     return normTarget === "tr"
       ? `/tr/ilanlar/${enListingEditMatch[1]}/duzenle`
@@ -233,43 +245,43 @@ export function getAlternateLocalePath(pathname: string, targetLocale: Locale | 
   }
 
   // Check listings detail: /tr/ilanlar/:slug or /en/listings/:slug
-  const trListingMatch = cleanPath.match(/^\/tr\/ilanlar\/(.+)$/);
+  const trListingMatch = cleanPath.match(/^\/tr\/(?:ilanlar|listings)\/(.+)$/);
   if (trListingMatch?.[1]) {
-    return targetLocale === "en"
+    return normTarget === "en"
       ? `/en/listings/${trListingMatch[1]}`
       : `/tr/ilanlar/${trListingMatch[1]}`;
   }
-  const enListingMatch = cleanPath.match(/^\/en\/listings\/(.+)$/);
+  const enListingMatch = cleanPath.match(/^\/en\/(?:listings|ilanlar)\/(.+)$/);
   if (enListingMatch?.[1]) {
-    return targetLocale === "tr"
+    return normTarget === "tr"
       ? `/tr/ilanlar/${enListingMatch[1]}`
       : `/en/listings/${enListingMatch[1]}`;
   }
 
   // Check profile: /tr/profil/:handle or /en/profile/:handle or /en/u/:handle
-  const trProfileMatch = cleanPath.match(/^\/tr\/profil\/(.+)$/);
+  const trProfileMatch = cleanPath.match(/^\/tr\/(?:profil|u)\/(.+)$/);
   if (trProfileMatch?.[1]) {
-    return targetLocale === "en"
+    return normTarget === "en"
       ? `/en/profile/${trProfileMatch[1]}`
       : `/tr/profil/${trProfileMatch[1]}`;
   }
   const enProfileMatch = cleanPath.match(/^\/en\/(?:profile|u)\/(.+)$/);
   if (enProfileMatch?.[1]) {
-    return targetLocale === "tr"
+    return normTarget === "tr"
       ? `/tr/profil/${enProfileMatch[1]}`
       : `/en/profile/${enProfileMatch[1]}`;
   }
 
   // Check workspace: /tr/calisma-alani/:id or /en/workspace/:id or /en/work/:id
-  const trWorkMatch = cleanPath.match(/^\/tr\/calisma-alani\/(.+)$/);
+  const trWorkMatch = cleanPath.match(/^\/tr\/(?:calisma-alani|work)\/(.+)$/);
   if (trWorkMatch?.[1]) {
-    return targetLocale === "en"
+    return normTarget === "en"
       ? `/en/workspace/${trWorkMatch[1]}`
       : `/tr/calisma-alani/${trWorkMatch[1]}`;
   }
   const enWorkMatch = cleanPath.match(/^\/en\/(?:workspace|work)\/(.+)$/);
   if (enWorkMatch?.[1]) {
-    return targetLocale === "tr"
+    return normTarget === "tr"
       ? `/tr/calisma-alani/${enWorkMatch[1]}`
       : `/en/workspace/${enWorkMatch[1]}`;
   }
@@ -278,11 +290,11 @@ export function getAlternateLocalePath(pathname: string, targetLocale: Locale | 
   const trLegalMatch = cleanPath.match(/^\/tr\/yasal\/(.+)$/);
   if (trLegalMatch?.[1]) {
     const internalKey = TR_TO_INTERNAL_LEGAL_SLUG[trLegalMatch[1]] ?? trLegalMatch[1];
-    return getLocalizedLegalPath(internalKey, targetLocale);
+    return getLocalizedLegalPath(internalKey, normTarget);
   }
   const enLegalMatch = cleanPath.match(/^\/en\/legal\/(.+)$/);
   if (enLegalMatch?.[1]) {
-    return getLocalizedLegalPath(enLegalMatch[1], targetLocale);
+    return getLocalizedLegalPath(enLegalMatch[1], normTarget);
   }
 
   // Fallback: simply replace locale prefix

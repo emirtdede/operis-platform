@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { setRequestLocale } from "next-intl/server";
 import { Search, PlusCircle, Clock, ShieldCheck } from "lucide-react";
-import { FeedService, FeedListingItem } from "@/src/modules/listings/feed/service";
+import { FeedService, FeedResult } from "@/src/modules/listings/feed/service";
 import { CategoryService } from "@/src/modules/categories/service";
 import { InteractiveListingsFeed } from "@/src/components/listings/interactive-listings-feed";
 import { EmptyState } from "@/src/components/ui/empty-state";
@@ -10,6 +10,7 @@ import { Button } from "@/src/components/ui/button";
 import { getLocalizedRoute } from "@/src/lib/i18n/routes";
 import { CategoryFilterBar } from "@/src/components/categories/category-filter-bar";
 import { getSession } from "@/src/modules/auth/session";
+import { serializeJsonLd } from "@/src/lib/security/json-ld";
 
 export async function generateMetadata({
   params,
@@ -75,13 +76,13 @@ export default async function BrowseListingsPage({
   const categories = await CategoryService.getAllCategories(isTr ? "tr" : "en").catch(() => []);
   const session = await getSession();
 
-  const feedResult: { items: FeedListingItem[] } = await FeedService.getFeedListings({
+  const feedResult: FeedResult = await FeedService.getFeedListings({
     mode: "all",
     categorySlugs: selectedCategory ? [selectedCategory] : undefined,
     search: searchQuery,
     locale: isTr ? "tr" : "en",
     userId: session?.userId,
-  }).catch(() => ({ items: [] }));
+  }).catch(() => ({ items: [], nextCursor: null, hasMore: false }));
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -130,7 +131,7 @@ export default async function BrowseListingsPage({
       {/* Schema.org Structured Data */}
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
       />
 
       {/* Expansive Header Banner */}
@@ -257,7 +258,14 @@ export default async function BrowseListingsPage({
             />
           </div>
         ) : (
-          <InteractiveListingsFeed items={feedResult.items} locale={locale} />
+          <InteractiveListingsFeed
+            items={feedResult.items}
+            locale={locale}
+            initialNextCursor={feedResult.nextCursor}
+            initialHasMore={feedResult.hasMore}
+            categorySlug={selectedCategory}
+            searchQuery={searchQuery}
+          />
         )}
       </section>
     </main>

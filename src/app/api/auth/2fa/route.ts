@@ -1,14 +1,18 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
-import { getSession } from "@/src/modules/auth/session";
+import { eq, sql } from "drizzle-orm";
+import { getSession, createSessionToken, SESSION_COOKIE_NAME } from "@/src/modules/auth/session";
 import { getDb, schema } from "@/src/lib/db";
-import { generateTotpSecret, verifyTotpCode, getOtpAuthUri } from "@/src/modules/auth/totp";
 import {
-  checkRateLimit,
-  getClientIp,
-  rateLimitExceededResponse,
-} from "@/src/lib/security/rate-limit";
+  generateTotpSecret,
+  verifyTotpCode,
+  getOtpAuthUri,
+  generateBackupCodes,
+  hashBackupCode,
+  encryptTotpSecret,
+  decryptTotpSecret,
+} from "@/src/modules/auth/totp";
+import { evaluateSecurityAccessAsync, getClientIp } from "@/src/lib/security/rate-limit";
 import { DEFAULT_USER } from "@/src/modules/auth/demo-user";
 
 const twoFactorSchema = z.object({
@@ -48,7 +52,9 @@ export async function GET(req: Request) {
     const message =
       err instanceof Error
         ? err.message
-        : isEn ? "Failed to retrieve 2FA setup information." : "2FA kurulum bilgisi alınamadı.";
+        : isEn
+          ? "Failed to retrieve 2FA setup information."
+          : "2FA kurulum bilgisi alınamadı.";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
@@ -58,14 +64,15 @@ export async function POST(req: Request) {
   const headerLocale = req.headers.get("x-locale");
   const isEnHeader = headerLocale === "en";
 
-  const limitCheck = checkRateLimit(`auth:2fa:${ip}`, 10, 60 * 1000);
-  if (!limitCheck.success) {
-    return rateLimitExceededResponse(
-      limitCheck.reset,
-      isEnHeader
-        ? "Too many 2FA attempts. Please wait a moment."
-        : "Çok fazla 2FA denemesi yapıldı. Lütfen biraz bekleyiniz."
-    );
+  const security = await evaluateSecurityAccessAsync({
+    ip,
+    purpose: "auth:2fa",
+    limit: 10,
+    windowMs: 60 * 1000,
+    isEn: isEnHeader,
+  });
+  if (!security.allowed) {
+    return security.response;
   }
 
   let isEn = isEnHeader;
@@ -80,7 +87,8 @@ export async function POST(req: Request) {
 
     const body = await req.json();
     isEn = body?.locale === "en" || isEnHeader;
-    const { enabled, secret, totpCode, currentTotpCode, password, setupToken } = twoFactorSchema.parse(body);
+    const { enabled, secret, totpCode, currentTotpCode, password, setupToken } =
+      twoFactorSchema.parse(body);
 
     if (setupToken && secret) {
       const { getEnv } = await import("@/src/config/env");
@@ -152,7 +160,10 @@ export async function POST(req: Request) {
         }
 
         if (!authorizedToReconfigure && currentTotpCode && currentUser.twoFactorSecret) {
-          authorizedToReconfigure = verifyTotpCode(currentUser.twoFactorSecret, currentTotpCode.trim());
+          authorizedToReconfigure = verifyTotpCode(
+            decryptTotpSecret(session.userId, currentUser.twoFactorSecret),
+            currentTotpCode.trim()
+          );
         }
 
         if (!authorizedToReconfigure) {
@@ -179,36 +190,70 @@ export async function POST(req: Request) {
         );
       }
 
+      const rawBackupCodes = generateBackupCodes(10);
+      const hashedBackupCodes = rawBackupCodes.map(hashBackupCode);
+
+      let freshAuthVersion = (session.authVersion ?? 1) + 1;
       try {
-        await db
+        const [updatedRow] = await db
           .update(schema.users)
           .set({
             twoFactorEnabled: true,
-            twoFactorSecret: secret,
+            twoFactorSecret: encryptTotpSecret(session.userId, secret),
+            twoFactorBackupCodes: hashedBackupCodes,
+            authVersion: sql`${schema.users.authVersion} + 1`,
             updatedAt: new Date(),
           })
-          .where(eq(schema.users.id, session.userId));
+          .where(eq(schema.users.id, session.userId))
+          .returning({ authVersion: schema.users.authVersion });
+
+        if (updatedRow?.authVersion) {
+          freshAuthVersion = updatedRow.authVersion;
+        }
       } catch {
         if (process.env.NODE_ENV === "production") {
-          throw new Error(isEn ? "Failed to update 2FA in database." : "Veritabanında 2FA güncellenemedi.");
+          throw new Error(
+            isEn ? "Failed to update 2FA in database." : "Veritabanında 2FA güncellenemedi."
+          );
         }
       }
 
       if (session.userId === DEFAULT_USER.id) {
         DEFAULT_USER.twoFactorEnabled = true;
         DEFAULT_USER.twoFactorSecret = secret;
+        DEFAULT_USER.authVersion = freshAuthVersion;
       }
 
-      return NextResponse.json(
+      // Reissue refreshed session cookie with updated authVersion
+      const freshToken = createSessionToken({
+        id: session.userId,
+        email: session.email,
+        role: session.role,
+        status: session.status,
+        authVersion: freshAuthVersion,
+      });
+
+      const response = NextResponse.json(
         {
           success: true,
           twoFactorEnabled: true,
+          backupCodes: rawBackupCodes,
           message: isEn
             ? "Two-factor authentication enabled successfully."
             : "İki aşamalı doğrulama başarıyla aktif edildi.",
         },
         { status: 200 }
       );
+
+      response.cookies.set(SESSION_COOKIE_NAME, freshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+        maxAge: 7 * 24 * 60 * 60,
+      });
+
+      return response;
     } else {
       // Re-authentication requirement to disable 2FA (AUTH-06)
       let authorizedToDisable = false;
@@ -226,7 +271,10 @@ export async function POST(req: Request) {
 
         if (dbUser) {
           if (totpCode && dbUser.twoFactorSecret) {
-            authorizedToDisable = verifyTotpCode(dbUser.twoFactorSecret, totpCode.trim());
+            authorizedToDisable = verifyTotpCode(
+              decryptTotpSecret(session.userId, dbUser.twoFactorSecret),
+              totpCode.trim()
+            );
           }
           if (!authorizedToDisable && password && dbUser.passwordHash) {
             const { verifyPassword } = await import("@/src/lib/crypto");
@@ -259,27 +307,47 @@ export async function POST(req: Request) {
         );
       }
 
+      let freshAuthVersion = (session.authVersion ?? 1) + 1;
       try {
-        await db
+        const [updatedRow] = await db
           .update(schema.users)
           .set({
             twoFactorEnabled: false,
             twoFactorSecret: null,
+            twoFactorBackupCodes: [],
+            authVersion: sql`${schema.users.authVersion} + 1`,
             updatedAt: new Date(),
           })
-          .where(eq(schema.users.id, session.userId));
+          .where(eq(schema.users.id, session.userId))
+          .returning({ authVersion: schema.users.authVersion });
+
+        if (updatedRow?.authVersion) {
+          freshAuthVersion = updatedRow.authVersion;
+        }
       } catch {
         if (process.env.NODE_ENV === "production") {
-          throw new Error(isEn ? "Failed to update 2FA in database." : "Veritabanında 2FA güncellenemedi.");
+          throw new Error(
+            isEn ? "Failed to update 2FA in database." : "Veritabanında 2FA güncellenemedi."
+          );
         }
       }
 
       if (session.userId === DEFAULT_USER.id) {
         DEFAULT_USER.twoFactorEnabled = false;
         DEFAULT_USER.twoFactorSecret = undefined;
+        DEFAULT_USER.authVersion = freshAuthVersion;
       }
 
-      return NextResponse.json(
+      // Reissue refreshed session cookie with updated authVersion
+      const freshToken = createSessionToken({
+        id: session.userId,
+        email: session.email,
+        role: session.role,
+        status: session.status,
+        authVersion: freshAuthVersion,
+      });
+
+      const response = NextResponse.json(
         {
           success: true,
           twoFactorEnabled: false,
@@ -289,12 +357,24 @@ export async function POST(req: Request) {
         },
         { status: 200 }
       );
+
+      response.cookies.set(SESSION_COOKIE_NAME, freshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+        maxAge: 7 * 24 * 60 * 60,
+      });
+
+      return response;
     }
   } catch (err: unknown) {
     const message =
       err instanceof z.ZodError
         ? err.issues[0]?.message || (isEn ? "Invalid request format." : "Geçersiz veri biçimi.")
-        : isEn ? "Failed to update 2FA status." : "2FA durumu güncellenirken bir hata oluştu.";
+        : isEn
+          ? "Failed to update 2FA status."
+          : "2FA durumu güncellenirken bir hata oluştu.";
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }

@@ -63,6 +63,7 @@ function formatRelativeTime(dateStr: string | Date, isTr: boolean): string {
 function getNotificationIcon(type: string) {
   switch (type) {
     case "OFFER_RECEIVED":
+    case "OFFER_UPDATED":
       return <Inbox className="h-3.5 w-3.5 text-purple-400" aria-hidden="true" />;
     case "OFFER_ACCEPTED":
     case "MATCHED":
@@ -119,6 +120,24 @@ export function NotificationPopover({
 
   useEffect(() => {
     fetchNotifications();
+
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        fetchNotifications();
+      }
+    }, 45000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        fetchNotifications();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, [fetchNotifications]);
 
   // When dropdown opens, reset displayed count to 5

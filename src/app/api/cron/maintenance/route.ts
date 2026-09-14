@@ -13,9 +13,7 @@ export const dynamic = "force-dynamic";
  */
 export async function GET(req: Request) {
   const authHeader = req.headers.get("authorization");
-  const cronSecret =
-    process.env.CRON_SECRET ||
-    (process.env.NODE_ENV !== "production" ? "operis-cron-dev-secret-2026" : undefined);
+  const cronSecret = process.env.CRON_SECRET;
 
   let isAuthorized = false;
 
@@ -47,6 +45,15 @@ export async function GET(req: Request) {
     const expiredCount = await ListingService.expireListingsJob();
     const expiringSoonNotified = await ListingService.notifyExpiringListings();
     const outboxProcessed = await NotificationService.processOutboxBatch(50);
+    const { cleanupExpiredOtpChallenges } = await import("@/src/modules/auth/verification");
+    const { cleanupExpiredRateLimits } = await import("@/src/lib/security/rate-limit");
+    const { OfferService } = await import("@/src/modules/offers/service");
+    const { PrivacyService } = await import("@/src/modules/privacy/service");
+    const cleanedOtp = await cleanupExpiredOtpChallenges(24);
+    const cleanedRateLimits = await cleanupExpiredRateLimits();
+    const cleanedIdempotencyKeys = await OfferService.cleanupExpiredIdempotencyKeys();
+    const cleanedExportFiles = await PrivacyService.cleanupExpiredExportFiles();
+    const processedExportJobs = await PrivacyService.processPendingExportJobs();
 
     return NextResponse.json(
       {
@@ -55,6 +62,11 @@ export async function GET(req: Request) {
         expiredListingsCount: expiredCount,
         expiringSoonNotifiedCount: expiringSoonNotified,
         outboxProcessedCount: outboxProcessed,
+        cleanedOtpCount: cleanedOtp,
+        cleanedRateLimitsCount: cleanedRateLimits,
+        cleanedIdempotencyKeysCount: cleanedIdempotencyKeys,
+        cleanedExportFilesCount: cleanedExportFiles,
+        processedExportJobsCount: processedExportJobs,
       },
       { status: 200 }
     );

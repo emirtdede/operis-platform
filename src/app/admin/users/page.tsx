@@ -11,7 +11,13 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function AdminUsersPage(props: {
-  searchParams?: Promise<{ page?: string; limit?: string; search?: string; status?: string; role?: string }>;
+  searchParams?: Promise<{
+    page?: string;
+    limit?: string;
+    search?: string;
+    status?: string;
+    role?: string;
+  }>;
 }) {
   const sp = await props.searchParams;
   const page = sp?.page ? parseInt(sp.page, 10) : 1;
@@ -48,7 +54,12 @@ export default async function AdminUsersPage(props: {
       </div>
 
       {/* Users Table */}
-      <UsersTableClient initialUsers={result.items} total={result.total} />
+      <UsersTableClient
+        initialUsers={result.items}
+        total={result.total}
+        currentPage={result.page}
+        totalPages={result.totalPages}
+      />
     </div>
   );
 }

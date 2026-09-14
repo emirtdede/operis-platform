@@ -113,7 +113,10 @@ export function Header({ initialSession, initialProfile }: HeaderProps) {
       }
     }
     function handleKeyDown(event: KeyboardEvent) {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+      if (
+        (event.metaKey || event.ctrlKey) &&
+        (event.key.toLowerCase() === "k" || event.code === "KeyK")
+      ) {
         event.preventDefault();
         setCommandPaletteOpen((prev) => !prev);
       }
@@ -147,6 +150,16 @@ export function Header({ initialSession, initialProfile }: HeaderProps) {
 
   const handleLogout = async () => {
     try {
+      if (
+        typeof window !== "undefined" &&
+        (window as unknown as { Clerk?: { signOut?: () => Promise<void> } }).Clerk?.signOut
+      ) {
+        try {
+          await (window as unknown as { Clerk: { signOut: () => Promise<void> } }).Clerk.signOut();
+        } catch {
+          // Ignore Clerk client signOut error if session already cleared
+        }
+      }
       await fetch("/api/auth/logout", { method: "POST" });
       router.push(`/${locale}`);
       router.refresh();

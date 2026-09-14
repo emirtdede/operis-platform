@@ -1,14 +1,20 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { eq, or } from "drizzle-orm";
 import { getSession } from "@/src/modules/auth/session";
 import { getDb, schema } from "@/src/lib/db";
-import { createEmailVerificationToken, storePhoneOtp } from "@/src/modules/auth/verification";
-import { generateOtpCode, decryptPii } from "@/src/lib/crypto";
+import {
+  createEmailVerificationToken,
+  storePhoneOtpAsync,
+  consumePhoneOtpAsync,
+  PhoneVerificationError,
+} from "@/src/modules/auth/verification";
+import { generateOtpCode, decryptPii, hashEmailBlindIndex } from "@/src/lib/crypto";
 import { emailProvider } from "@/src/lib/email";
 import { smsProvider } from "@/src/lib/sms";
 import {
-  checkRateLimit,
+  evaluateSecurityAccessAsync,
+  checkRateLimitAsync,
   getClientIp,
   rateLimitExceededResponse,
 } from "@/src/lib/security/rate-limit";
@@ -31,9 +37,7 @@ export async function POST(req: Request) {
     if (!parseResult.success) {
       return NextResponse.json(
         {
-          error: isEnHeader
-            ? "Invalid request parameters."
-            : "Geçersiz istek parametreleri.",
+          error: isEnHeader ? "Invalid request parameters." : "Geçersiz istek parametreleri.",
         },
         { status: 400 }
       );
@@ -43,8 +47,27 @@ export async function POST(req: Request) {
     const isEn = locale === "en" || isEnHeader;
     const session = await getSession();
 
-    const rateKey = `auth:resend:${session?.userId || email || ip}`;
-    const limitCheck = checkRateLimit(rateKey, 1, 60 * 1000);
+    // T-07 / B18: Strict global IP security & rate limiting (403 if blocked, 503 if DB unavailable)
+    const ipAccess = await evaluateSecurityAccessAsync({
+      ip,
+      purpose: "auth:resend:ip",
+      limit: 5,
+      windowMs: 60 * 1000,
+      isEn,
+    });
+    if (!ipAccess.allowed) {
+      return ipAccess.response;
+    }
+
+    // Target-specific shared rate limiting (1 request per 60s per user or email via Postgres)
+    const targetPurpose = "auth:resend:target";
+    const targetSubject = session?.userId
+      ? `usr_${session.userId}`
+      : email
+        ? `email_${email.toLowerCase().trim()}`
+        : `ip_${ip}`;
+
+    const limitCheck = await checkRateLimitAsync(targetPurpose, targetSubject, 1, 60 * 1000);
     if (!limitCheck.success) {
       return rateLimitExceededResponse(
         limitCheck.reset,
@@ -65,7 +88,11 @@ export async function POST(req: Request) {
         } else {
           const db = getDb();
           const [user] = await db
-            .select({ id: schema.users.id, email: schema.users.email, emailVerified: schema.users.emailVerified })
+            .select({
+              id: schema.users.id,
+              email: schema.users.email,
+              emailVerified: schema.users.emailVerified,
+            })
             .from(schema.users)
             .where(eq(schema.users.id, targetUserId))
             .limit(1);
@@ -83,12 +110,17 @@ export async function POST(req: Request) {
           }
         }
       } else if (targetEmail && !targetUserId) {
-        // Look up by email
+        // Look up by email (or emailHmac for encrypted records)
         const db = getDb();
+        const emailHmac = hashEmailBlindIndex(targetEmail.toLowerCase().trim());
         const [user] = await db
-          .select({ id: schema.users.id, email: schema.users.email, emailVerified: schema.users.emailVerified })
+          .select({
+            id: schema.users.id,
+            email: schema.users.email,
+            emailVerified: schema.users.emailVerified,
+          })
           .from(schema.users)
-          .where(eq(schema.users.email, targetEmail))
+          .where(or(eq(schema.users.emailHmac, emailHmac), eq(schema.users.email, targetEmail)))
           .limit(1);
 
         if (user) {
@@ -124,7 +156,8 @@ export async function POST(req: Request) {
       }
 
       const emailToken = createEmailVerificationToken(targetUserId, targetEmail);
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:8000";
+      const appUrl =
+        process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
       const verificationUrl = `${appUrl}/api/auth/verify-email?token=${emailToken}`;
 
       const res = await emailProvider.send({
@@ -175,9 +208,12 @@ export async function POST(req: Request) {
 
       if (session.userId === DEFAULT_USER.id) {
         const otpCode = generateOtpCode();
-        storePhoneOtp(session.userId, otpCode);
+        const challengeId = await storePhoneOtpAsync(session.userId, otpCode, {
+          purpose: "INITIAL_VERIFICATION",
+        });
         return NextResponse.json({
           success: true,
+          challengeId,
           message: isEn
             ? "Verification code has been sent via SMS (Demo Mode: 123456)."
             : "Doğrulama kodu SMS ile gönderildi (Demo Mod: 123456).",
@@ -197,9 +233,7 @@ export async function POST(req: Request) {
       if (!identity) {
         return NextResponse.json(
           {
-            error: isEn
-              ? "User identity record not found."
-              : "Kullanıcı kimlik kaydı bulunamadı.",
+            error: isEn ? "User identity record not found." : "Kullanıcı kimlik kaydı bulunamadı.",
           },
           { status: 404 }
         );
@@ -216,7 +250,11 @@ export async function POST(req: Request) {
 
       let phoneE164 = "";
       try {
-        phoneE164 = decryptPii(identity.phoneE164Enc);
+        phoneE164 = decryptPii(identity.phoneE164Enc, {
+          table: "user_private_identity",
+          primaryKey: session.userId,
+          column: "phone_e164_enc",
+        });
       } catch (decErr) {
         console.error("PII decrypt error during SMS resend:", decErr);
         return NextResponse.json(
@@ -230,7 +268,9 @@ export async function POST(req: Request) {
       }
 
       const otpCode = generateOtpCode();
-      storePhoneOtp(session.userId, otpCode);
+      const challengeId = await storePhoneOtpAsync(session.userId, otpCode, {
+        purpose: "INITIAL_VERIFICATION",
+      });
 
       const res = await smsProvider.sendOtp({
         phoneE164,
@@ -240,6 +280,11 @@ export async function POST(req: Request) {
       });
 
       if (!res.success && process.env.NODE_ENV === "production") {
+        try {
+          await consumePhoneOtpAsync(session.userId, challengeId);
+        } catch {
+          // Non-fatal challenge invalidation
+        }
         return NextResponse.json(
           {
             error: isEn
@@ -252,6 +297,7 @@ export async function POST(req: Request) {
 
       return NextResponse.json({
         success: true,
+        challengeId,
         message: isEn
           ? "Verification code has been sent via SMS."
           : "Doğrulama kodu SMS ile iletildi.",
@@ -261,7 +307,46 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid type." }, { status: 400 });
   } catch (err: unknown) {
     const isEn = isEnHeader;
-    const message = err instanceof Error ? err.message : isEn ? "An unexpected error occurred." : "Beklenmeyen bir hata oluştu.";
-    return NextResponse.json({ error: message }, { status: 500 });
+
+    if (err instanceof PhoneVerificationError) {
+      return NextResponse.json(
+        {
+          error:
+            err.code === "DB_UNAVAILABLE"
+              ? isEn
+                ? "Database service temporarily unavailable."
+                : "Veritabanı servisine geçici olarak erişilemiyor."
+              : err.message,
+        },
+        { status: err.status }
+      );
+    }
+
+    const isDbUnavailable =
+      err instanceof Error &&
+      (err.message.includes("database") ||
+        err.message.includes("connection") ||
+        err.message.includes("ECONNREFUSED") ||
+        err.message.includes("SECURITY_DATABASE_UNAVAILABLE"));
+
+    if (isDbUnavailable) {
+      return NextResponse.json(
+        {
+          error: isEn
+            ? "Database service temporarily unavailable."
+            : "Veritabanı servisine geçici olarak erişilemiyor.",
+        },
+        { status: 503 }
+      );
+    }
+
+    return NextResponse.json(
+      {
+        error: isEn
+          ? "An unexpected error occurred. Please try again."
+          : "Beklenmeyen bir hata oluştu. Lütfen tekrar deneyin.",
+      },
+      { status: 500 }
+    );
   }
 }

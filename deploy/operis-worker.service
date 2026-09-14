@@ -1,0 +1,34 @@
+[Unit]
+Description=Operis Background Worker Daemon
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=operis
+Group=operis
+WorkingDirectory=/var/www/operis
+Environment=NODE_ENV=production
+Environment=WORKER_HEARTBEAT_FILE=/run/operis/operis-worker-heartbeat.json
+ExecStartPre=/bin/mkdir -p /run/operis
+ExecStartPre=/bin/chown operis:operis /run/operis
+ExecStart=/usr/bin/pnpm run worker
+Restart=always
+RestartSec=5s
+KillSignal=SIGTERM
+TimeoutStopSec=30s
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=operis-worker
+
+# Sandboxing & Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/run/operis /tmp
+ProtectKernelTunables=true
+ProtectControlGroups=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

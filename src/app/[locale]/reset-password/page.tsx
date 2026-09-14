@@ -16,7 +16,7 @@ export async function generateMetadata({
   const { locale } = await params;
   const isTr = locale === "tr";
 
-  const title = isTr ? "Yeni Şifre Belirleyin — Operis" : "Set New Password — Operis";
+  const title = isTr ? "Yeni Şifre Belirleyin" : "Set New Password";
   const description = isTr
     ? "Hesabınız için yeni ve güvenli bir şifre belirleyin."
     : "Set a new and secure password for your Operis account.";

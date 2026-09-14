@@ -3,9 +3,9 @@ import { z } from "zod";
 import { getSession } from "@/src/modules/auth/session";
 import { CategoryService } from "@/src/modules/categories/service";
 import {
-  checkRateLimit,
+  evaluateSecurityAccessAsync,
   getClientIp,
-  rateLimitExceededResponse,
+  normalizeIp,
 } from "@/src/lib/security/rate-limit";
 
 const followSchema = z.object({
@@ -18,12 +18,16 @@ export async function POST(req: Request) {
   const headerLocale = req.headers.get("x-locale");
   const isEnHeader = headerLocale === "en";
 
-  const limitCheck = checkRateLimit(`cat:follow:${ip}`, 30, 60 * 1000);
-  if (!limitCheck.success) {
-    return rateLimitExceededResponse(
-      limitCheck.reset,
-      isEnHeader ? "Too many requests. Please wait a moment." : "Kısa sürede çok fazla istek iletildi. Lütfen bekleyiniz."
-    );
+  const access = await evaluateSecurityAccessAsync({
+    ip,
+    purpose: "cat:follow",
+    subject: normalizeIp(ip),
+    limit: 30,
+    windowMs: 60 * 1000,
+    isEn: isEnHeader,
+  });
+  if (!access.allowed) {
+    return access.response;
   }
 
   let isEn = isEnHeader;
@@ -49,7 +53,9 @@ export async function POST(req: Request) {
         ? err.issues[0]?.message || (isEn ? "Invalid category ID." : "Geçersiz kategori kimliği.")
         : err instanceof Error
           ? err.message
-          : isEn ? "Failed to toggle category follow." : "Kategori takip durumu değiştirilemedi.";
+          : isEn
+            ? "Failed to toggle category follow."
+            : "Kategori takip durumu değiştirilemedi.";
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }

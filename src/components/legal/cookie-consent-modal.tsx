@@ -394,7 +394,7 @@ export function CookieConsentModal({ locale }: CookieConsentModalProps) {
             }}
             className="w-full whitespace-nowrap px-4 py-2.5 rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-elevated)] hover:bg-[var(--color-surface-hover)] text-xs sm:text-sm font-semibold text-[var(--color-text-primary)] transition-all shadow-sm active:scale-[0.98] text-center cursor-pointer"
           >
-            {isManualOpen ? (isTr ? "Kapat" : "Close") : (isTr ? "Geri Dön" : "Back")}
+            {isManualOpen ? (isTr ? "Kapat" : "Close") : isTr ? "Geri Dön" : "Back"}
           </button>
 
           <button

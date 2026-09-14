@@ -80,6 +80,7 @@ export default async function ReceivedOffersPage({
   }
 
   let initialOffers: ReceivedOfferItem[];
+  let fetchError = false;
 
   try {
     const rows = await OfferService.getReceivedOffers(session.userId);
@@ -105,6 +106,7 @@ export default async function ReceivedOffersPage({
       initialOffers = initialOffers.filter((o) => o.listingId === filterListingId);
     }
   } catch {
+    fetchError = true;
     initialOffers = [];
   }
 
@@ -196,9 +198,29 @@ export default async function ReceivedOffersPage({
       </section>
 
       {/* Received Offers Dashboard */}
-      <section aria-label={isTr ? "Gelen Teklif Listesi" : "Received Offer List"}>
-        <ReceivedOffersDashboard initialOffers={initialOffers} locale={locale} />
-      </section>
+      {fetchError ? (
+        <div className="rounded-2xl border border-rose-500/20 bg-rose-500/10 p-6 text-center space-y-3">
+          <p className="text-sm font-semibold text-rose-400">
+            {isTr
+              ? "Gelen teklifleriniz yüklenirken bir sorun oluştu."
+              : "An error occurred while loading incoming proposals."}
+          </p>
+          <p className="text-xs text-[var(--color-text-secondary)]">
+            {isTr
+              ? "Sunucu bağlantısında anlık bir gecikme yaşanmış olabilir. Lütfen sayfayı yenileyiniz."
+              : "There may have been a temporary network blip. Please refresh the page to try again."}
+          </p>
+          <Link href={isTr ? "/tr/panel/teklifler/gelen" : "/en/dashboard/offers/received"}>
+            <Button variant="outline" size="sm" className="mt-2 text-xs">
+              {isTr ? "Sayfayı Yenile" : "Refresh Page"}
+            </Button>
+          </Link>
+        </div>
+      ) : (
+        <section aria-label={isTr ? "Gelen Teklif Listesi" : "Received Offer List"}>
+          <ReceivedOffersDashboard initialOffers={initialOffers} locale={locale} />
+        </section>
+      )}
     </main>
   );
 }

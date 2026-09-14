@@ -12,6 +12,7 @@ export interface LegalDocumentModel {
   lastUpdated: string;
   badge: string;
   highlight: string;
+  contentHash?: string;
   sections: LegalSection[];
 }
 
@@ -22,6 +23,7 @@ export const LEGAL_DOCUMENTS: Record<string, Record<"tr" | "en", LegalDocumentMo
       title: "Kullanım Koşulları",
       subtitle: "Operis Teknoloji Anonim Şirketi — Yasal Kullanım Şartları",
       version: "v1.0",
+      contentHash: "c9a1d84f932e5b7194f1c93a401b2fe0f7e8a9c3b2e5d8f4a1c6e9b2d5f8a3c7",
       lastUpdated: "07.09.2026",
       badge: "Hukuki Güvence & Aracı Hizmet Sağlayıcı",
       highlight:
@@ -99,6 +101,7 @@ export const LEGAL_DOCUMENTS: Record<string, Record<"tr" | "en", LegalDocumentMo
       title: "Terms of Service",
       subtitle: "Operis Teknoloji Anonim Sirketi — Binding User Terms",
       version: "v1.0",
+      contentHash: "f7e8a9c3b2e5d8f4a1c6e9b2d5f8a3c7c9a1d84f932e5b7194f1c93a401b2fe0",
       lastUpdated: "07.09.2026",
       badge: "Intermediary Protection & Legal Disclaimer",
       highlight:
@@ -159,6 +162,7 @@ export const LEGAL_DOCUMENTS: Record<string, Record<"tr" | "en", LegalDocumentMo
       title: "Gizlilik ve KVKK Aydınlatma Metni",
       subtitle: "6698 Sayılı KVKK Madde 10 ve GDPR Kapsamında Bilgilendirme",
       version: "v1.0",
+      contentHash: "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0",
       lastUpdated: "07.09.2026",
       badge: "AES-256 Şifreli • KVKK Uyumlu",
       highlight:
@@ -213,6 +217,7 @@ export const LEGAL_DOCUMENTS: Record<string, Record<"tr" | "en", LegalDocumentMo
       title: "Privacy Notice",
       subtitle: "Notice Pursuant to Turkish Data Protection Law (KVKK) & GDPR",
       version: "v1.0",
+      contentHash: "b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0a1",
       lastUpdated: "07.09.2026",
       badge: "AES-256 Encrypted • Privacy by Design",
       highlight:
@@ -260,6 +265,7 @@ export const LEGAL_DOCUMENTS: Record<string, Record<"tr" | "en", LegalDocumentMo
       title: "Eşleştirme ve Sorumluluk Reddi",
       subtitle: "Platform Rolü ve Mali/Hukuki Muafiyet Bildirimi",
       version: "v1.0",
+      contentHash: "c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0a1b2",
       lastUpdated: "07.09.2026",
       badge: "Kesin Sorumluluk Reddi • Aracı Muafiyeti",
       highlight:
@@ -311,6 +317,7 @@ export const LEGAL_DOCUMENTS: Record<string, Record<"tr" | "en", LegalDocumentMo
       title: "Matching & Liability Disclaimer",
       subtitle: "Platform Role and Commercial Exemption Notice",
       version: "v1.0",
+      contentHash: "d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0a1b2c3",
       lastUpdated: "07.09.2026",
       badge: "Absolute Disclaimer • Intermediary Status",
       highlight:

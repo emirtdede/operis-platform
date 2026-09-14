@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Search,
   Clock,
@@ -10,19 +11,47 @@ import {
   AlertTriangle,
   Eye,
   MousePointerClick,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { AdminListingItem } from "@/src/modules/admin/service";
 
 interface ListingsTableClientProps {
   initialListings: AdminListingItem[];
   total: number;
+  currentPage?: number;
+  totalPages?: number;
 }
 
-export function ListingsTableClient({ initialListings, total: _total }: ListingsTableClientProps) {
+export function ListingsTableClient({
+  initialListings,
+  total,
+  currentPage = 1,
+  totalPages = 1,
+}: ListingsTableClientProps) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
   const [listings, setListings] = useState<AdminListingItem[]>(initialListings);
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [search, setSearch] = useState(searchParams.get("search") || "");
+  const [statusFilter, setStatusFilter] = useState(searchParams.get("status") || "ALL");
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+
+  useEffect(() => {
+    setListings(initialListings);
+  }, [initialListings]);
+
+  const updateUrl = (updates: Record<string, string | null>) => {
+    const params = new URLSearchParams(searchParams.toString());
+    Object.entries(updates).forEach(([k, v]) => {
+      if (!v || v === "ALL") {
+        params.delete(k);
+      } else {
+        params.set(k, v);
+      }
+    });
+    router.push(`?${params.toString()}`);
+  };
   const [modifyingListing, setModifyingListing] = useState<AdminListingItem | null>(null);
   const [moderationReason, setModerationReason] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -96,27 +125,40 @@ export function ListingsTableClient({ initialListings, total: _total }: Listings
 
       {/* Filter Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-2xl bg-[#12141a] border border-slate-800">
-        <div className="relative flex-1 max-w-md">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            updateUrl({ search: search.trim(), page: "1" });
+          }}
+          className="relative flex-1 max-w-md"
+        >
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="İlan başlığı veya ilan sahibi ile ara..."
+            placeholder="İlan başlığı veya ilan sahibi ile ara (Enter)..."
             className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-9 pr-3 py-1.5 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-blue-500"
           />
-        </div>
+        </form>
 
         <div className="flex items-center gap-2.5">
           <select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => {
+              const val = e.target.value;
+              setStatusFilter(val);
+              updateUrl({ status: val, page: "1" });
+            }}
             className="bg-slate-900 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-blue-500"
           >
             <option value="ALL">Tüm Durumlar</option>
             <option value="ACTIVE">Aktif (7 Günlük Radarda)</option>
             <option value="INACTIVE_EXPIRED">Süresi Dolanlar</option>
             <option value="HIDDEN_MODERATION">Moderasyonla Gizlenenler</option>
+            <option value="DELETED">Kullanıcı Tarafından Silinenler (Soft Delete)</option>
+            <option value="MATCHED">Eşleşenler (Projeye Dönüşen)</option>
+            <option value="COMPLETED">Tamamlanan Projeler</option>
           </select>
 
           <span className="text-[11px] font-mono text-slate-400 bg-slate-900 border border-slate-800 px-2.5 py-1.5 rounded-xl">
@@ -160,21 +202,31 @@ export function ListingsTableClient({ initialListings, total: _total }: Listings
                   </td>
 
                   <td className="py-3 px-4">
-                    <span
-                      className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
-                        item.status === "ACTIVE"
-                          ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                          : item.status === "HIDDEN_MODERATION"
-                            ? "bg-red-500/10 text-red-400 border-red-500/20"
-                            : "bg-slate-800 text-slate-400 border-slate-700"
-                      }`}
-                    >
-                      {item.status === "ACTIVE"
-                        ? "AKTİF"
-                        : item.status === "HIDDEN_MODERATION"
-                          ? "GİZLENDİ"
-                          : "SÜRESİ DOLDU"}
-                    </span>
+                    {item.status === "ACTIVE" ? (
+                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
+                        AKTİF
+                      </span>
+                    ) : item.status === "HIDDEN_MODERATION" ? (
+                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold border bg-amber-500/10 text-amber-400 border-amber-500/20">
+                        GİZLENDİ
+                      </span>
+                    ) : item.status === "DELETED" ? (
+                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold border bg-rose-500/10 text-rose-400 border-rose-500/20">
+                        SİLİNDİ (SOFT)
+                      </span>
+                    ) : item.status === "MATCHED" ? (
+                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold border bg-purple-500/10 text-purple-400 border-purple-500/20">
+                        EŞLEŞTİ
+                      </span>
+                    ) : item.status === "COMPLETED" ? (
+                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold border bg-blue-500/10 text-blue-400 border-blue-500/20">
+                        TAMAMLANDI
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold border bg-slate-800 text-slate-400 border-slate-700">
+                        SÜRESİ DOLDU
+                      </span>
+                    )}
                   </td>
 
                   <td className="py-3 px-4">
@@ -200,32 +252,70 @@ export function ListingsTableClient({ initialListings, total: _total }: Listings
 
                   <td className="py-3 px-4 text-right">
                     <div className="flex items-center justify-end gap-1.5">
-                      <Link
-                        href={`/tr/ilanlar/${item.slug}`}
-                        target="_blank"
-                        className="p-1.5 rounded-lg border border-slate-700 bg-slate-800/80 text-slate-300 hover:text-white"
-                        title="İlanı Gör"
-                      >
-                        <ExternalLink className="h-3.5 w-3.5" />
-                      </Link>
+                      {item.status !== "DELETED" && (
+                        <Link
+                          href={`/tr/ilanlar/${item.slug}`}
+                          target="_blank"
+                          className="p-1.5 rounded-lg border border-slate-700 bg-slate-800/80 text-slate-300 hover:text-white"
+                          title="İlanı Gör"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </Link>
+                      )}
 
-                      <button
-                        type="button"
-                        onClick={() => setModifyingListing(item)}
-                        className={`px-2.5 py-1 rounded-lg border text-[11px] font-semibold transition-colors ${
-                          item.status === "ACTIVE"
-                            ? "border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20"
-                            : "border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"
-                        }`}
-                      >
-                        {item.status === "ACTIVE" ? "Yayından Kaldır" : "Görünür Yap"}
-                      </button>
+                      {item.status === "DELETED" ? (
+                        <span className="px-2 py-1 rounded-lg border border-slate-800 bg-slate-900/60 text-slate-500 text-[11px] font-mono">
+                          Arşivlendi
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setModifyingListing(item)}
+                          className={`px-2.5 py-1 rounded-lg border text-[11px] font-semibold transition-colors cursor-pointer ${
+                            item.status === "ACTIVE"
+                              ? "border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20"
+                              : "border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"
+                          }`}
+                        >
+                          {item.status === "ACTIVE" ? "Yayından Kaldır" : "Görünür Yap"}
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      {/* Pagination Footer */}
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 bg-[#12141a] border border-slate-800 rounded-2xl text-xs text-slate-400">
+        <div>
+          Toplam <span className="text-white font-semibold">{total.toLocaleString()}</span> ilan •
+          Sayfa <span className="text-white font-semibold">{currentPage}</span> /{" "}
+          <span className="text-white font-semibold">{totalPages}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => updateUrl({ page: String(currentPage - 1) })}
+            disabled={currentPage <= 1}
+            className="px-3 py-1.5 rounded-lg border border-slate-800 bg-slate-900 text-slate-300 hover:text-white hover:bg-slate-800 disabled:opacity-40 disabled:pointer-events-none transition-colors flex items-center gap-1 cursor-pointer"
+          >
+            <ChevronLeft className="h-3.5 w-3.5" />
+            <span>Önceki</span>
+          </button>
+          <span className="px-2 font-mono text-slate-300">{currentPage}</span>
+          <button
+            type="button"
+            onClick={() => updateUrl({ page: String(currentPage + 1) })}
+            disabled={currentPage >= totalPages}
+            className="px-3 py-1.5 rounded-lg border border-slate-800 bg-slate-900 text-slate-300 hover:text-white hover:bg-slate-800 disabled:opacity-40 disabled:pointer-events-none transition-colors flex items-center gap-1 cursor-pointer"
+          >
+            <span>Sonraki</span>
+            <ChevronRight className="h-3.5 w-3.5" />
+          </button>
         </div>
       </div>
 

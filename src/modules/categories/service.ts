@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { eq, and, asc } from "drizzle-orm";
+import { eq, and, asc, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/src/lib/db";
 import { Locale } from "@/src/lib/i18n/config";
 import { SEED_CATEGORIES } from "@/db/seeds/categories";
@@ -69,19 +69,28 @@ export class CategoryService {
         .orderBy(asc(schema.categories.sortOrder));
 
       if (categoryRows && categoryRows.length > 0) {
-        // 2. Fetch translations for this locale
+        // 2. Fetch translations for this locale and fallback 'tr'
+        const localesToFetch = Array.from(new Set([locale, "tr"]));
         const translationRows = await db
           .select({
             categoryId: schema.categoryTranslations.categoryId,
+            locale: schema.categoryTranslations.locale,
             name: schema.categoryTranslations.name,
             description: schema.categoryTranslations.description,
           })
           .from(schema.categoryTranslations)
-          .where(eq(schema.categoryTranslations.locale, locale));
+          .where(inArray(schema.categoryTranslations.locale, localesToFetch));
 
-        const transMap = new Map(
-          translationRows.map((t) => [t.categoryId, { name: t.name, description: t.description }])
-        );
+        const transMap = new Map<string, { name: string; description: string | null }>();
+        const trFallbackMap = new Map<string, { name: string; description: string | null }>();
+
+        for (const t of translationRows) {
+          if (t.locale === locale) {
+            transMap.set(t.categoryId, { name: t.name, description: t.description });
+          } else if (t.locale === "tr") {
+            trFallbackMap.set(t.categoryId, { name: t.name, description: t.description });
+          }
+        }
 
         // 3. If authenticated user, fetch private follows
         let followedSet = new Set<string>();
@@ -94,7 +103,8 @@ export class CategoryService {
         }
 
         return categoryRows.map((cat) => {
-          const trans = transMap.get(cat.id) || { name: cat.key, description: null };
+          const trans = transMap.get(cat.id) ||
+            trFallbackMap.get(cat.id) || { name: cat.key, description: null };
           return {
             id: cat.id,
             key: cat.key,
@@ -118,14 +128,18 @@ export class CategoryService {
    * Toggles category follow state for a user.
    */
   static async toggleFollow(userId: string, categoryId: string): Promise<boolean> {
-    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(categoryId);
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      categoryId
+    );
     try {
       const db = getDb();
 
       const categoryRows = await db
         .select({ id: schema.categories.id })
         .from(schema.categories)
-        .where(isUuid ? eq(schema.categories.id, categoryId) : eq(schema.categories.key, categoryId))
+        .where(
+          isUuid ? eq(schema.categories.id, categoryId) : eq(schema.categories.key, categoryId)
+        )
         .limit(1);
 
       if (categoryRows.length === 0) {
@@ -156,10 +170,13 @@ export class CategoryService {
           );
         return false; // unfollowed
       } else {
-        await db.insert(schema.categoryFollows).values({
-          userId,
-          categoryId: targetId,
-        });
+        await db
+          .insert(schema.categoryFollows)
+          .values({
+            userId,
+            categoryId: targetId,
+          })
+          .onConflictDoNothing();
         return true; // followed
       }
     } catch (err) {

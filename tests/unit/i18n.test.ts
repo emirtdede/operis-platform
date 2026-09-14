@@ -57,4 +57,41 @@ describe("i18n Foundation & Catalogs", () => {
 
     expect(trKeys).toEqual(enKeys);
   });
+
+  it("converts paths between TR and EN preserving localized route structures", async () => {
+    const { getAlternateLocalePath } = await import("@/src/lib/i18n/routes");
+
+    // Standard routes
+    expect(getAlternateLocalePath("/tr/panel/ilanlarim", "en")).toBe("/en/dashboard/listings");
+    expect(getAlternateLocalePath("/en/dashboard/listings", "tr")).toBe("/tr/panel/ilanlarim");
+
+    // Listings detail & edit
+    expect(getAlternateLocalePath("/tr/ilanlar/react-developer", "en")).toBe(
+      "/en/listings/react-developer"
+    );
+    expect(getAlternateLocalePath("/en/listings/react-developer/edit", "tr")).toBe(
+      "/tr/ilanlar/react-developer/duzenle"
+    );
+    expect(getAlternateLocalePath("/tr/ilanlar/react-developer/duzenle", "en")).toBe(
+      "/en/listings/react-developer/edit"
+    );
+
+    // Profile
+    expect(getAlternateLocalePath("/tr/profil/johndoe", "en")).toBe("/en/profile/johndoe");
+    expect(getAlternateLocalePath("/en/profile/johndoe", "tr")).toBe("/tr/profil/johndoe");
+    expect(getAlternateLocalePath("/en/u/johndoe", "tr")).toBe("/tr/profil/johndoe");
+
+    // Workspace
+    expect(getAlternateLocalePath("/tr/calisma-alani/eng-123", "en")).toBe("/en/workspace/eng-123");
+    expect(getAlternateLocalePath("/en/workspace/eng-123", "tr")).toBe("/tr/calisma-alani/eng-123");
+    expect(getAlternateLocalePath("/tr/work/eng-123", "en")).toBe("/en/workspace/eng-123");
+
+    // Regional locales (en-US, tr-TR)
+    expect(getAlternateLocalePath("/tr/panel/ayarlar", "en-US")).toBe("/en/dashboard/settings");
+    expect(getAlternateLocalePath("/en/dashboard/settings", "tr-TR")).toBe("/tr/panel/ayarlar");
+
+    // Legal
+    expect(getAlternateLocalePath("/tr/yasal/kullanim-kosullari", "en")).toBe("/en/legal/terms");
+    expect(getAlternateLocalePath("/en/legal/terms", "tr")).toBe("/tr/yasal/kullanim-kosullari");
+  });
 });

@@ -1,4 +1,5 @@
-import { and, desc, eq, isNull, lte, or } from "drizzle-orm";
+import crypto from "node:crypto";
+import { and, desc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { getDb, schema } from "@/src/lib/db";
 import { EmailAdapter } from "@/src/lib/email";
 
@@ -15,7 +16,10 @@ export type NotificationType =
   | "OFFER_EXPIRED_LISTING"
   | "LISTING_EXPIRING_SOON"
   | "LISTING_EXPIRED"
+  | "LISTING_PUBLISHED"
   | "LISTING_REACTIVATED"
+  | "LISTING_UPDATED"
+  | "CATEGORY_FOLLOW_MATCH"
   | "COMPLETION_REQUESTED"
   | "COMPLETION_CONFIRMED"
   | "COMPLETION_DISPUTED"
@@ -38,17 +42,65 @@ export class NotificationService {
     aggregateType: string,
     aggregateId: string,
     payload: Record<string, unknown>,
-    txContext?: unknown
+    txContext?: unknown,
+    deliveryKey?: string
   ) {
     const execute = async (tx: TransactionContext) => {
-      const [notification] = await tx
-        .insert(schema.notifications)
-        .values({
-          userId,
-          type,
-          payloadJson: payload,
-        })
-        .returning();
+      const { eq } = await import("drizzle-orm");
+      const activationSeq = typeof payload.activationSeq === "number" ? payload.activationSeq : 1;
+      const effectiveDeliveryKey =
+        deliveryKey ||
+        (aggregateType === "listing" && (type === "RADAR_MATCH" || type === "CATEGORY_FOLLOW_MATCH")
+          ? `listing:${aggregateId}:act:${activationSeq}:user:${userId}`
+          : undefined);
+
+      const enrichedPayload = {
+        ...payload,
+        listingId: payload.listingId || (aggregateType === "listing" ? aggregateId : undefined),
+        activationSeq,
+      };
+
+      let notification: typeof schema.notifications.$inferSelect | undefined;
+
+      if (effectiveDeliveryKey) {
+        // B16: DB-level uniqueness via ON CONFLICT DO NOTHING on deliveryKey
+        const inserted = await tx
+          .insert(schema.notifications)
+          .values({
+            userId,
+            type,
+            payloadJson: enrichedPayload,
+            deliveryKey: effectiveDeliveryKey,
+          })
+          .onConflictDoNothing({
+            target: schema.notifications.deliveryKey,
+            where: sql`delivery_key IS NOT NULL`,
+          })
+          .returning();
+
+        if (inserted.length > 0) {
+          notification = inserted[0];
+        } else {
+          // Already delivered! Retrieve existing record to return idempotently without duplicate outbox event
+          const [existing] = await tx
+            .select()
+            .from(schema.notifications)
+            .where(eq(schema.notifications.deliveryKey, effectiveDeliveryKey))
+            .limit(1);
+
+          return existing ?? null;
+        }
+      } else {
+        const [inserted] = await tx
+          .insert(schema.notifications)
+          .values({
+            userId,
+            type,
+            payloadJson: enrichedPayload,
+          })
+          .returning();
+        notification = inserted;
+      }
 
       if (!notification) {
         throw new Error("Failed to create notification");
@@ -58,10 +110,12 @@ export class NotificationService {
         type,
         aggregateType,
         aggregateId,
+        deliveryKey: effectiveDeliveryKey ?? null,
         payloadJson: {
-          ...payload,
+          ...enrichedPayload,
           recipientUserId: userId,
           notificationId: notification.id,
+          ...(effectiveDeliveryKey ? { deliveryKey: effectiveDeliveryKey } : {}),
         },
         status: "PENDING",
         attemptCount: 0,
@@ -72,13 +126,25 @@ export class NotificationService {
     };
 
     try {
+      let result: typeof schema.notifications.$inferSelect | null;
       if (txContext && typeof (txContext as Record<string, unknown>).insert === "function") {
-        return await execute(txContext as TransactionContext);
+        result = await execute(txContext as TransactionContext);
+      } else {
+        const db = getDb();
+        result = await db.transaction(execute);
+
+        // Immediate sub-second outbox dispatch via Inngest (fail-open)
+        import("@/src/lib/inngest/client")
+          .then(({ sendInngestEvent }) => {
+            sendInngestEvent("operis/outbox.process", {
+              triggeredBy: "notification_created",
+            }).catch(() => {});
+          })
+          .catch(() => {});
       }
-      const db = getDb();
-      return await db.transaction(execute);
+      return result;
     } catch (err) {
-      if (process.env.NODE_ENV === "production") {
+      if (txContext || process.env.NODE_ENV === "production") {
         throw err;
       }
       const newNotif = {
@@ -211,7 +277,7 @@ export class NotificationService {
     try {
       const db = getDb();
       const now = new Date();
-      const leaseThreshold = new Date(Date.now() - 5 * 60 * 1000); // 5-minute lease timeout
+      const leaseDurationMs = 5 * 60 * 1000; // 5-minute lease timeout
 
       const pendingEvents = await db
         .select()
@@ -224,7 +290,7 @@ export class NotificationService {
             ),
             and(
               eq(schema.outboxEvents.status, "PROCESSING"),
-              lte(schema.outboxEvents.nextAttemptAt, leaseThreshold)
+              or(isNull(schema.outboxEvents.leaseUntil), lte(schema.outboxEvents.leaseUntil, now))
             )
           )
         )
@@ -233,12 +299,17 @@ export class NotificationService {
       let processedCount = 0;
 
       for (const event of pendingEvents) {
-        // Atomically claim the event by transitioning PENDING/stuck PROCESSING -> PROCESSING
+        const workerLeaseToken = crypto.randomUUID();
+        const leaseUntil = new Date(Date.now() + leaseDurationMs);
+
+        // Atomically claim the event with leaseToken fencing
         const claimResult = await db
           .update(schema.outboxEvents)
           .set({
             status: "PROCESSING",
-            nextAttemptAt: now, // Heartbeat lease timestamp
+            leaseToken: workerLeaseToken,
+            leaseUntil,
+            nextAttemptAt: now,
           })
           .where(
             and(
@@ -247,7 +318,10 @@ export class NotificationService {
                 eq(schema.outboxEvents.status, "PENDING"),
                 and(
                   eq(schema.outboxEvents.status, "PROCESSING"),
-                  lte(schema.outboxEvents.nextAttemptAt, leaseThreshold)
+                  or(
+                    isNull(schema.outboxEvents.leaseUntil),
+                    lte(schema.outboxEvents.leaseUntil, now)
+                  )
                 )
               )
             )
@@ -261,90 +335,239 @@ export class NotificationService {
 
         try {
           const payload = event.payloadJson as Record<string, unknown>;
-          const recipientUserId = payload.recipientUserId as string | undefined;
 
-          if (recipientUserId) {
-            // Fetch recipient email and locale
-            const userRows = await db
-              .select({
-                email: schema.users.email,
-                locale: schema.profiles.locale,
-              })
-              .from(schema.users)
-              .leftJoin(schema.profiles, eq(schema.users.id, schema.profiles.userId))
-              .where(eq(schema.users.id, recipientUserId))
-              .limit(1);
+          if (event.type === "LISTING_PUBLISHED" || event.type === "LISTING_REACTIVATED") {
+            const { processFanoutEvent } = await import("./fanout");
+            const result = await processFanoutEvent(event.id, workerLeaseToken);
+            if (result === "COMPLETED") {
+              processedCount++;
+            } else if (result === "ERROR") {
+              const nextAttempts = event.attemptCount + 1;
+              const isDead = nextAttempts >= 3;
+              const nextAttemptAt = new Date(Date.now() + 30000);
 
-            const user = userRows[0];
-            if (user) {
-              const locale = user.locale === "en" ? "en" : "tr";
-              const customTitle = typeof payload.title === "string" ? payload.title : null;
-              const customMessage = typeof payload.message === "string" ? payload.message : null;
-
-              const subject =
-                customTitle ||
-                (locale === "tr"
-                  ? `Platform Bildirimi: ${event.type}`
-                  : `Platform Notification: ${event.type}`);
-
-              const body = customMessage
-                ? locale === "tr"
-                  ? `Merhaba,\n\n${customMessage}\n\nDetayları Operis platformu üzerinden görüntüleyebilirsiniz.`
-                  : `Hello,\n\n${customMessage}\n\nYou can view full details on the Operis platform.`
-                : locale === "tr"
-                  ? `Merhaba,\n\nHesabınızda yeni bir işlem gerçekleşti: ${event.type}.\nDetayları platform üzerinden görüntüleyebilirsiniz.`
-                  : `Hello,\n\nA new activity occurred on your account: ${event.type}.\nYou can view details on the platform.`;
-
-              const sentOk = await EmailAdapter.sendTransactionalEmail({
-                to: user.email,
-                subject,
-                body,
-                template: event.type.toLowerCase(),
-                locale,
-                idempotencyKey: `outbox_${event.id}`,
-              });
-
-              if (!sentOk) {
-                throw new Error(`Email provider failed for outbox event ${event.id}`);
-              }
+              await db
+                .update(schema.outboxEvents)
+                .set({
+                  status: isDead ? "DEAD" : "PENDING",
+                  attemptCount: nextAttempts,
+                  nextAttemptAt,
+                  leaseToken: null,
+                  leaseUntil: null,
+                })
+                .where(
+                  and(
+                    eq(schema.outboxEvents.id, event.id),
+                    eq(schema.outboxEvents.leaseToken, workerLeaseToken),
+                    eq(schema.outboxEvents.status, "PROCESSING")
+                  )
+                );
             }
+            continue;
           }
 
-          // Mark SENT
+          const recipientUserId = payload.recipientUserId as string | undefined;
+
+          if (!recipientUserId) {
+            // Missing recipient: Mark FAILED immediately, DO NOT mark SENT
+            await db
+              .update(schema.outboxEvents)
+              .set({
+                status: "FAILED",
+                leaseToken: null,
+                leaseUntil: null,
+              })
+              .where(
+                and(
+                  eq(schema.outboxEvents.id, event.id),
+                  eq(schema.outboxEvents.leaseToken, workerLeaseToken)
+                )
+              );
+            continue;
+          }
+
+          // Fetch recipient email and locale (supporting both encrypted and legacy email)
+          const userRows = await db
+            .select({
+              email: schema.users.email,
+              emailEnc: schema.users.emailEnc,
+              locale: schema.profiles.locale,
+            })
+            .from(schema.users)
+            .leftJoin(schema.profiles, eq(schema.users.id, schema.profiles.userId))
+            .where(eq(schema.users.id, recipientUserId))
+            .limit(1);
+
+          const user = userRows[0];
+          let recipientEmail: string | null = null;
+          if (user?.emailEnc) {
+            try {
+              const { decryptEnvelopeV2 } = await import("@/src/lib/crypto/envelope");
+              recipientEmail = decryptEnvelopeV2(user.emailEnc, {
+                table: "users",
+                primaryKey: recipientUserId,
+                column: "email_enc",
+              });
+            } catch {
+              // Fail closed: do not fallback to plaintext if ciphertext cannot be decrypted
+              recipientEmail = null;
+            }
+          } else if (user?.email) {
+            recipientEmail = user.email;
+          }
+
+          if (!user || !recipientEmail) {
+            // Recipient user not found or has no email: Mark FAILED, DO NOT mark SENT
+            await db
+              .update(schema.outboxEvents)
+              .set({
+                status: "FAILED",
+                leaseToken: null,
+                leaseUntil: null,
+              })
+              .where(
+                and(
+                  eq(schema.outboxEvents.id, event.id),
+                  eq(schema.outboxEvents.leaseToken, workerLeaseToken)
+                )
+              );
+            continue;
+          }
+
+          const locale = user.locale === "en" ? "en" : "tr";
+          const customTitle = typeof payload.title === "string" ? payload.title : null;
+          const customMessage = typeof payload.message === "string" ? payload.message : null;
+
+          const subject =
+            customTitle ||
+            (locale === "tr"
+              ? `Platform Bildirimi: ${event.type}`
+              : `Platform Notification: ${event.type}`);
+
+          const body = customMessage
+            ? locale === "tr"
+              ? `Merhaba,\n\n${customMessage}\n\nDetayları Operis platformu üzerinden görüntüleyebilirsiniz.`
+              : `Hello,\n\n${customMessage}\n\nYou can view full details on the Operis platform.`
+            : locale === "tr"
+              ? `Merhaba,\n\nHesabınızda yeni bir işlem gerçekleşti: ${event.type}.\nDetayları platform üzerinden görüntüleyebilirsiniz.`
+              : `Hello,\n\nA new activity occurred on your account: ${event.type}.\nYou can view details on the platform.`;
+
+          const sentOk = await EmailAdapter.sendTransactionalEmail({
+            to: recipientEmail,
+            subject,
+            body,
+            template: event.type.toLowerCase(),
+            locale,
+            idempotencyKey: event.deliveryKey
+              ? `outbox_${event.deliveryKey}`
+              : `outbox_${event.id}`,
+          });
+
+          if (!sentOk) {
+            throw new Error(`Email provider failed for outbox event ${event.id}`);
+          }
+
+          // Mark SENT conditioned on leaseToken
           await db
             .update(schema.outboxEvents)
             .set({
               status: "SENT",
               attemptCount: event.attemptCount + 1,
+              leaseToken: null,
+              leaseUntil: null,
             })
-            .where(eq(schema.outboxEvents.id, event.id));
+            .where(
+              and(
+                eq(schema.outboxEvents.id, event.id),
+                eq(schema.outboxEvents.leaseToken, workerLeaseToken)
+              )
+            );
 
           processedCount++;
-        } catch {
-        const nextAttempts = event.attemptCount + 1;
-        const isDead = nextAttempts >= 5;
+        } catch (deliveryErr: unknown) {
+          const errMsg = deliveryErr instanceof Error ? deliveryErr.message : String(deliveryErr);
+          const nextAttempts = event.attemptCount + 1;
+          const isDead = nextAttempts >= 5;
 
-        // Exponential backoff in seconds: 2^attempt * 30s
-        const backoffSeconds = Math.pow(2, nextAttempts) * 30;
-        const nextAttemptAt = new Date(Date.now() + backoffSeconds * 1000);
+          // Exponential backoff in seconds: 2^attempt * 30s
+          const backoffSeconds = Math.pow(2, nextAttempts) * 30;
+          const nextAttemptAt = new Date(Date.now() + backoffSeconds * 1000);
 
-        await db
-          .update(schema.outboxEvents)
-          .set({
-            status: isDead ? "DEAD" : "PENDING",
+          console.error(
+            `[outbox-worker] Delivery failure for event ${event.id} (attempt ${nextAttempts}/5, isDead=${isDead}): ${errMsg}`
+          );
+
+          const currentPayload = (event.payloadJson as Record<string, unknown>) || {};
+          const updatedPayload = {
+            ...currentPayload,
+            lastDeliveryError: errMsg,
+            failedAt: new Date().toISOString(),
             attemptCount: nextAttempts,
-            nextAttemptAt,
-          })
-          .where(eq(schema.outboxEvents.id, event.id));
-      }
-    }
+          };
 
-    return processedCount;
-  } catch (err) {
-    if (process.env.NODE_ENV === "production") {
-      throw err;
+          await db
+            .update(schema.outboxEvents)
+            .set({
+              status: isDead ? "DEAD" : "PENDING",
+              attemptCount: nextAttempts,
+              nextAttemptAt,
+              payloadJson: updatedPayload,
+              leaseToken: null,
+              leaseUntil: null,
+            })
+            .where(
+              and(
+                eq(schema.outboxEvents.id, event.id),
+                eq(schema.outboxEvents.leaseToken, workerLeaseToken)
+              )
+            );
+        }
+      }
+
+      return processedCount;
+    } catch (err) {
+      if (process.env.NODE_ENV === "production") {
+        throw err;
+      }
+      return 0;
     }
-    return 0;
   }
-}
+
+  /**
+   * Resurrects DEAD outbox events back to PENDING so they can be retried by the outbox processor.
+   * Resets nextAttemptAt to now and clears attemptCount for a fresh backoff cycle.
+   */
+  static async reviveDeadOutboxEvents(maxLimit = 100): Promise<number> {
+    try {
+      const db = getDb();
+      const now = new Date();
+
+      const deadEvents = await db
+        .select({ id: schema.outboxEvents.id })
+        .from(schema.outboxEvents)
+        .where(eq(schema.outboxEvents.status, "DEAD"))
+        .limit(maxLimit);
+
+      if (deadEvents.length === 0) {
+        return 0;
+      }
+
+      const deadIds = deadEvents.map((e) => e.id);
+      await db
+        .update(schema.outboxEvents)
+        .set({
+          status: "PENDING",
+          nextAttemptAt: now,
+          attemptCount: 0,
+        })
+        .where(inArray(schema.outboxEvents.id, deadIds));
+
+      return deadIds.length;
+    } catch (err) {
+      if (process.env.NODE_ENV === "production") {
+        throw err;
+      }
+      return 0;
+    }
+  }
 }

@@ -1,35 +1,51 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { EmailAdapter } from "@/src/lib/email";
+import { getDb, schema } from "@/src/lib/db";
 import { EMOJI_REGEX, validateContentAppropriateness } from "@/src/lib/security/content-moderator";
-import {
-  checkRateLimit,
-  getClientIp,
-  rateLimitExceededResponse,
-} from "@/src/lib/security/rate-limit";
+import { evaluateSecurityAccessAsync, getClientIp } from "@/src/lib/security/rate-limit";
+import { verifyTurnstileToken } from "@/src/lib/security/turnstile";
 
 const createContactSchema = (isEn: boolean) =>
   z.object({
     name: z
       .string()
       .min(2, isEn ? "Please enter your full name." : "Lütfen adınızı ve soyadınızı giriniz.")
-      .refine((val) => !EMOJI_REGEX.test(val), isEn ? "Name cannot contain emojis." : "İsim alanı emoji içeremez."),
-    email: z.string().email(isEn ? "Please enter a valid email address." : "Geçerli bir e-posta adresi giriniz."),
+      .refine(
+        (val) => !EMOJI_REGEX.test(val),
+        isEn ? "Name cannot contain emojis." : "İsim alanı emoji içeremez."
+      ),
+    email: z
+      .string()
+      .email(isEn ? "Please enter a valid email address." : "Geçerli bir e-posta adresi giriniz."),
     subject: z
       .string()
       .min(3, isEn ? "Please specify a subject." : "Lütfen bir konu belirtiniz.")
-      .refine((val) => !EMOJI_REGEX.test(val), isEn ? "Subject cannot contain emojis." : "Konu alanı emoji içeremez.")
+      .refine(
+        (val) => !EMOJI_REGEX.test(val),
+        isEn ? "Subject cannot contain emojis." : "Konu alanı emoji içeremez."
+      )
       .refine(
         (val) => validateContentAppropriateness(val).isValid,
         isEn ? "Subject contains inappropriate content." : "Konu uygunsuz ifadeler içeremez."
       ),
     message: z
       .string()
-      .min(10, isEn ? "Please enter at least 10 characters." : "Lütfen en az 10 karakterlik bir mesaj yazınız.")
-      .refine((val) => !EMOJI_REGEX.test(val), isEn ? "Message cannot contain emojis." : "Mesaj alanı emoji içeremez.")
+      .min(
+        10,
+        isEn
+          ? "Please enter at least 10 characters."
+          : "Lütfen en az 10 karakterlik bir mesaj yazınız."
+      )
+      .refine(
+        (val) => !EMOJI_REGEX.test(val),
+        isEn ? "Message cannot contain emojis." : "Mesaj alanı emoji içeremez."
+      )
       .refine(
         (val) => validateContentAppropriateness(val).isValid,
-        isEn ? "Message violates community guidelines." : "Mesajınız topluluk kurallarımıza aykırı ifadeler içeremez."
+        isEn
+          ? "Message violates community guidelines."
+          : "Mesajınız topluluk kurallarımıza aykırı ifadeler içeremez."
       ),
     locale: z.enum(["tr", "en"]).optional().default("tr"),
   });
@@ -39,26 +55,61 @@ export async function POST(req: Request) {
   const headerLocale = req.headers.get("x-locale");
   const isEnHeader = headerLocale === "en";
 
-  const limitCheck = checkRateLimit(`contact:${ip}`, 5, 10 * 60 * 1000);
-  if (!limitCheck.success) {
-    return rateLimitExceededResponse(
-      limitCheck.reset,
-      isEnHeader
-        ? "Too many messages sent. Please try again later."
-        : "Kısa sürede çok fazla mesaj gönderildi. Lütfen daha sonra tekrar deneyiniz."
-    );
+  const access = await evaluateSecurityAccessAsync({
+    ip,
+    purpose: "contact",
+    limit: 5,
+    windowMs: 10 * 60 * 1000,
+    isEn: isEnHeader,
+  });
+  if (!access.allowed) {
+    return access.response;
   }
 
   let isEn = isEnHeader;
   try {
     const body = await req.json();
+
+    // Verify Cloudflare Turnstile token (fail-open in dev/testing)
+    const turnstileResult = await verifyTurnstileToken(body?.turnstileToken, ip);
+    if (!turnstileResult.success) {
+      return NextResponse.json(
+        {
+          error:
+            turnstileResult.error ||
+            (isEnHeader
+              ? "Bot verification failed. Please refresh."
+              : "Bot doğrulaması başarısız oldu. Lütfen yenileyiniz."),
+        },
+        { status: 403 }
+      );
+    }
+
     isEn = body?.locale === "en" || isEnHeader;
     const { name, email, subject, message: text } = createContactSchema(isEn).parse(body);
+
+    try {
+      const db = getDb();
+      await db.insert(schema.contactMessages).values({
+        name,
+        email,
+        subject,
+        message: text,
+        locale: isEn ? "en" : "tr",
+        ipAddress: ip,
+        status: "NEW",
+      });
+    } catch {
+      // Non-blocking fallback
+    }
 
     const supportEmail = process.env.LEGAL_SUPPORT_EMAIL || "destek@operis.pro";
     const sent = await EmailAdapter.sendTransactionalEmail({
       to: supportEmail,
-      subject: isEn ? `[Contact Form] ${subject} - ${name}` : `[İletişim Formu] ${subject} - ${name}`,
+      replyTo: email,
+      subject: isEn
+        ? `[Contact Form] ${subject} - ${name}`
+        : `[İletişim Formu] ${subject} - ${name}`,
       body: isEn
         ? `Sender: ${name} (${email})\nSubject: ${subject}\n\nMessage:\n${text}`
         : `Gönderen: ${name} (${email})\nKonu: ${subject}\n\nMesaj:\n${text}`,
@@ -89,8 +140,13 @@ export async function POST(req: Request) {
   } catch (err: unknown) {
     const message =
       err instanceof z.ZodError
-        ? err.issues[0]?.message || (isEn ? "Please fill in all form fields correctly." : "Lütfen form alanlarını eksiksiz doldurunuz.")
-        : isEn ? "Failed to send message." : "Mesaj gönderilemedi.";
+        ? err.issues[0]?.message ||
+          (isEn
+            ? "Please fill in all form fields correctly."
+            : "Lütfen form alanlarını eksiksiz doldurunuz.")
+        : isEn
+          ? "Failed to send message."
+          : "Mesaj gönderilemedi.";
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }

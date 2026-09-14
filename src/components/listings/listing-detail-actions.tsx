@@ -3,10 +3,12 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Share2, Check, LogIn, Zap, SlidersHorizontal } from "lucide-react";
+import { Share2, Check, LogIn, Zap, SlidersHorizontal, Flag, History } from "lucide-react";
 import { Button } from "../ui/button";
 import { SubmitOfferModal } from "../offers/submit-offer-modal";
 import { QuickOfferDrawer } from "../offers/quick-offer-drawer";
+import { ListingRevisionsModal } from "./listing-revisions-modal";
+import { ContextualReportModal } from "../moderation/contextual-report-modal";
 import { getLocalizedRoute } from "@/src/lib/i18n/routes";
 
 export interface ListingDetailActionsProps {
@@ -43,14 +45,19 @@ export function ListingDetailActions({
   const router = useRouter();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
-  const [initialData, setInitialData] = useState<{
-    message: string;
-    budgetCurrency: string;
-    budgetMin: string;
-    budgetMax: string;
-    timelineValue: string;
-    timelineUnit: "DAYS" | "WEEKS" | "MONTHS";
-  } | undefined>(undefined);
+  const [revisionsOpen, setRevisionsOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [initialData, setInitialData] = useState<
+    | {
+        message: string;
+        budgetCurrency: string;
+        budgetMin: string;
+        budgetMax: string;
+        timelineValue: string;
+        timelineUnit: "DAYS" | "WEEKS" | "MONTHS";
+      }
+    | undefined
+  >(undefined);
   const [copied, setCopied] = useState(false);
 
   const handleCopyLink = async () => {
@@ -143,7 +150,23 @@ export function ListingDetailActions({
         <Link href={getLocalizedRoute("dashboardListings", locale)}>
           <Button variant="outline">{isTr ? "Tüm İlanlarım" : "All My Listings"}</Button>
         </Link>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setRevisionsOpen(true)}
+          className="cursor-pointer"
+        >
+          <History className="h-4 w-4 mr-1.5 text-blue-400" />
+          <span>{isTr ? "Revizyon Geçmişi" : "Revision History"}</span>
+        </Button>
         {copyButton}
+
+        <ListingRevisionsModal
+          listingId={listingId}
+          isOpen={revisionsOpen}
+          onClose={() => setRevisionsOpen(false)}
+          locale={locale}
+        />
       </div>
     );
   }
@@ -212,6 +235,17 @@ export function ListingDetailActions({
 
         {copyButton}
 
+        <Button
+          type="button"
+          variant="ghost"
+          size={isOwner ? "md" : "lg"}
+          onClick={() => setReportOpen(true)}
+          className="text-xs text-[var(--color-text-tertiary)] hover:text-amber-400 cursor-pointer"
+        >
+          <Flag className="h-3.5 w-3.5 mr-1" />
+          <span>{isTr ? "İhbar Et" : "Report"}</span>
+        </Button>
+
         {drawerOpen && (
           <QuickOfferDrawer
             isOpen={drawerOpen}
@@ -248,6 +282,15 @@ export function ListingDetailActions({
             }}
           />
         )}
+
+        <ContextualReportModal
+          targetType="listing"
+          targetIdentifier={listingSlug || listingId}
+          targetTitle={listingTitle}
+          isOpen={reportOpen}
+          onClose={() => setReportOpen(false)}
+          locale={locale}
+        />
       </div>
 
       <p className="text-[11px] text-[var(--color-text-tertiary)] flex items-center gap-1.5 pt-1">

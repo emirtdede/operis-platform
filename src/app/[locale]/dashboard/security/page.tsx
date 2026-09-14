@@ -19,7 +19,7 @@ export async function generateMetadata({
   const isTr = locale === "tr";
 
   return {
-    title: isTr ? "Güvenlik & 2FA Ayarları | Operis" : "Security & 2FA Settings | Operis",
+    title: isTr ? "Güvenlik & 2FA Ayarları" : "Security & 2FA Settings",
     description: isTr
       ? "Hesap şifrenizi güncelleyin ve iki aşamalı doğrulamayı (2FA) yönetin."
       : "Manage account password, two-factor authentication, and security audit.",

@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/src/modules/auth/session";
 import { ProfileService } from "@/src/modules/profiles/service";
 import {
-  checkRateLimit,
+  evaluateSecurityAccessAsync,
   getClientIp,
-  rateLimitExceededResponse,
+  normalizeIp,
 } from "@/src/lib/security/rate-limit";
 
 export async function GET(req: Request) {
@@ -50,14 +50,16 @@ export async function PATCH(req: Request) {
     }
 
     const ip = getClientIp(req);
-    const limitCheck = checkRateLimit(`profile:update:${session.userId}:${ip}`, 30, 60 * 1000);
-    if (!limitCheck.success) {
-      return rateLimitExceededResponse(
-        limitCheck.reset,
-        isEn
-          ? "Too many profile updates. Please wait a moment."
-          : "Çok fazla güncelleme denemesi yapıldı. Lütfen biraz bekleyin."
-      );
+    const access = await evaluateSecurityAccessAsync({
+      ip,
+      purpose: "profile:update",
+      subject: `${session.userId}:${normalizeIp(ip)}`,
+      limit: 30,
+      windowMs: 60 * 1000,
+      isEn,
+    });
+    if (!access.allowed) {
+      return access.response;
     }
 
     await ProfileService.updateProfile(session.userId, body);
@@ -65,9 +67,7 @@ export async function PATCH(req: Request) {
     return NextResponse.json(
       {
         success: true,
-        message: isEn
-          ? "Profile updated successfully."
-          : "Profil bilgileri güncellendi.",
+        message: isEn ? "Profile updated successfully." : "Profil bilgileri güncellendi.",
       },
       { status: 200 }
     );

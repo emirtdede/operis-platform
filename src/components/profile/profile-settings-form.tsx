@@ -16,6 +16,7 @@ import {
   Phone,
   Key,
   RefreshCw,
+  X,
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { TextInput } from "../ui/text-input";
@@ -94,6 +95,15 @@ export function ProfileSettingsForm({ initialProfile, locale }: ProfileSettingsF
   const [emailVerified] = useState(initialProfile.emailVerified ?? false);
   const [phoneVerified, setPhoneVerified] = useState(initialProfile.phoneVerified ?? false);
   const [showPhoneModal, setShowPhoneModal] = useState(false);
+  const [showPhoneChangeModal, setShowPhoneChangeModal] = useState(false);
+  const [newPhone, setNewPhone] = useState("");
+  const [phoneChangeStep, setPhoneChangeStep] = useState<1 | 2>(1);
+  const [phoneChangeOtp, setPhoneChangeOtp] = useState("");
+  const [isPhoneChanging, setIsPhoneChanging] = useState(false);
+  const [phoneChangeError, setPhoneChangeError] = useState<string | null>(null);
+  const [phoneChangeSuccess, setPhoneChangeSuccess] = useState<string | null>(null);
+  const [phoneChallengeId, setPhoneChallengeId] = useState<string | null>(null);
+  const [phoneChangeChallengeId, setPhoneChangeChallengeId] = useState<string | null>(null);
   const [otpCode, setOtpCode] = useState("");
   const [isSubmittingOtp, setIsSubmittingOtp] = useState(false);
   const [isResendingEmail, setIsResendingEmail] = useState(false);
@@ -104,6 +114,47 @@ export function ProfileSettingsForm({ initialProfile, locale }: ProfileSettingsF
     message: string;
   } | null>(null);
 
+  const [marketingConsent, setMarketingConsent] = useState(false);
+  const [loadingMarketingConsent, setLoadingMarketingConsent] = useState(true);
+  const [isUpdatingConsent, setIsUpdatingConsent] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    fetch("/api/profile/marketing-consent")
+      .then((r) => r.json())
+      .then((data) => {
+        if (isMounted && data?.consent) {
+          setMarketingConsent(Boolean(data.consent.hasConsent));
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (isMounted) setLoadingMarketingConsent(false);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const handleMarketingConsentChange = async (checked: boolean) => {
+    setMarketingConsent(checked);
+    setIsUpdatingConsent(true);
+    try {
+      const res = await fetch("/api/profile/marketing-consent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-locale": locale },
+        body: JSON.stringify({ consent: checked }),
+      });
+      if (!res.ok) {
+        setMarketingConsent(!checked);
+      }
+    } catch {
+      setMarketingConsent(!checked);
+    } finally {
+      setIsUpdatingConsent(false);
+    }
+  };
+
   useEffect(() => {
     if (cooldownSeconds <= 0) return;
     const timer = setInterval(() => {
@@ -111,6 +162,22 @@ export function ProfileSettingsForm({ initialProfile, locale }: ProfileSettingsF
     }, 1000);
     return () => clearInterval(timer);
   }, [cooldownSeconds]);
+
+  useEffect(() => {
+    if (showPhoneModal && !phoneChallengeId && !phoneVerified) {
+      fetch("/api/account/phone/challenge?purpose=INITIAL_VERIFICATION")
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.success && data.challengeId) {
+            setPhoneChallengeId(data.challengeId);
+            if (data.secondsRemaining && data.secondsRemaining > 0) {
+              setCooldownSeconds(Math.min(60, data.secondsRemaining));
+            }
+          }
+        })
+        .catch(() => {});
+    }
+  }, [showPhoneModal, phoneChallengeId, phoneVerified]);
 
   const handleResendEmail = async () => {
     if (cooldownSeconds > 0 || isResendingEmail) return;
@@ -123,13 +190,19 @@ export function ProfileSettingsForm({ initialProfile, locale }: ProfileSettingsF
         body: JSON.stringify({ type: "email", locale }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || (isTr ? "E-posta gönderilemedi." : "Failed to send email."));
+      if (!res.ok)
+        throw new Error(data.error || (isTr ? "E-posta gönderilemedi." : "Failed to send email."));
       setVerificationFeedback({ type: "success", message: data.message });
       setCooldownSeconds(60);
     } catch (err: unknown) {
       setVerificationFeedback({
         type: "error",
-        message: err instanceof Error ? err.message : isTr ? "E-posta gönderilemedi." : "Failed to send email.",
+        message:
+          err instanceof Error
+            ? err.message
+            : isTr
+              ? "E-posta gönderilemedi."
+              : "Failed to send email.",
       });
     } finally {
       setIsResendingEmail(false);
@@ -147,13 +220,18 @@ export function ProfileSettingsForm({ initialProfile, locale }: ProfileSettingsF
         body: JSON.stringify({ type: "phone", locale }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || (isTr ? "SMS gönderilemedi." : "Failed to send SMS."));
+      if (!res.ok)
+        throw new Error(data.error || (isTr ? "SMS gönderilemedi." : "Failed to send SMS."));
+      if (data.challengeId) {
+        setPhoneChallengeId(data.challengeId);
+      }
       setVerificationFeedback({ type: "success", message: data.message });
       setCooldownSeconds(60);
     } catch (err: unknown) {
       setVerificationFeedback({
         type: "error",
-        message: err instanceof Error ? err.message : isTr ? "SMS gönderilemedi." : "Failed to send SMS.",
+        message:
+          err instanceof Error ? err.message : isTr ? "SMS gönderilemedi." : "Failed to send SMS.",
       });
     } finally {
       setIsResendingPhone(false);
@@ -163,16 +241,30 @@ export function ProfileSettingsForm({ initialProfile, locale }: ProfileSettingsF
   const handleVerifyPhone = async (e: React.FormEvent) => {
     e.preventDefault();
     if (otpCode.trim().length !== 6 || isSubmittingOtp) return;
+    if (!phoneChallengeId) {
+      setVerificationFeedback({
+        type: "error",
+        message: isTr
+          ? "Doğrulama oturumu bulunamadı. Lütfen 'Kodu Tekrar Gönder' butonuna basarak yeni kod isteyiniz."
+          : "Verification challenge not found. Please request a new code first.",
+      });
+      return;
+    }
     setIsSubmittingOtp(true);
     setVerificationFeedback(null);
     try {
       const res = await fetch("/api/auth/verify-phone", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-locale": locale },
-        body: JSON.stringify({ code: otpCode.trim(), locale }),
+        body: JSON.stringify({
+          code: otpCode.trim(),
+          locale,
+          challengeId: phoneChallengeId,
+        }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || (isTr ? "Kod doğrulanamadı." : "Verification failed."));
+      if (!res.ok)
+        throw new Error(data.error || (isTr ? "Kod doğrulanamadı." : "Verification failed."));
       setPhoneVerified(true);
       setShowPhoneModal(false);
       setOtpCode("");
@@ -180,10 +272,87 @@ export function ProfileSettingsForm({ initialProfile, locale }: ProfileSettingsF
     } catch (err: unknown) {
       setVerificationFeedback({
         type: "error",
-        message: err instanceof Error ? err.message : isTr ? "Kod doğrulanamadı." : "Verification failed.",
+        message:
+          err instanceof Error ? err.message : isTr ? "Kod doğrulanamadı." : "Verification failed.",
       });
     } finally {
       setIsSubmittingOtp(false);
+    }
+  };
+
+  const handleRequestPhoneChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPhone.trim() || isPhoneChanging) return;
+    setIsPhoneChanging(true);
+    setPhoneChangeError(null);
+
+    try {
+      const res = await fetch("/api/account/phone/request-change", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-locale": locale },
+        body: JSON.stringify({ phone: newPhone.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok)
+        throw new Error(
+          data.error || (isTr ? "SMS kodu gönderilemedi." : "Failed to send SMS code.")
+        );
+      if (data.challengeId) {
+        setPhoneChangeChallengeId(data.challengeId);
+      }
+      setPhoneChangeStep(2);
+      setPhoneChangeError(null);
+    } catch (err: unknown) {
+      setPhoneChangeError(err instanceof Error ? err.message : "İşlem başarısız oldu.");
+    } finally {
+      setIsPhoneChanging(false);
+    }
+  };
+
+  const handleVerifyPhoneChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!phoneChangeOtp.trim() || isPhoneChanging) return;
+    if (!phoneChangeChallengeId) {
+      setPhoneChangeError(
+        isTr
+          ? "Doğrulama oturumu bulunamadı. Lütfen önce SMS kodu talep ediniz."
+          : "Verification challenge not found. Please request an SMS code first."
+      );
+      return;
+    }
+    setIsPhoneChanging(true);
+    setPhoneChangeError(null);
+
+    try {
+      const res = await fetch("/api/account/phone/verify-change", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-locale": locale },
+        body: JSON.stringify({
+          phone: newPhone.trim(),
+          code: phoneChangeOtp.trim(),
+          challengeId: phoneChangeChallengeId,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok)
+        throw new Error(
+          data.error || (isTr ? "Doğrulama başarısız oldu." : "Verification failed.")
+        );
+      setPhoneVerified(true);
+      setPhoneChangeSuccess(
+        data.message || (isTr ? "Telefon numaranız güncellendi." : "Phone number updated.")
+      );
+      setTimeout(() => {
+        setShowPhoneChangeModal(false);
+        setPhoneChangeStep(1);
+        setNewPhone("");
+        setPhoneChangeOtp("");
+        setPhoneChangeSuccess(null);
+      }, 2000);
+    } catch (err: unknown) {
+      setPhoneChangeError(err instanceof Error ? err.message : "Doğrulama başarısız oldu.");
+    } finally {
+      setIsPhoneChanging(false);
     }
   };
 
@@ -247,7 +416,10 @@ export function ProfileSettingsForm({ initialProfile, locale }: ProfileSettingsF
       });
 
       const dataProfile = await resProfile.json();
-      if (!resProfile.ok) throw new Error(dataProfile.error || (isTr ? "Profil güncellenemedi." : "Failed to update profile."));
+      if (!resProfile.ok)
+        throw new Error(
+          dataProfile.error || (isTr ? "Profil güncellenemedi." : "Failed to update profile.")
+        );
 
       // 2. Update Links
       const resLinks = await fetch("/api/profile/links", {
@@ -260,7 +432,14 @@ export function ProfileSettingsForm({ initialProfile, locale }: ProfileSettingsF
       });
 
       const dataLinks = await resLinks.json();
-      if (!resLinks.ok) throw new Error(dataLinks.error || (isTr ? "Bağlantılar güncellenemedi." : "Failed to update links."));
+      if (!resLinks.ok) {
+        throw new Error(
+          (dataLinks.error || (isTr ? "Bağlantılar güncellenemedi." : "Failed to update links.")) +
+            (isTr
+              ? " (Ancak profil bilgileriniz kaydedildi)"
+              : " (However, profile details were saved)")
+        );
+      }
 
       setFeedback({
         type: "success",
@@ -433,7 +612,9 @@ export function ProfileSettingsForm({ initialProfile, locale }: ProfileSettingsF
       <div className="rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/70 backdrop-blur-xl p-6 sm:p-7 space-y-5">
         <h2 className="text-base font-semibold text-[var(--color-text-primary)] flex items-center gap-2">
           <Shield className="h-4 w-4 text-emerald-400" aria-hidden="true" />
-          <span>{isTr ? "Hesap ve Güvenlik Doğrulamaları" : "Account & Security Verifications"}</span>
+          <span>
+            {isTr ? "Hesap ve Güvenlik Doğrulamaları" : "Account & Security Verifications"}
+          </span>
         </h2>
 
         {verificationFeedback && (
@@ -488,11 +669,16 @@ export function ProfileSettingsForm({ initialProfile, locale }: ProfileSettingsF
                   disabled={cooldownSeconds > 0 || isResendingEmail}
                   className="w-full text-xs font-medium gap-1.5 h-8 cursor-pointer"
                 >
-                  <RefreshCw className={`h-3.5 w-3.5 ${isResendingEmail ? "animate-spin" : ""}`} aria-hidden="true" />
+                  <RefreshCw
+                    className={`h-3.5 w-3.5 ${isResendingEmail ? "animate-spin" : ""}`}
+                    aria-hidden="true"
+                  />
                   <span>
                     {cooldownSeconds > 0
                       ? `${isTr ? "Tekrar gönder" : "Resend in"} (${cooldownSeconds}s)`
-                      : isTr ? "Doğrulama E-postası Gönder" : "Send Verification Email"}
+                      : isTr
+                        ? "Doğrulama E-postası Gönder"
+                        : "Send Verification Email"}
                   </span>
                 </Button>
               </div>
@@ -522,10 +708,32 @@ export function ProfileSettingsForm({ initialProfile, locale }: ProfileSettingsF
             </div>
             <p className="text-[11px] text-[var(--color-text-tertiary)]">
               {phoneVerified
-                ? isTr ? "Telefon numaranız güvenle şifrelenmiş ve doğrulanmıştır." : "Your phone number is encrypted and verified."
-                : isTr ? "İlan verme ve teklif gönderme işlemleri için telefon doğrulaması zorunludur." : "Phone verification is required to publish listings and submit offers."}
+                ? isTr
+                  ? "Telefon numaranız güvenle şifrelenmiş ve doğrulanmıştır."
+                  : "Your phone number is encrypted and verified."
+                : isTr
+                  ? "İlan verme ve teklif gönderme işlemleri için telefon doğrulaması zorunludur."
+                  : "Phone verification is required to publish listings and submit offers."}
             </p>
-            {!phoneVerified && (
+            {phoneVerified ? (
+              <div className="pt-1 flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    setShowPhoneChangeModal(true);
+                    setPhoneChangeStep(1);
+                    setPhoneChangeError(null);
+                    setPhoneChangeSuccess(null);
+                  }}
+                  className="text-xs font-medium gap-1.5 h-8 cursor-pointer"
+                >
+                  <RefreshCw className="h-3 w-3" aria-hidden="true" />
+                  <span>{isTr ? "Numarayı Güncelle" : "Change Phone"}</span>
+                </Button>
+              </div>
+            ) : (
               <div className="pt-1 flex items-center gap-2">
                 <Button
                   type="button"
@@ -553,7 +761,11 @@ export function ProfileSettingsForm({ initialProfile, locale }: ProfileSettingsF
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-[var(--color-text-primary)] flex items-center gap-1.5">
                 <Key className="h-4 w-4 text-blue-400" aria-hidden="true" />
-                <span>{isTr ? "SMS ile Gelen 6 Haneli Doğrulama Kodunu Giriniz" : "Enter the 6-digit SMS verification code"}</span>
+                <span>
+                  {isTr
+                    ? "SMS ile Gelen 6 Haneli Doğrulama Kodunu Giriniz"
+                    : "Enter the 6-digit SMS verification code"}
+                </span>
               </span>
               <button
                 type="button"
@@ -592,11 +804,16 @@ export function ProfileSettingsForm({ initialProfile, locale }: ProfileSettingsF
                 disabled={cooldownSeconds > 0 || isResendingPhone}
                 className="text-xs font-medium h-9 px-3 gap-1 cursor-pointer"
               >
-                <RefreshCw className={`h-3 w-3 ${isResendingPhone ? "animate-spin" : ""}`} aria-hidden="true" />
+                <RefreshCw
+                  className={`h-3 w-3 ${isResendingPhone ? "animate-spin" : ""}`}
+                  aria-hidden="true"
+                />
                 <span>
                   {cooldownSeconds > 0
                     ? `${isTr ? "Tekrar gönder" : "Resend in"} (${cooldownSeconds}s)`
-                    : isTr ? "Tekrar Kod Gönder" : "Resend Code"}
+                    : isTr
+                      ? "Tekrar Kod Gönder"
+                      : "Resend Code"}
                 </span>
               </Button>
             </div>
@@ -646,6 +863,26 @@ export function ProfileSettingsForm({ initialProfile, locale }: ProfileSettingsF
             }
             checked={revealPhoneAfterMatch}
             onChange={(e) => setRevealPhoneAfterMatch(e.target.checked)}
+          />
+
+          <Checkbox
+            label={
+              <div>
+                <span className="font-medium text-xs text-[var(--color-text-primary)]">
+                  {isTr
+                    ? "E-posta Bildirimleri ve Bülten Aboneliği"
+                    : "Email Updates & Platform Newsletter"}
+                </span>
+                <p className="text-[11px] text-[var(--color-text-tertiary)]">
+                  {isTr
+                    ? "Popüler ilanlar, haftalık platform özetleri ve yenilikler hakkında e-posta alın. İstediğiniz an tek tıkla abonelikten çıkabilirsiniz."
+                    : "Receive periodic highlights, trending projects, and platform updates. Unsubscribe anytime with 1 click."}
+                </p>
+              </div>
+            }
+            checked={marketingConsent}
+            disabled={loadingMarketingConsent || isUpdatingConsent}
+            onChange={(e) => handleMarketingConsentChange(e.target.checked)}
           />
         </div>
       </div>
@@ -761,6 +998,133 @@ export function ProfileSettingsForm({ initialProfile, locale }: ProfileSettingsF
           {isTr ? "Değişiklikleri Kaydet" : "Save Changes"}
         </Button>
       </div>
+
+      {/* Phone Change Modal Dialog */}
+      {showPhoneChangeModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in duration-200"
+          role="dialog"
+          aria-modal="true"
+          aria-label={isTr ? "Telefon Numarası Güncelleme" : "Update Phone Number"}
+        >
+          <div className="relative w-full max-w-md rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)] p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-[var(--color-border-subtle)] pb-3">
+              <div className="flex items-center gap-2 text-blue-400">
+                <Phone className="h-4 w-4" aria-hidden="true" />
+                <h3 className="font-semibold text-sm text-[var(--color-text-primary)]">
+                  {isTr ? "Telefon Numarası Güncelleme" : "Update Phone Number"}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPhoneChangeModal(false)}
+                className="text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] p-1 rounded-lg"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+
+            {phoneChangeError && (
+              <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-xs text-red-400">
+                {phoneChangeError}
+              </div>
+            )}
+
+            {phoneChangeSuccess && (
+              <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-300 flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                <span>{phoneChangeSuccess}</span>
+              </div>
+            )}
+
+            {phoneChangeStep === 1 ? (
+              <form onSubmit={handleRequestPhoneChange} className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-[var(--color-text-secondary)]">
+                    {isTr ? "Yeni Telefon Numarası" : "New Phone Number"}
+                  </label>
+                  <input
+                    type="tel"
+                    value={newPhone}
+                    onChange={(e) => setNewPhone(e.target.value.trim())}
+                    placeholder="+905551234567"
+                    required
+                    className="w-full h-10 px-3 rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)] text-xs text-[var(--color-text-primary)] font-mono focus:outline-none focus:border-blue-500"
+                  />
+                  <p className="text-[11px] text-[var(--color-text-tertiary)]">
+                    {isTr
+                      ? "Uluslararası E.164 formatında (ülke kodu ile) giriniz. Örn: +905551234567"
+                      : "Enter in international E.164 format with country code. E.g. +905551234567"}
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-[var(--color-border-subtle)]">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setShowPhoneChangeModal(false)}
+                    disabled={isPhoneChanging}
+                  >
+                    {isTr ? "Vazgeç" : "Cancel"}
+                  </Button>
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    size="sm"
+                    disabled={!newPhone.trim()}
+                    isLoading={isPhoneChanging}
+                  >
+                    {isTr ? "SMS Kodu Gönder" : "Send SMS Code"}
+                  </Button>
+                </div>
+              </form>
+            ) : (
+              <form onSubmit={handleVerifyPhoneChange} className="space-y-4">
+                <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed">
+                  <strong className="text-white">{newPhone}</strong>{" "}
+                  {isTr
+                    ? "numarasına gönderilen 6 haneli doğrulama kodunu giriniz:"
+                    : "enter the 6-digit verification code sent to this number:"}
+                </p>
+
+                <div className="space-y-1.5">
+                  <input
+                    type="text"
+                    maxLength={6}
+                    value={phoneChangeOtp}
+                    onChange={(e) =>
+                      setPhoneChangeOtp(e.target.value.replace(/\D/g, "").slice(0, 6))
+                    }
+                    placeholder="000000"
+                    required
+                    className="w-full h-11 text-center tracking-widest text-lg font-mono font-bold rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)] text-[var(--color-text-primary)] focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between gap-2 pt-2 border-t border-[var(--color-border-subtle)]">
+                  <button
+                    type="button"
+                    onClick={() => setPhoneChangeStep(1)}
+                    className="text-xs text-blue-400 hover:underline"
+                  >
+                    {isTr ? "Numarayı Değiştir" : "Change Number"}
+                  </button>
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    size="sm"
+                    disabled={phoneChangeOtp.length !== 6}
+                    isLoading={isPhoneChanging}
+                  >
+                    {isTr ? "Doğrula ve Güncelle" : "Verify & Update"}
+                  </Button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </form>
   );
 }

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { ShieldAlert, Lock, ArrowLeft, UserCheck, Shield } from "lucide-react";
+import { ShieldAlert, Lock, ArrowLeft, UserCheck, Shield, KeyRound } from "lucide-react";
 import { BrandLogo } from "@/src/components/layout/brand-logo";
 
 interface AdminAccessDeniedClientProps {
@@ -16,12 +16,18 @@ export function AdminAccessDeniedClient({
 }: AdminAccessDeniedClientProps) {
   const [adminKey, setAdminKey] = useState("");
   const [adminEmail, setAdminEmail] = useState("admin@operis.pro");
+  const [requires2FA, setRequires2FA] = useState(false);
+  const [totpCode, setTotpCode] = useState("");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const handleAdminLogin = (role: "ADMIN" | "SECURITY_ADMIN") => {
     if (!adminKey.trim()) {
       setErrorMsg("Lütfen güvenlik anahtarını / PIN kodunu giriniz.");
+      return;
+    }
+    if (requires2FA && (!totpCode.trim() || totpCode.trim().length !== 6)) {
+      setErrorMsg("Lütfen 6 haneli iki aşamalı doğrulama (TOTP) kodunu eksiksiz giriniz.");
       return;
     }
     setErrorMsg(null);
@@ -35,6 +41,7 @@ export function AdminAccessDeniedClient({
             role,
             email: adminEmail,
             displayName: role === "ADMIN" ? "Demir Yıldız (Admin)" : "Güvenlik Sorumlusu",
+            totpCode: requires2FA ? totpCode.trim() : undefined,
           }),
         });
 
@@ -43,7 +50,12 @@ export function AdminAccessDeniedClient({
         if (res.ok) {
           window.location.reload();
         } else {
-          setErrorMsg(data.error || "Yetkilendirme doğrulanamadı.");
+          if (data.requires2FA) {
+            setRequires2FA(true);
+            setErrorMsg(data.error || "İki aşamalı doğrulama (TOTP) kodu gereklidir.");
+          } else {
+            setErrorMsg(data.error || "Yetkilendirme doğrulanamadı.");
+          }
         }
       } catch {
         setErrorMsg("Bağlantı hatası oluştu.");
@@ -121,6 +133,29 @@ export function AdminAccessDeniedClient({
               />
             </div>
 
+            {requires2FA && (
+              <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 space-y-2 animate-in fade-in">
+                <div className="flex items-center gap-2 text-amber-400 font-semibold text-xs">
+                  <KeyRound className="h-4 w-4" />
+                  <span>İki Aşamalı Doğrulama (TOTP) Kodu</span>
+                </div>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  value={totpCode}
+                  onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  placeholder="123456"
+                  autoFocus
+                  className="w-full bg-[#0d0e12] border border-amber-500/40 rounded-xl px-3.5 py-2.5 text-center text-sm font-mono tracking-widest text-amber-300 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+                />
+                <p className="text-[10px] text-slate-400">
+                  Google/Microsoft Authenticator uygulamanızdaki 6 haneli kodu giriniz.
+                </p>
+              </div>
+            )}
+
             {/* Quick Demo Authentication Buttons */}
             <div className="pt-2 space-y-2">
               <button
@@ -131,7 +166,11 @@ export function AdminAccessDeniedClient({
               >
                 <UserCheck className="h-4 w-4" />
                 <span>
-                  {isPending ? "Doğrulanıyor..." : "Demir Yıldız (Süper Admin) Olarak Konsola Gir"}
+                  {isPending
+                    ? "Doğrulanıyor..."
+                    : requires2FA
+                      ? "2FA Kodu ile Konsola Gir (Süper Admin)"
+                      : "Demir Yıldız (Süper Admin) Olarak Konsola Gir"}
                 </span>
               </button>
 
@@ -142,7 +181,11 @@ export function AdminAccessDeniedClient({
                 className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium text-xs transition-colors flex items-center justify-center gap-2"
               >
                 <Shield className="h-4 w-4 text-red-400" />
-                <span>Güvenlik Sorumlusu (Security Admin) Olarak Konsola Gir</span>
+                <span>
+                  {requires2FA
+                    ? "2FA Kodu ile Konsola Gir (Güvenlik)"
+                    : "Güvenlik Sorumlusu (Security Admin) Olarak Konsola Gir"}
+                </span>
               </button>
             </div>
           </div>

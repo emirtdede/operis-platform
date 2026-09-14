@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { eq } from "drizzle-orm";
+import { getDb, schema } from "@/src/lib/db";
 import { DEFAULT_USER } from "@/src/modules/auth/demo-user";
 import {
   createSessionToken,
@@ -28,25 +30,83 @@ export async function POST(req: Request) {
   }
 
   try {
-    const sessionToken = createSessionToken({
+    let body: { email?: string; role?: string } = {};
+    try {
+      body = await req.json();
+    } catch {
+      // empty body
+    }
+
+    const targetEmail =
+      body.email ||
+      (body.role === "freelancer"
+        ? "freelancer@operis.pro"
+        : body.role === "admin"
+          ? "admin@operis.pro"
+          : DEFAULT_USER.email);
+
+    let userRecord = {
       id: DEFAULT_USER.id,
       email: DEFAULT_USER.email,
       role: DEFAULT_USER.role,
       status: DEFAULT_USER.status,
+      emailVerified: DEFAULT_USER.emailVerified,
+      phoneVerified: DEFAULT_USER.phoneVerified,
+      profile: DEFAULT_USER.profile,
+    };
+
+    try {
+      const db = getDb();
+      const rows = await db
+        .select({
+          user: schema.users,
+          profile: schema.profiles,
+        })
+        .from(schema.users)
+        .leftJoin(schema.profiles, eq(schema.profiles.userId, schema.users.id))
+        .where(eq(schema.users.email, targetEmail))
+        .limit(1);
+
+      if (rows[0]) {
+        const u = rows[0].user;
+        const p = rows[0].profile;
+        userRecord = {
+          id: u.id,
+          email: u.email,
+          role: u.role as typeof DEFAULT_USER.role,
+          status: u.status as typeof DEFAULT_USER.status,
+          emailVerified: u.emailVerified,
+          phoneVerified: true,
+          profile: p
+            ? {
+                handle: p.handle,
+                displayName: p.displayName,
+                about: p.about || "",
+                avatarUrl: p.avatarUrl,
+                showLocation: p.showLocation,
+                revealPhoneAfterMatch: p.revealPhoneAfterMatch,
+                locale: p.locale,
+                theme: p.theme,
+                trackedSkills: p.trackedSkills,
+              }
+            : DEFAULT_USER.profile,
+        };
+      }
+    } catch {
+      // Fall back to DEFAULT_USER in offline unit tests
+    }
+
+    const sessionToken = createSessionToken({
+      id: userRecord.id,
+      email: userRecord.email,
+      role: userRecord.role,
+      status: userRecord.status,
     });
 
     const response = NextResponse.json(
       {
         success: true,
-        user: {
-          id: DEFAULT_USER.id,
-          email: DEFAULT_USER.email,
-          emailVerified: DEFAULT_USER.emailVerified,
-          phoneVerified: DEFAULT_USER.phoneVerified,
-          role: DEFAULT_USER.role,
-          status: DEFAULT_USER.status,
-          profile: DEFAULT_USER.profile,
-        },
+        user: userRecord,
       },
       { status: 200 }
     );

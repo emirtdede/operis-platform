@@ -1,18 +1,24 @@
-import { eq } from "drizzle-orm";
+import crypto from "node:crypto";
+import { eq, or } from "drizzle-orm";
 import { getDb, schema } from "@/src/lib/db";
 import {
   hashPassword,
   verifyPassword,
-  encryptPii,
+  encryptEnvelopeV2,
   hashPhoneBlindIndex,
+  hashEmailBlindIndex,
   generateOtpCode,
   sha256,
 } from "@/src/lib/crypto";
 import { registrationSchema, RegistrationInput, loginSchema, LoginInput } from "./validation";
 import { createSessionToken } from "./session";
 import { DEFAULT_USER } from "./demo-user";
-import { verifyTotpCode } from "./totp";
-import { createEmailVerificationToken, storePhoneOtp } from "./verification";
+import { verifyTotpCode, verifyAndConsumeBackupCode, decryptTotpSecret } from "./totp";
+import {
+  createEmailVerificationToken,
+  storePhoneOtpAsync,
+  consumePhoneOtpAsync,
+} from "./verification";
 import { emailProvider } from "@/src/lib/email";
 import { smsProvider } from "@/src/lib/sms";
 import { LEGAL_DOCUMENTS } from "@/src/lib/legal/legal-documents-data";
@@ -41,15 +47,17 @@ export class AuthService {
   static async register(rawInput: RegistrationInput): Promise<{
     user: SafeUser;
     sessionToken: string;
+    phoneChallengeId?: string | null;
   }> {
     const input = registrationSchema.parse(rawInput);
     const db = getDb();
 
-    // 1. Check duplicate email
+    // 1. Check duplicate email via HMAC blind index or legacy email
+    const emailHmac = hashEmailBlindIndex(input.email);
     const existingUser = await db
       .select({ id: schema.users.id })
       .from(schema.users)
-      .where(eq(schema.users.email, input.email))
+      .where(or(eq(schema.users.emailHmac, emailHmac), eq(schema.users.email, input.email)))
       .limit(1);
 
     if (existingUser.length > 0) {
@@ -79,11 +87,34 @@ export class AuthService {
       throw new Error("An account with this mobile phone number already exists.");
     }
 
-    // 4. Encrypt private identity fields
-    const legalFirstNameEnc = encryptPii(input.legalFirstName);
-    const legalLastNameEnc = encryptPii(input.legalLastName);
-    const dateOfBirthEnc = encryptPii(input.dateOfBirth);
-    const phoneE164Enc = encryptPii(input.phone);
+    const userId = crypto.randomUUID();
+
+    // 4. Encrypt private identity fields with Envelope v2 and AAD context binding
+    const legalFirstNameEnc = encryptEnvelopeV2(input.legalFirstName, {
+      table: "user_private_identity",
+      primaryKey: userId,
+      column: "legal_first_name_enc",
+    });
+    const legalLastNameEnc = encryptEnvelopeV2(input.legalLastName, {
+      table: "user_private_identity",
+      primaryKey: userId,
+      column: "legal_last_name_enc",
+    });
+    const dateOfBirthEnc = encryptEnvelopeV2(input.dateOfBirth, {
+      table: "user_private_identity",
+      primaryKey: userId,
+      column: "date_of_birth_enc",
+    });
+    const phoneE164Enc = encryptEnvelopeV2(input.phone, {
+      table: "user_private_identity",
+      primaryKey: userId,
+      column: "phone_e164_enc",
+    });
+    const emailEnc = encryptEnvelopeV2(input.email, {
+      table: "users",
+      primaryKey: userId,
+      column: "email_enc",
+    });
     const passwordHash = await hashPassword(input.password);
 
     // 5. Execute transactional insert
@@ -92,15 +123,16 @@ export class AuthService {
       const [newUser] = await tx
         .insert(schema.users)
         .values({
+          id: userId,
           email: input.email,
           emailVerified: false,
           passwordHash,
           role: "USER",
           status: "ACTIVE",
+          emailEnc,
+          emailHmac: hashEmailBlindIndex(input.email),
         })
         .returning();
-
-      const userId = newUser!.id;
 
       // B. Insert encrypted private identity
       await tx.insert(schema.userPrivateIdentity).values({
@@ -201,7 +233,8 @@ export class AuthService {
     // F. Send signed email verification token outside of DB transaction
     try {
       const emailToken = createEmailVerificationToken(result.user.id, input.email);
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:8000";
+      const appUrl =
+        process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
       const verificationUrl = `${appUrl}/api/auth/verify-email?token=${emailToken}`;
       const emailRes = await emailProvider.send({
         to: input.email,
@@ -210,10 +243,14 @@ export class AuthService {
         variables: {
           token: emailToken,
           verificationUrl,
-          subject: input.locale === "en" ? "Verify your Operis email" : "Operis e-posta adresinizi doğrulayın",
-          body: input.locale === "en"
-            ? `Please verify your email by clicking: ${verificationUrl}`
-            : `Lütfen e-posta adresinizi doğrulamak için tıklayın: ${verificationUrl}`,
+          subject:
+            input.locale === "en"
+              ? "Verify your Operis email"
+              : "Operis e-posta adresinizi doğrulayın",
+          body:
+            input.locale === "en"
+              ? `Please verify your email by clicking: ${verificationUrl}`
+              : `Lütfen e-posta adresinizi doğrulamak için tıklayın: ${verificationUrl}`,
         },
         idempotencyKey: `email_verify_${result.user.id}`,
       });
@@ -225,9 +262,12 @@ export class AuthService {
     }
 
     // G. Send SMS OTP code and persist verification record outside of DB transaction
+    let phoneChallengeId: string | null = null;
     try {
       const otpCode = generateOtpCode();
-      storePhoneOtp(result.user.id, otpCode);
+      phoneChallengeId = await storePhoneOtpAsync(result.user.id, otpCode, {
+        purpose: "INITIAL_VERIFICATION",
+      });
       const smsRes = await smsProvider.sendOtp({
         phoneE164: input.phone,
         code: otpCode,
@@ -236,12 +276,31 @@ export class AuthService {
       });
       if (!smsRes.success) {
         console.error("SMS OTP delivery failure:", smsRes.error);
+        if (process.env.NODE_ENV === "production" && phoneChallengeId) {
+          try {
+            await consumePhoneOtpAsync(result.user.id, phoneChallengeId);
+          } catch {
+            // Non-fatal
+          }
+          phoneChallengeId = null;
+        }
       }
     } catch (smsErr) {
       console.error("Non-blocking SMS OTP delivery failure:", smsErr);
+      if (process.env.NODE_ENV === "production" && phoneChallengeId) {
+        try {
+          await consumePhoneOtpAsync(result.user.id, phoneChallengeId);
+        } catch {
+          // Non-fatal
+        }
+        phoneChallengeId = null;
+      }
     }
 
-    return result;
+    return {
+      ...result,
+      phoneChallengeId,
+    };
   }
 
   /**
@@ -278,16 +337,28 @@ export class AuthService {
           throw err;
         }
 
-        const cleanCode = input.totpCode.replace(/\s+/g, "");
-        if (!/^\d{6}$/.test(cleanCode)) {
-          throw new Error("Geçersiz 2FA doğrulama kodu. Lütfen 6 haneli kodu giriniz.");
-        }
+        const rawCode = input.totpCode.trim();
+        const cleanCode = rawCode.replace(/\s+/g, "");
+        const isStandardTotp = /^\d{6}$/.test(cleanCode);
 
-        if (cleanCode !== "123456" && DEFAULT_USER.twoFactorSecret) {
-          const isValid = verifyTotpCode(DEFAULT_USER.twoFactorSecret, cleanCode);
-          if (!isValid) {
+        if (isStandardTotp) {
+          if (cleanCode !== "123456" && DEFAULT_USER.twoFactorSecret) {
+            const isValid = verifyTotpCode(DEFAULT_USER.twoFactorSecret, cleanCode);
+            if (!isValid) {
+              throw new Error(
+                "Geçersiz 2FA doğrulama kodu. Lütfen Authenticator uygulamanızdaki güncel kodu giriniz."
+              );
+            }
+          }
+        } else {
+          // Check if valid backup code format (e.g. XXXX-XXXX or 8 alphanumeric) or demo backup code
+          const isDemoBackup =
+            cleanCode.toUpperCase() === "BACKUP-1234" ||
+            cleanCode.length === 8 ||
+            cleanCode.length === 9;
+          if (!isDemoBackup) {
             throw new Error(
-              "Geçersiz 2FA doğrulama kodu. Lütfen Authenticator uygulamanızdaki güncel kodu giriniz."
+              "Geçersiz 2FA doğrulama kodu veya kurtarma kodu. Lütfen kontrol ediniz."
             );
           }
         }
@@ -298,6 +369,7 @@ export class AuthService {
         email: DEFAULT_USER.email,
         role: DEFAULT_USER.role,
         status: DEFAULT_USER.status,
+        authVersion: DEFAULT_USER.authVersion ?? 1,
       });
 
       return {
@@ -317,11 +389,20 @@ export class AuthService {
     try {
       const db = getDb();
 
-      const userRows = await db
+      const emailHmac = hashEmailBlindIndex(input.email);
+      let userRows = await db
         .select()
         .from(schema.users)
-        .where(eq(schema.users.email, input.email))
+        .where(eq(schema.users.emailHmac, emailHmac))
         .limit(1);
+
+      if (userRows.length === 0) {
+        userRows = await db
+          .select()
+          .from(schema.users)
+          .where(eq(schema.users.email, input.email))
+          .limit(1);
+      }
 
       if (userRows.length === 0) {
         throw new Error("Invalid email or password.");
@@ -349,20 +430,67 @@ export class AuthService {
           throw err;
         }
 
-        const cleanCode = input.totpCode.replace(/\s+/g, "");
-        if (!/^\d{6}$/.test(cleanCode)) {
-          throw new Error("Geçersiz 2FA doğrulama kodu. Lütfen 6 haneli kodu giriniz.");
+        const rawCode = input.totpCode.trim();
+        const cleanTotp = rawCode.replace(/\s+/g, "");
+        let isTwoFactorValid = false;
+
+        // A. Try standard 6-digit TOTP if 6 digits provided
+        if (/^\d{6}$/.test(cleanTotp) && user.twoFactorSecret) {
+          isTwoFactorValid = verifyTotpCode(
+            decryptTotpSecret(user.id, user.twoFactorSecret),
+            cleanTotp
+          );
         }
 
-        if (user.twoFactorSecret) {
-          const isValidTotp = verifyTotpCode(user.twoFactorSecret, cleanCode);
-          if (!isValidTotp) {
-            throw new Error(
-              "Geçersiz 2FA doğrulama kodu. Lütfen Authenticator uygulamanızdaki güncel kodu giriniz."
-            );
+        // B. If not valid TOTP, try verifying and consuming backup code atomically with row lock (B05)
+        if (
+          !isTwoFactorValid &&
+          user.twoFactorBackupCodes &&
+          user.twoFactorBackupCodes.length > 0
+        ) {
+          try {
+            await db.transaction(async (tx) => {
+              const [lockedUser] = await tx
+                .select({
+                  twoFactorBackupCodes: schema.users.twoFactorBackupCodes,
+                })
+                .from(schema.users)
+                .where(eq(schema.users.id, user.id))
+                .for("update");
+
+              if (
+                !lockedUser?.twoFactorBackupCodes ||
+                lockedUser.twoFactorBackupCodes.length === 0
+              ) {
+                return;
+              }
+
+              const { isValid, remainingHashedCodes } = verifyAndConsumeBackupCode(
+                rawCode,
+                lockedUser.twoFactorBackupCodes
+              );
+
+              if (isValid) {
+                await tx
+                  .update(schema.users)
+                  .set({
+                    twoFactorBackupCodes: remainingHashedCodes,
+                    updatedAt: new Date(),
+                  })
+                  .where(eq(schema.users.id, user.id));
+                isTwoFactorValid = true;
+              }
+            });
+          } catch {
+            // Fail closed on database concurrency error or lock timeout
+            isTwoFactorValid = false;
           }
-        } else if (process.env.NODE_ENV === "production") {
-          throw new Error("2FA yapılandırması eksik.");
+        }
+
+        if (!isTwoFactorValid) {
+          throw new Error(
+            "Geçersiz 2FA doğrulama kodu veya kurtarma kodu. Lütfen Authenticator kodunuzu veya 8 haneli tek kullanımlık kurtarma kodunuzu kontrol ediniz."
+          );
         }
       }
 

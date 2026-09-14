@@ -1,17 +1,33 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { Clock, RefreshCw, Archive, CheckCircle2, Calendar } from "lucide-react";
 
 export function LifecycleRadarDiagram() {
-  const days = [
-    { num: 1, label: "1. Gün", passed: true },
-    { num: 2, label: "2. Gün", passed: true },
-    { num: 3, label: "3. Gün", passed: true },
-    { num: 4, label: "4. Gün", passed: true, current: true },
-    { num: 5, label: "5. Gün", passed: false },
-    { num: 6, label: "6. Gün", passed: false },
-    { num: 7, label: "7. Gün", passed: false },
+  const [activeDay, setActiveDay] = useState(1);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setActiveDay((prev) => (prev >= 7 ? 1 : prev + 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const rawDays = [
+    { num: 1, label: "1. Gün" },
+    { num: 2, label: "2. Gün" },
+    { num: 3, label: "3. Gün" },
+    { num: 4, label: "4. Gün" },
+    { num: 5, label: "5. Gün" },
+    { num: 6, label: "6. Gün" },
+    { num: 7, label: "7. Gün" },
   ];
+
+  const days = rawDays.map((item) => ({
+    ...item,
+    passed: item.num <= activeDay,
+    current: item.num === activeDay,
+  }));
 
   return (
     <div className="relative w-full overflow-hidden rounded-3xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/80 p-6 sm:p-8 backdrop-blur-xl shadow-2xl">
@@ -40,17 +56,18 @@ export function LifecycleRadarDiagram() {
       <div className="relative flex flex-col lg:flex-row items-center justify-around gap-8 py-4">
         {/* Radar SVG Visualizer */}
         <div className="relative flex h-64 w-64 items-center justify-center shrink-0">
-          {/* Rotating Radar Sweep Cone */}
+          {/* Rotating Radar Sweep Cone (7s duration matching 7 days) */}
           <div
             aria-hidden="true"
             className="absolute inset-2 rounded-full animate-radar-sweep pointer-events-none"
             style={{
+              animationDuration: "7s",
               background:
-                "conic-gradient(from 0deg, transparent 0deg, transparent 270deg, rgba(6, 182, 212, 0.25) 360deg)",
+                "conic-gradient(from 0deg, transparent 0deg, transparent 270deg, rgba(6, 182, 212, 0.28) 360deg)",
             }}
           />
 
-          {/* SVG Concentric Rings */}
+          {/* SVG Concentric Rings & Dynamic Radar Markers */}
           <svg
             className="absolute inset-0 h-full w-full"
             viewBox="0 0 200 200"
@@ -58,6 +75,13 @@ export function LifecycleRadarDiagram() {
             xmlns="http://www.w3.org/2000/svg"
             aria-hidden="true"
           >
+            <defs>
+              <linearGradient id="radarArcGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#06b6d4" stopOpacity="0.3" />
+                <stop offset="100%" stopColor="#22d3ee" stopOpacity="0.95" />
+              </linearGradient>
+            </defs>
+
             {/* Outer Ring */}
             <circle
               cx="100"
@@ -71,6 +95,22 @@ export function LifecycleRadarDiagram() {
             <circle cx="100" cy="100" r="60" stroke="var(--color-border-subtle)" strokeWidth="1" />
             {/* Inner Ring */}
             <circle cx="100" cy="100" r="34" stroke="var(--color-border-subtle)" strokeWidth="1" />
+
+            {/* Dynamic Progress Arc connecting the active blue dots */}
+            <circle
+              cx="100"
+              cy="100"
+              r="74"
+              fill="none"
+              stroke="url(#radarArcGrad)"
+              strokeWidth="1.5"
+              strokeDasharray="465"
+              strokeDashoffset={465 - (465 * activeDay) / 7}
+              strokeLinecap="round"
+              className="transition-all duration-700 ease-out"
+              transform="rotate(-90 100 100)"
+              opacity="0.85"
+            />
 
             {/* Radar Crosshairs */}
             <line
@@ -98,7 +138,7 @@ export function LifecycleRadarDiagram() {
               const cx = 100 + 74 * Math.cos(angle);
               const cy = 100 + 74 * Math.sin(angle);
               return (
-                <g key={item.num}>
+                <g key={item.num} className="cursor-pointer" onClick={() => setActiveDay(item.num)}>
                   {item.current && (
                     <>
                       {/* Concentric Sonar Pulse Wave 1 */}
@@ -113,20 +153,20 @@ export function LifecycleRadarDiagram() {
                       >
                         <animate
                           attributeName="r"
-                          values="6;20"
-                          dur="2s"
+                          values="6;22"
+                          dur="1.5s"
                           repeatCount="indefinite"
                         />
                         <animate
                           attributeName="opacity"
                           values="0.8;0"
-                          dur="2s"
+                          dur="1.5s"
                           repeatCount="indefinite"
                         />
                         <animate
                           attributeName="stroke-width"
                           values="2;0.5"
-                          dur="2s"
+                          dur="1.5s"
                           repeatCount="indefinite"
                         />
                       </circle>
@@ -142,38 +182,38 @@ export function LifecycleRadarDiagram() {
                       >
                         <animate
                           attributeName="r"
-                          values="6;20"
-                          begin="1s"
-                          dur="2s"
+                          values="6;22"
+                          begin="0.75s"
+                          dur="1.5s"
                           repeatCount="indefinite"
                         />
                         <animate
                           attributeName="opacity"
                           values="0.6;0"
-                          begin="1s"
-                          dur="2s"
+                          begin="0.75s"
+                          dur="1.5s"
                           repeatCount="indefinite"
                         />
                         <animate
                           attributeName="stroke-width"
                           values="1.5;0.5"
-                          begin="1s"
-                          dur="2s"
+                          begin="0.75s"
+                          dur="1.5s"
                           repeatCount="indefinite"
                         />
                       </circle>
                       {/* Luminous beacon core glow */}
-                      <circle cx={cx} cy={cy} r="9" fill="#06b6d4" opacity="0.3">
+                      <circle cx={cx} cy={cy} r="9" fill="#06b6d4" opacity="0.35">
                         <animate
                           attributeName="r"
-                          values="8;11;8"
-                          dur="2s"
+                          values="8;12;8"
+                          dur="1.5s"
                           repeatCount="indefinite"
                         />
                         <animate
                           attributeName="opacity"
-                          values="0.2;0.45;0.2"
-                          dur="2s"
+                          values="0.25;0.55;0.25"
+                          dur="1.5s"
                           repeatCount="indefinite"
                         />
                       </circle>
@@ -182,7 +222,7 @@ export function LifecycleRadarDiagram() {
                   <circle
                     cx={cx}
                     cy={cy}
-                    r={item.current ? "6" : item.passed ? "5.5" : "4"}
+                    r={item.current ? "6.5" : item.passed ? "5.5" : "4"}
                     fill={item.passed ? "#06b6d4" : "var(--color-surface-elevated)"}
                     stroke={
                       item.current
@@ -192,19 +232,25 @@ export function LifecycleRadarDiagram() {
                           : "var(--color-border-strong)"
                     }
                     strokeWidth={item.current ? "2" : "1.5"}
+                    className="transition-all duration-500 ease-out"
+                    style={{
+                      filter: item.passed
+                        ? "drop-shadow(0 0 5px rgba(6, 182, 212, 0.9))"
+                        : undefined,
+                    }}
                   />
                 </g>
               );
             })}
           </svg>
 
-          {/* Radar Center Status: User Friendly 1 Hafta */}
-          <div className="relative z-10 flex flex-col items-center justify-center text-center p-3 rounded-2xl bg-[var(--color-surface-base)]/90 backdrop-blur-md border border-cyan-500/20 shadow-lg">
-            <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-cyan-400">
-              <Calendar className="h-3 w-3" aria-hidden="true" />
-              <span>Döngü</span>
+          {/* Radar Center Status: User Friendly 1 Hafta (Dörtgen Çerçeve Kaldırıldı) */}
+          <div className="relative z-10 flex flex-col items-center justify-center text-center pointer-events-none select-none">
+            <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-cyan-400 drop-shadow-[0_0_8px_rgba(6,182,212,0.6)]">
+              <Calendar className="h-3 w-3 animate-pulse" aria-hidden="true" />
+              <span>Döngü &bull; {activeDay}. Gün</span>
             </div>
-            <div className="font-display text-xl sm:text-2xl font-extrabold text-[var(--color-text-primary)]">
+            <div className="font-display text-xl sm:text-2xl font-black text-[var(--color-text-primary)] tracking-tight drop-shadow-sm">
               1 HAFTA
             </div>
             <div className="text-[10px] font-medium text-[var(--color-text-tertiary)]">

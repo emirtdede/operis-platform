@@ -5,3 +5,5 @@ coverage/
 pnpm-lock.yaml
 FREELANCE_PLATFORM_MASTER_SPEC.md
 *.md
+public/preview-emails.html
+db/migrations/meta/

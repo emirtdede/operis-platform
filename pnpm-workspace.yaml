@@ -1,5 +1,8 @@
 packages:
   - "."
 allowBuilds:
+  "@sentry/cli": set this to true or false
+  core-js: true
   esbuild: true
+  protobufjs: set this to true or false
   unrs-resolver: true
