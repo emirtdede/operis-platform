@@ -733,14 +733,11 @@ export function CategoryListInteractive({
                 className="h-full p-6 transition-all duration-300 hover:-translate-y-1 group"
               >
                 <div className="flex flex-col flex-1">
-                  <div className="flex items-center justify-between mb-3.5">
+                  <div className="flex items-start justify-between mb-3.5">
                     <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-500/10 text-blue-400 group-hover:bg-blue-500/20 group-hover:scale-105 transition-all shrink-0">
                       <Icon className="h-5 w-5" aria-hidden="true" />
                     </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <span className="font-mono text-[11px] text-[var(--color-text-tertiary)] bg-[var(--color-surface-hover)] px-2 py-0.5 rounded-md">
-                        /{cat.slug}
-                      </span>
+                    <div className="flex flex-col items-end gap-1.5 shrink-0">
                       <span
                         className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border ${
                           (cat.listingCount || 0) > 0
@@ -749,6 +746,9 @@ export function CategoryListInteractive({
                         }`}
                       >
                         {cat.listingCount || 0} {isTr ? "ilan" : "listings"}
+                      </span>
+                      <span className="font-mono text-[11px] text-[var(--color-text-tertiary)] bg-[var(--color-surface-hover)] px-2 py-0.5 rounded-md">
+                        /{cat.slug}
                       </span>
                     </div>
                   </div>
