@@ -24,8 +24,8 @@ export async function generateMetadata({
     ? "Teklif Verdiğim İlanlar — Durum Takibi"
     : "My Sent Proposals — Track Status";
   const description = isTr
-    ? "Projeler için ilettiğiniz gizli teklifleri, beklemedeki durumları ve kabul edilen eşleşmeleri takip edin."
-    : "Track your private proposals, pending statuses, and accepted matches across projects.";
+    ? "İlanlar için ilettiğiniz gizli teklifleri, beklemedeki durumları ve kabul edilen eşleşmeleri takip edin."
+    : "Track your private proposals, pending statuses, and accepted matches across listings.";
 
   return {
     title,
@@ -138,15 +138,15 @@ export default async function SentOffersPage({ params }: { params: Promise<{ loc
           </h1>
           <p className="text-sm text-[var(--color-text-secondary)]">
             {isTr
-              ? "Projeler için verdiğiniz tekliflerin güncel durumlarını buradan izleyebilirsiniz."
-              : "Review and manage all proposals you have submitted to project owners."}
+              ? "İlanlar için verdiğiniz tekliflerin güncel durumlarını buradan izleyebilirsiniz."
+              : "Review and manage all proposals you have submitted to listing owners."}
           </p>
         </div>
 
         <Link href={isTr ? "/tr/ilanlar" : "/en/listings"}>
           <Button variant="shimmer" size="sm" className="gap-2">
             <Compass className="h-4 w-4" aria-hidden="true" />
-            <span>{isTr ? "Yeni İlanları Keşfet" : "Browse Projects"}</span>
+            <span>{isTr ? "Yeni İlanları Keşfet" : "Browse Listings"}</span>
           </Button>
         </Link>
       </header>

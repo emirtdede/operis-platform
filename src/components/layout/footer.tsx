@@ -24,7 +24,7 @@ export function Footer() {
   const platformLinks = [
     {
       href: getLocalizedRoute("feed", locale),
-      label: isTr ? "Proje Akışı" : "Project Feed",
+      label: isTr ? "İlan Akışı" : "Listings Feed",
     },
     {
       href: getLocalizedRoute("listings", locale),

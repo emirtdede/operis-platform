@@ -241,7 +241,7 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
             <Link href={isTr ? "/tr/akis" : "/en/feed"} className="w-full sm:w-auto">
               <Button variant="shimmer" size="lg" className="w-full sm:w-auto px-8 py-4 text-base">
                 <span>
-                  {isTr ? "Yazılımcıyım: Projeleri İncele" : "I'm a Developer: Browse Projects"}
+                  {isTr ? "Yazılımcıyım: İlanları İncele" : "I'm a Developer: Browse Listings"}
                 </span>
                 <ArrowRight className="h-4 w-4" aria-hidden="true" />
               </Button>
@@ -256,7 +256,7 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
                 className="w-full sm:w-auto px-8 py-4 text-base"
               >
                 <span>
-                  {isTr ? "İşverenim: Ücretsiz İlan Ver" : "I'm a Client: Post a Project"}
+                  {isTr ? "İşverenim: Ücretsiz İlan Ver" : "I'm a Client: Post a Listing"}
                 </span>
               </Button>
             </Link>

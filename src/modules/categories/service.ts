@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { eq, and, asc, inArray, isNotNull } from "drizzle-orm";
+import { eq, and, asc, inArray, isNotNull, sql, isNull } from "drizzle-orm";
 import { getDb, schema } from "@/src/lib/db";
 import { Locale } from "@/src/lib/i18n/config";
 import { SEED_CATEGORIES, SEED_SECTORS } from "@/db/seeds/categories";
@@ -15,6 +15,7 @@ export interface CategoryDto {
   sectorKey?: string;
   parentId?: string | null;
   isFollowed?: boolean;
+  listingCount?: number;
 }
 
 export interface SectorDto {
@@ -26,6 +27,7 @@ export interface SectorDto {
   sortOrder: number;
   icon: string;
   categories: CategoryDto[];
+  listingCount?: number;
   isFollowed?: boolean;
 }
 
@@ -37,7 +39,7 @@ export function getDeterministicUuid(key: string): string {
   return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-4${hash.slice(13, 16)}-a${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
 }
 
-function getFallbackCategories(locale: Locale, userId?: string): CategoryDto[] {
+function getFallbackCategories(locale: Locale, userId?: string, countMap?: Map<string, number>): CategoryDto[] {
   const lang = locale === "tr" ? "tr" : "en";
   const userFollows = userId ? inMemoryFollows.get(userId) : undefined;
 
@@ -53,20 +55,22 @@ function getFallbackCategories(locale: Locale, userId?: string): CategoryDto[] {
       description: trans.description,
       sortOrder: cat.sortOrder,
       isActive: true,
+      listingCount: countMap?.get(catId) || countMap?.get(cat.key) || 0,
       isFollowed: userFollows ? userFollows.has(catId) || userFollows.has(cat.key) : false,
     };
   });
 }
 
-function getFallbackSectors(locale: Locale, userId?: string): SectorDto[] {
+function getFallbackSectors(locale: Locale, userId?: string, countMap?: Map<string, number>): SectorDto[] {
   const lang = locale === "tr" ? "tr" : "en";
-  const allCategories = getFallbackCategories(locale, userId);
+  const allCategories = getFallbackCategories(locale, userId, countMap);
   const userFollows = userId ? inMemoryFollows.get(userId) : undefined;
 
   return SEED_SECTORS.map((sec) => {
     const trans = sec.translations[lang] || sec.translations.tr;
     const secId = getDeterministicUuid(sec.key);
     const subCategories = allCategories.filter((cat) => cat.sectorKey === sec.key);
+    const sectorListingCount = subCategories.reduce((acc, cat) => acc + (cat.listingCount || 0), 0);
 
     return {
       id: secId,
@@ -77,12 +81,46 @@ function getFallbackSectors(locale: Locale, userId?: string): SectorDto[] {
       sortOrder: sec.sortOrder,
       icon: sec.icon,
       categories: subCategories,
+      listingCount: sectorListingCount,
       isFollowed: userFollows ? userFollows.has(secId) || userFollows.has(sec.key) : false,
     };
   });
 }
 
 export class CategoryService {
+  /**
+   * Fetches active listing counts grouped by category ID.
+   */
+  static async getListingCountsByCategory(): Promise<Map<string, number>> {
+    const countMap = new Map<string, number>();
+    try {
+      const db = getDb();
+      const countRows = await db
+        .select({
+          categoryId: schema.listings.categoryId,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(schema.listings)
+        .where(
+          and(
+            eq(schema.listings.status, "ACTIVE"),
+            sql`${schema.listings.activeUntil} > now()`,
+            isNull(schema.listings.deletedAt)
+          )
+        )
+        .groupBy(schema.listings.categoryId);
+
+      for (const r of countRows) {
+        if (r.categoryId) {
+          countMap.set(r.categoryId, Number(r.count) || 0);
+        }
+      }
+    } catch {
+      // Fallback to empty counts if database is unreachable or table not yet initialized
+    }
+    return countMap;
+  }
+
   /**
    * Returns all active categories grouped by sectors localized to the requested locale.
    */
@@ -92,11 +130,12 @@ export class CategoryService {
       const lang = locale === "tr" ? "tr" : "en";
       const userFollows = userId ? inMemoryFollows.get(userId) : undefined;
 
-      // Map categories under their respective sectors
+      // Map categories under their respective sectors with aggregated listing counts
       return SEED_SECTORS.map((sec) => {
         const trans = sec.translations[lang] || sec.translations.tr;
         const secId = getDeterministicUuid(sec.key);
         const subCategories = categories.filter((cat) => cat.sectorKey === sec.key);
+        const sectorListingCount = subCategories.reduce((acc, cat) => acc + (cat.listingCount || 0), 0);
 
         return {
           id: secId,
@@ -107,6 +146,7 @@ export class CategoryService {
           sortOrder: sec.sortOrder,
           icon: sec.icon,
           categories: subCategories,
+          listingCount: sectorListingCount,
           isFollowed: userFollows ? userFollows.has(secId) || userFollows.has(sec.key) : false,
         };
       });
@@ -127,17 +167,20 @@ export class CategoryService {
     try {
       const db = getDb();
 
-      // 1. Fetch active categories
-      const categoryRows = await db
-        .select({
-          id: schema.categories.id,
-          key: schema.categories.key,
-          sortOrder: schema.categories.sortOrder,
-          isActive: schema.categories.isActive,
-        })
-        .from(schema.categories)
-        .where(and(eq(schema.categories.isActive, true), isNotNull(schema.categories.parentId)))
-        .orderBy(asc(schema.categories.sortOrder));
+      // 1. Fetch active categories and listing counts in parallel
+      const [categoryRows, countMap] = await Promise.all([
+        db
+          .select({
+            id: schema.categories.id,
+            key: schema.categories.key,
+            sortOrder: schema.categories.sortOrder,
+            isActive: schema.categories.isActive,
+          })
+          .from(schema.categories)
+          .where(and(eq(schema.categories.isActive, true), isNotNull(schema.categories.parentId)))
+          .orderBy(asc(schema.categories.sortOrder)),
+        this.getListingCountsByCategory(),
+      ]);
 
       if (categoryRows && categoryRows.length > 0) {
         // 2. Fetch translations for this locale and fallback 'tr'
@@ -190,6 +233,7 @@ export class CategoryService {
             description: trans.description,
             sortOrder: cat.sortOrder,
             isActive: cat.isActive,
+            listingCount: countMap.get(cat.id) || countMap.get(cat.key) || 0,
             isFollowed: userId ? followedSet.has(cat.id) : undefined,
           };
         });

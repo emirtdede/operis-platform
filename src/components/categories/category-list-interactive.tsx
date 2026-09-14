@@ -216,6 +216,7 @@ export interface CategoryItem {
   sectorKey?: string;
   description?: string | null;
   isFollowed?: boolean;
+  listingCount?: number;
 }
 
 export interface CategoryListInteractiveProps {
@@ -389,25 +390,36 @@ export function CategoryListInteractive({
       ? categories.length
       : categories.filter((c) => c.sectorKey === selectedSector).length;
 
+  const currentSectorListingCount = useMemo(() => {
+    return selectedSector === "all"
+      ? categories.reduce((acc, c) => acc + (c.listingCount || 0), 0)
+      : categories
+          .filter((c) => c.sectorKey === selectedSector)
+          .reduce((acc, c) => acc + (c.listingCount || 0), 0);
+  }, [categories, selectedSector]);
+
   const ActiveSectorIcon = selectedSectorObj
     ? SECTOR_ICONS[selectedSectorObj.key] || Briefcase
     : Layers;
 
   const sectorOptions = useMemo(() => {
+    const totalListings = categories.reduce((acc, c) => acc + (c.listingCount || 0), 0);
     const list = [
       {
         key: "all",
         name: isTr ? "Tüm Sektörler" : "All Sectors",
         count: categories.length,
+        listingCount: totalListings,
         icon: Layers,
         subText: isTr
-          ? "Tüm resmi sektörler ve 104 uzmanlık"
-          : "All 10 sectors & 104 specializations",
+          ? `10 sektör, 104 uzmanlık • ${totalListings} aktif ilan`
+          : `10 sectors, 104 specializations • ${totalListings} active listings`,
         allKeywords: "all tüm hepsi",
       },
       ...SEED_SECTORS.map((sec) => {
         const name = isTr ? sec.translations.tr.name : sec.translations.en.name;
         const subCats = categories.filter((c) => c.sectorKey === sec.key);
+        const sectorListingCount = subCats.reduce((acc, c) => acc + (c.listingCount || 0), 0);
         const subText = subCats
           .slice(0, 3)
           .map((c) => c.name)
@@ -419,6 +431,7 @@ export function CategoryListInteractive({
           key: sec.key,
           name,
           count: subCats.length,
+          listingCount: sectorListingCount,
           icon: SECTOR_ICONS[sec.key] || Briefcase,
           subText,
           allKeywords,
@@ -545,7 +558,7 @@ export function CategoryListInteractive({
                 </button>
               ) : (
                 <span className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-[var(--color-surface-base)] text-[var(--color-text-secondary)] border border-[var(--color-border-subtle)] shrink-0">
-                  {currentSectorCount}
+                  {currentSectorCount} {isTr ? "alan" : "areas"} • {currentSectorListingCount} {isTr ? "ilan" : "listings"}
                 </span>
               )}
 
@@ -571,7 +584,7 @@ export function CategoryListInteractive({
             {/* Dropdown Menu (Shows 10 items in viewport, scrollable) */}
             {isSectorDropdownOpen && (
               <div
-                className="absolute top-full left-0 mt-2 w-full min-w-[320px] sm:min-w-[420px] rounded-2xl border p-1.5 z-[100] animate-in fade-in zoom-in-95 duration-150"
+                className="absolute top-full left-0 mt-2 w-full min-w-[320px] sm:min-w-[440px] rounded-2xl border p-1.5 z-[100] animate-in fade-in zoom-in-95 duration-150"
                 style={{
                   backgroundColor: "var(--bg-elevated)",
                   borderColor: "var(--border-strong)",
@@ -637,13 +650,13 @@ export function CategoryListInteractive({
 
                           <div className="flex items-center gap-2 shrink-0">
                             <span
-                              className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${
+                              className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
                                 isSelected
                                   ? "bg-blue-500/20 text-blue-300"
                                   : "bg-[var(--color-surface-hover)] text-[var(--color-text-tertiary)]"
                               }`}
                             >
-                              {item.count}
+                              {item.count} {isTr ? "uzmanlık" : "specializations"} • {item.listingCount} {isTr ? "ilan" : "listings"}
                             </span>
                             {isSelected && (
                               <Check className="h-4 w-4 text-blue-400" aria-hidden="true" />
@@ -676,11 +689,16 @@ export function CategoryListInteractive({
         </div>
 
         {/* Counter readout */}
-        <div className="text-xs text-[var(--color-text-tertiary)] shrink-0 self-end sm:self-center">
+        <div className="text-xs text-[var(--color-text-tertiary)] shrink-0 self-end sm:self-center flex items-center gap-1.5">
           <span className="font-bold text-[var(--color-text-primary)]">
             {filteredCategories.length}
           </span>{" "}
-          {isTr ? "uzmanlık listeleniyor" : "specializations listed"}
+          <span>{isTr ? "uzmanlık" : "specializations"}</span>
+          <span className="opacity-40">•</span>
+          <span className="font-bold text-blue-400">
+            {filteredCategories.reduce((acc, cat) => acc + (cat.listingCount || 0), 0)}
+          </span>{" "}
+          <span>{isTr ? "aktif ilan listeleniyor" : "active listings live"}</span>
         </div>
       </div>
 
@@ -719,9 +737,20 @@ export function CategoryListInteractive({
                     <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-500/10 text-blue-400 group-hover:bg-blue-500/20 group-hover:scale-105 transition-all shrink-0">
                       <Icon className="h-5 w-5" aria-hidden="true" />
                     </div>
-                    <span className="font-mono text-[11px] text-[var(--color-text-tertiary)] bg-[var(--color-surface-hover)] px-2 py-0.5 rounded-md shrink-0">
-                      /{cat.slug}
-                    </span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="font-mono text-[11px] text-[var(--color-text-tertiary)] bg-[var(--color-surface-hover)] px-2 py-0.5 rounded-md">
+                        /{cat.slug}
+                      </span>
+                      <span
+                        className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border ${
+                          (cat.listingCount || 0) > 0
+                            ? "bg-blue-500/10 text-blue-400 border-blue-500/30"
+                            : "bg-[var(--color-surface-hover)] text-[var(--color-text-tertiary)] border-[var(--color-border-subtle)]"
+                        }`}
+                      >
+                        {cat.listingCount || 0} {isTr ? "ilan" : "listings"}
+                      </span>
+                    </div>
                   </div>
 
                   <div className="flex flex-col flex-1">
@@ -749,7 +778,7 @@ export function CategoryListInteractive({
                     href={isTr ? `/tr/akis?category=${cat.slug}` : `/en/feed?category=${cat.slug}`}
                     className="inline-flex items-center gap-1 text-xs font-semibold text-blue-500 hover:text-blue-400 transition-colors"
                   >
-                    <span>{isTr ? "Projeler" : "Projects"}</span>
+                    <span>{isTr ? `İlanlar (${cat.listingCount || 0})` : `Listings (${cat.listingCount || 0})`}</span>
                     <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
                   </Link>
 

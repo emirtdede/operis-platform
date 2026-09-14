@@ -282,7 +282,7 @@ export function PlatformComparisonTable({
                 href={getLocalizedRoute("listings", locale)}
                 className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-5 py-2.5 text-xs font-bold text-slate-950 hover:bg-emerald-400 transition-colors shadow-lg shadow-emerald-500/20"
               >
-                <span>{isTr ? "Hemen Projeleri Keşfet" : "Explore Active Projects"}</span>
+                <span>{isTr ? "Hemen İlanları Keşfet" : "Explore Active Listings"}</span>
                 <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
               </Link>
               <span className="text-xs text-[var(--color-text-tertiary)] font-medium">

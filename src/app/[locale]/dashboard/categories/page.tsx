@@ -20,8 +20,8 @@ export async function generateMetadata({
   return {
     title: isTr ? "Takip Ettiğim Kategoriler" : "Followed Categories",
     description: isTr
-      ? "Takip ettiğiniz teknoloji kategorileri ve canlı proje bildirimleri."
-      : "Manage your followed technology categories and project feed preferences.",
+      ? "Takip ettiğiniz teknoloji kategorileri ve canlı ilan bildirimleri."
+      : "Manage your followed technology categories and listing feed preferences.",
     robots: {
       index: false,
       follow: false,
@@ -73,8 +73,8 @@ export default async function DashboardCategoriesPage({
           </h1>
           <p className="text-sm text-[var(--color-text-secondary)]">
             {isTr
-              ? "Uzmanlık alanlarınıza uygun projeleri doğrudan akışınızda görün ve bildirimler alın."
-              : "Keep track of projects matching your tech stack with tailored notifications."}
+              ? "Uzmanlık alanlarınıza uygun ilanları doğrudan akışınızda görün ve bildirimler alın."
+              : "Keep track of listings matching your tech stack with tailored notifications."}
           </p>
         </div>
 

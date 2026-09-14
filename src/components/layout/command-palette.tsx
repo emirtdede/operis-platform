@@ -139,8 +139,8 @@ export function CommandPalette({ locale, isOpen, onClose, userHandle }: CommandP
   const navActions: PaletteAction[] = [
     {
       id: "nav-browse",
-      title: isTr ? "Tüm İlanları Keşfet" : "Browse All Projects",
-      subtitle: isTr ? "Aktif ilan akışına git" : "Go to project listings",
+      title: isTr ? "Tüm İlanları Keşfet" : "Browse All Listings",
+      subtitle: isTr ? "Aktif ilan akışına git" : "Go to listings feed",
       icon: <Compass className="h-4 w-4 text-blue-400" />,
       category: "navigation",
       onSelect: () => {
@@ -150,8 +150,8 @@ export function CommandPalette({ locale, isOpen, onClose, userHandle }: CommandP
     },
     {
       id: "nav-new",
-      title: isTr ? "Yeni Proje İlanı Yayınla" : "Post a New Project",
-      subtitle: isTr ? "Yeni ilan sihirbazını başlat" : "Start project wizard",
+      title: isTr ? "Yeni İlan Yayınla" : "Post a New Listing",
+      subtitle: isTr ? "Yeni ilan sihirbazını başlat" : "Start listing wizard",
       icon: <PlusCircle className="h-4 w-4 text-emerald-400" />,
       category: "navigation",
       onSelect: () => {
@@ -162,7 +162,7 @@ export function CommandPalette({ locale, isOpen, onClose, userHandle }: CommandP
     {
       id: "nav-workspace",
       title: isTr ? "Çalışma Alanım / İlanlarım" : "My Workspace & Listings",
-      subtitle: isTr ? "Yayınladığın ilanları yönet" : "Manage your projects",
+      subtitle: isTr ? "Yayınladığın ilanları yönet" : "Manage your listings",
       icon: <Briefcase className="h-4 w-4 text-purple-400" />,
       category: "navigation",
       onSelect: () => {

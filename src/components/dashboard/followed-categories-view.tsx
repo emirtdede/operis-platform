@@ -96,7 +96,7 @@ export function FollowedCategoriesView({ categories, locale }: FollowedCategorie
               href={isTr ? `/tr/akis?category=${cat.key}` : `/en/feed?category=${cat.key}`}
               className="text-xs font-medium text-blue-400 hover:text-blue-300 transition-colors inline-flex items-center gap-1 hover:underline"
             >
-              <span>{isTr ? "Projeleri Gör" : "View Projects"}</span>
+              <span>{isTr ? "İlanları Gör" : "View Listings"}</span>
               <ArrowRight className="h-3 w-3" aria-hidden="true" />
             </Link>
 

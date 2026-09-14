@@ -20,10 +20,10 @@ export async function generateMetadata({
   const { locale } = await params;
   const isTr = locale === "tr";
 
-  const title = isTr ? "Proje İlanları Arama & Filtreleme" : "Browse & Filter Project Listings";
+  const title = isTr ? "İlan Arama & Filtreleme" : "Browse & Filter Listings";
   const description = isTr
-    ? "Tüm kategorilerdeki güncel yazılım, tasarım ve teknoloji projelerini inceleyin, doğrudan teklif sunun."
-    : "Explore active software, design, and technology project listings across all categories and submit direct proposals.";
+    ? "Tüm kategorilerdeki güncel yazılım, tasarım ve teknoloji ilanlarını inceleyin, doğrudan teklif sunun."
+    : "Explore active software, design, and technology listings across all categories and submit direct proposals.";
 
   return {
     title,
@@ -138,12 +138,12 @@ export default async function BrowseListingsPage({
       <header className="relative flex flex-col md:flex-row md:items-end justify-between gap-6 pb-8 border-b border-[var(--color-border-subtle)]">
         <div className="space-y-2 max-w-2xl">
           <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-[var(--color-text-primary)]">
-            {isTr ? "Aktif Proje İlanları" : "Active Project Listings"}
+            {isTr ? "Aktif İlanlar" : "Active Listings"}
           </h1>
           <p className="text-sm text-[var(--color-text-secondary)] leading-relaxed">
             {isTr
-              ? "Tüm kategorilerdeki en güncel yazılım ve teknoloji projelerini inceleyin, doğrudan şifreli teklifinizi iletin."
-              : "Discover active software and technology projects across all categories with 100% direct client matching."}
+              ? "Tüm kategorilerdeki en güncel yazılım ve teknoloji ilanlarını inceleyin, doğrudan şifreli teklifinizi iletin."
+              : "Discover active software and technology listings across all categories with 100% direct client matching."}
           </p>
         </div>
 

@@ -17,8 +17,8 @@ export async function generateMetadata({
     ? "Freelance Sektörler & Uzmanlık Kategorileri | Operis"
     : "Freelance Sectors & Expertise Categories | Operis";
   const description = isTr
-    ? "Yazılım, tasarım, pazarlama, yapay zeka, video, finans ve hukuk alanlarındaki kategorileri keşfedin, takip edin ve doğrudan projelere ulaşın."
-    : "Discover and follow categories across software engineering, design, marketing, AI, video, finance, and legal to customize your direct project feed.";
+    ? "Yazılım, tasarım, pazarlama, yapay zeka, video, finans ve hukuk alanlarındaki kategorileri keşfedin, takip edin ve doğrudan ilanlara ulaşın."
+    : "Discover and follow categories across software engineering, design, marketing, AI, video, finance, and legal to customize your direct listings feed.";
 
   return {
     title,
@@ -134,8 +134,8 @@ export default async function CategoriesPage({
         </h1>
         <p className="text-sm sm:text-base text-[var(--color-text-secondary)] max-w-2xl leading-relaxed">
           {isTr
-            ? "Yazılım, tasarım, pazarlama, yapay zeka, finans ve hukuk gibi 10 ana sektördeki kategorileri takip ederek proje akışınızı kişiselleştirin. Takip tercihleriniz tamamen gizlidir."
-            : "Follow categories across 10 major industry sectors to customize your direct project feed. Your follow choices are strictly private."}
+            ? "Yazılım, tasarım, pazarlama, yapay zeka, finans ve hukuk gibi 10 ana sektördeki kategorileri takip ederek ilan akışınızı kişiselleştirin. Takip tercihleriniz tamamen gizlidir."
+            : "Follow categories across 10 major industry sectors to customize your direct listings feed. Your follow choices are strictly private."}
         </p>
       </header>
 

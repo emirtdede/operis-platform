@@ -142,8 +142,8 @@ export default async function DashboardListingsPage({
           </h1>
           <p className="text-sm text-[var(--color-text-secondary)]">
             {isTr
-              ? "Yayınladığınız projelerin 1 haftalık durumlarını, teklifleri ve eşleşmeleri yönetin."
-              : "Manage your 1-week listing lifecycles, incoming offers, and matched projects."}
+              ? "Yayınladığınız ilanların 1 haftalık durumlarını, teklifleri ve eşleşmeleri yönetin."
+              : "Manage your 1-week listing lifecycles, incoming offers, and matched requests."}
           </p>
         </div>
 

@@ -359,8 +359,8 @@ export function CategoryFilterBar({
                     <p className="font-semibold">{isTr ? "Tüm Alanlar" : "All Fields"}</p>
                     <p className="text-[10px] text-[var(--color-text-tertiary)]">
                       {isTr
-                        ? `10 sektördeki ${categories.length} uzmanlık kategorisinin tamamı`
-                        : `All ${categories.length} categories across 10 sectors`}
+                        ? `10 sektördeki ${categories.length} uzmanlık kategorisi • ${categories.reduce((acc, c) => acc + (c.listingCount || 0), 0)} ilan`
+                        : `All ${categories.length} categories across 10 sectors • ${categories.reduce((acc, c) => acc + (c.listingCount || 0), 0)} listings`}
                     </p>
                   </div>
                 </div>
@@ -431,6 +431,17 @@ export function CategoryFilterBar({
                       </div>
 
                       <div className="flex items-center gap-2 shrink-0">
+                        {typeof cat.listingCount === "number" && (
+                          <span
+                            className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border ${
+                              cat.listingCount > 0
+                                ? "bg-blue-500/10 text-blue-400 border-blue-500/30"
+                                : "bg-[var(--color-surface-hover)] text-[var(--color-text-tertiary)] border-[var(--color-border-subtle)]"
+                            }`}
+                          >
+                            {cat.listingCount} {isTr ? "ilan" : "listings"}
+                          </span>
+                        )}
                         <span className="font-mono text-[10px] text-[var(--color-text-tertiary)] bg-[var(--color-surface-hover)] px-1.5 py-0.5 rounded">
                           /{cat.slug}
                         </span>

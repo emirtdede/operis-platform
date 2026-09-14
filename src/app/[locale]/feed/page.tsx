@@ -21,11 +21,11 @@ export async function generateMetadata({
   const isTr = locale === "tr";
 
   const title = isTr
-    ? "Canlı Proje Akışı — 7 Günlük İlanlar"
-    : "Live Project Feed — 7-Day Listings";
+    ? "Canlı İlan Akışı — 7 Günlük İlanlar"
+    : "Live Listings Feed — 7-Day Listings";
   const description = isTr
-    ? "7 günlük güncel teknoloji projelerini ve yazılım ilanlarını keşfedin, doğrudan teklif verin."
-    : "Discover active 7-day software engineering and technology projects and submit direct proposals.";
+    ? "7 günlük güncel teknoloji ve yazılım ilanlarını keşfedin, doğrudan teklif verin."
+    : "Discover active 7-day software engineering and technology listings and submit direct proposals.";
 
   return {
     title,
@@ -100,10 +100,10 @@ export default async function FeedPage({
     "@graph": [
       {
         "@type": "CollectionPage",
-        name: isTr ? "Proje Akışı" : "Project Feed",
+        name: isTr ? "İlan Akışı" : "Listings Feed",
         description: isTr
-          ? "7 günlük güncel teknoloji projelerini ve yazılım ilanlarını keşfedin."
-          : "Discover active 7-day software engineering and technology projects.",
+          ? "7 günlük güncel teknoloji ve yazılım ilanlarını keşfedin."
+          : "Discover active 7-day software engineering and technology listings.",
         url: `https://operis.pro${feedPath}`,
         inLanguage: locale,
         mainEntity: {
@@ -129,7 +129,7 @@ export default async function FeedPage({
           {
             "@type": "ListItem",
             position: 2,
-            name: isTr ? "Proje Akışı" : "Project Feed",
+            name: isTr ? "İlan Akışı" : "Listings Feed",
             item: `https://operis.pro${feedPath}`,
           },
         ],
@@ -149,12 +149,12 @@ export default async function FeedPage({
       <header className="relative flex flex-col md:flex-row md:items-end justify-between gap-6 pb-8 border-b border-[var(--color-border-subtle)]">
         <div className="space-y-2 max-w-2xl">
           <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-[var(--color-text-primary)]">
-            {isTr ? "Proje Akışı" : "Project Activity Feed"}
+            {isTr ? "İlan Akışı" : "Listings Activity Feed"}
           </h1>
           <p className="text-sm text-[var(--color-text-secondary)] leading-relaxed">
             {isTr
-              ? "Yalnızca son 1 hafta içinde yayınlanmış veya yenilenmiş güncel yazılım projeleri."
-              : "Strictly active projects published or reactivated within the last 1 week."}
+              ? "Yalnızca son 1 hafta içinde yayınlanmış veya yenilenmiş güncel yazılım ilanları."
+              : "Strictly active listings published or reactivated within the last 1 week."}
           </p>
         </div>
 
@@ -218,7 +218,7 @@ export default async function FeedPage({
               : "border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/60 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-strong)]"
           }`}
         >
-          {isTr ? "Tüm Projeler" : "All Projects"}
+          {isTr ? "Tüm İlanlar" : "All Listings"}
         </Link>
       </nav>
 
@@ -231,8 +231,8 @@ export default async function FeedPage({
           <Clock className="h-4 w-4 text-blue-400 shrink-0" aria-hidden="true" />
           <span>
             {isTr
-              ? "Tüm projeler 1 haftalık canlılık döngüsündedir. Yalnızca aktif ve güncel yazılım işlerine teklif verirsiniz."
-              : "All projects operate within a strict 1-week freshness radar. Connect strictly with active software work."}
+              ? "Tüm ilanlar 1 haftalık canlılık döngüsündedir. Yalnızca aktif ve güncel yazılım işlerine teklif verirsiniz."
+              : "All listings operate within a strict 1-week freshness radar. Connect strictly with active software work."}
           </span>
         </div>
         <div className="flex items-center gap-1.5 font-semibold text-emerald-400 shrink-0">
@@ -259,15 +259,15 @@ export default async function FeedPage({
         <div className="flex items-center justify-between text-xs text-[var(--color-text-tertiary)] border-b border-[var(--color-border-subtle)] pb-3">
           <span>
             {isTr
-              ? `${feedResult.items.length} canlı proje listelendi`
-              : `${feedResult.items.length} active projects live`}
+              ? `${feedResult.items.length} canlı ilan listelendi`
+              : `${feedResult.items.length} active listings live`}
           </span>
           <Link
             href={getLocalizedRoute("newListing", locale)}
             className="inline-flex items-center gap-1.5 font-medium text-cyan-500 hover:text-cyan-400 transition-colors"
           >
             <PlusCircle className="h-4 w-4" aria-hidden="true" />
-            <span>{isTr ? "Yeni İlan Yayınla" : "Publish Project"}</span>
+            <span>{isTr ? "Yeni İlan Yayınla" : "Publish Listing"}</span>
           </Link>
         </div>
 
@@ -286,11 +286,11 @@ export default async function FeedPage({
               description={
                 mode === "following" && !feedResult.hasFollowedCategories
                   ? isTr
-                    ? "İlginizi çeken teknoloji kategorilerini takip ederek özelleştirilmiş proje akışınızı oluşturun."
+                    ? "İlginizi çeken teknoloji kategorilerini takip ederek özelleştirilmiş ilan akışınızı oluşturun."
                     : "Follow technology categories you specialize in to build your personalized feed."
                   : isTr
                     ? "Arama ve filtre kriterlerinize uygun aktif ilan bulunamadı. Filtreleri temizleyebilir veya tüm akışı inceleyebilirsiniz."
-                    : "No active projects match your filters. You can clear filters or view all listings."
+                    : "No active listings match your filters. You can clear filters or view all listings."
               }
               action={
                 <div className="flex flex-wrap items-center justify-center gap-3 pt-4">
