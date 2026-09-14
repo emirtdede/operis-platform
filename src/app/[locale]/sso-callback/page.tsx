@@ -1,8 +1,11 @@
 import { AuthenticateWithRedirectCallback } from "@clerk/nextjs";
 
+export const dynamic = "force-dynamic";
+
 export default async function SSOCallbackPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
   const isTr = locale === "tr";
+  const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
 
   return (
     <div className="flex min-h-[60vh] flex-col items-center justify-center space-y-4 px-4 text-center">
@@ -12,7 +15,7 @@ export default async function SSOCallbackPage({ params }: { params: Promise<{ lo
           ? "Yetkilendirme tamamlanıyor, lütfen bekleyin..."
           : "Completing authentication, please wait..."}
       </p>
-      <AuthenticateWithRedirectCallback />
+      {publishableKey ? <AuthenticateWithRedirectCallback /> : null}
     </div>
   );
 }
