@@ -24,6 +24,8 @@
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3.4-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16+-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Drizzle ORM](https://img.shields.io/badge/Drizzle_ORM-0.41-C5F74F?style=for-the-badge&logo=drizzle&logoColor=black)
+![Inngest](https://img.shields.io/badge/Inngest-4.20-533BE5?style=for-the-badge&logo=inngest&logoColor=white)
+![Clerk](https://img.shields.io/badge/Clerk-Auth-6C47FF?style=for-the-badge&logo=clerk&logoColor=white)
 ![Security](https://img.shields.io/badge/Security-AES--256--GCM-00C853?style=for-the-badge&logo=lock)
 ![Vitest](https://img.shields.io/badge/Vitest-3.0-FCC72B?style=for-the-badge&logo=vitest&logoColor=black)
 ![Playwright](https://img.shields.io/badge/Playwright-1.51-2EAD33?style=for-the-badge&logo=playwright&logoColor=white)
@@ -49,7 +51,7 @@
 
 ## 💻 Project Overview
 
-**Operis Platform** is an enterprise-grade, privacy-first software and technology freelancing marketplace engineered with **Next.js 16 (App Router)**, **React 19**, **TypeScript 5.8**, **Tailwind CSS**, and **Drizzle ORM** over **PostgreSQL**. It empowers clients and tech specialists to discover, propose, and collaborate on software projects directly—completely eliminating intermediaries, escrow bottlenecks, and predatory platform commissions.
+**Operis Platform** is an enterprise-grade, privacy-first software and technology freelancing marketplace engineered with **Next.js 16 (App Router)**, **React 19**, **TypeScript 5.8**, **Tailwind CSS**, and **Drizzle ORM** over **PostgreSQL**. Powered by **Inngest** serverless durable workflows, **Clerk** identity management, and **Resend** transactional communications, it empowers clients and tech specialists to discover, propose, and collaborate on software projects directly—completely eliminating intermediaries, escrow bottlenecks, and predatory platform commissions.
 
 Traditional freelance platforms lock users behind opaque rating algorithms, impose high commissions (often 10%–20%), force artificial milestone escrow holds, and fragment users into rigid "employer" vs. "freelancer" silos. **Operis Platform** re-architects this model around integrity, speed, and privacy:
 
@@ -58,7 +60,8 @@ Traditional freelance platforms lock users behind opaque rating algorithms, impo
 - **Private 1-to-1 Offers**: Proposals are strictly confidential between the specialist and the listing owner. Competing bids and price negotiations remain private.
 - **Direct Privacy-Preserving Contact Handoff**: Once an offer is accepted, the platform securely unlocks verified direct communication (verified email always; phone only if explicitly opted in).
 - **Bilateral Mutual Delivery Verification**: Projects and reputation scores appear on public profiles only after both parties mutually confirm successful project completion.
-- **Enterprise-Grade Cryptographic Security**: Sensitive personally identifiable information (PII) is encrypted at rest using **AES-256-GCM** with **HMAC blind indexing** for high-speed queries without leaking plaintext.
+- **Serverless Durable Background Workflows**: Eliminates costly 24/7 background servers by orchestrating outbox email dispatch, delayed 3-day offer cancellations, and asynchronous GDPR exports using **Inngest**.
+- **Enterprise-Grade Cryptographic Security**: Sensitive personally identifiable information (PII) is encrypted at rest using **AES-256-GCM** with **HMAC blind indexing** and **envelope encryption** for high-speed queries without leaking plaintext.
 
 ---
 
@@ -66,13 +69,25 @@ Traditional freelance platforms lock users behind opaque rating algorithms, impo
 
 - **Zero Platform Commission**: No hidden fees, no percentage cuts, and no escrow deductions. Direct specialist-to-client value transfer.
 - **Dual-Role Universal Accounts**: Unified profile architecture supporting simultaneous project publishing and confidential proposal submission.
-- **7-Day Freshness Lifecycle**: Automated lifecycle system ensuring the marketplace feed only contains active, high-intent listings.
+- **7-Day Freshness Lifecycle**: Automated lifecycle system ensuring the marketplace feed only contains active, high-intent listings with an immutable initial publication timestamp.
 - **Confidential 1-to-1 Bidding**: No public bidding wars. Exactly one pending proposal per listing per specialist with full private messaging once accepted.
 - **Bilateral Mutual Delivery Sign-Off**: Trust and portfolio verification achieved through two-way confirmation—neither party can unilaterally forge reviews.
-- **Cryptographic PII Protection**:
-  - **AES-256-GCM Encryption**: Secure encryption for contact details, phone numbers, and sensitive client credentials.
+- **Serverless Durable Workflows (Inngest)**:
+  - **Sub-Second Outbox Dispatch**: Real-time event triggers (`operis/outbox.process`) paired with a 2-minute recurring cron fallback for guaranteed email delivery.
+  - **3-Day Delayed Offer Auto-Cancellation**: Long-running workflow using `step.sleep("3 days")` to automatically release stale proposals and send localized notifications.
+  - **Asynchronous KVKK / GDPR Data Export**: Offloads memory-intensive zip/json export processing to prevent serverless gateway timeouts.
+  - **Automated Hourly Maintenance**: Automated cleanup of expired listings, obsolete OTP verification codes, and rate-limiting buckets.
+- **Enterprise Authentication & Social SSO (Clerk)**: Smooth OAuth onboarding (Google, GitHub) alongside native credentials, synchronized via cryptographic Svix webhooks.
+- **Cryptographic PII Protection & Envelope Encryption**:
+  - **AES-256-GCM Encryption**: Secure authenticated encryption for contact details, phone numbers, and sensitive client credentials.
   - **Blind Indexing (HMAC-SHA256)**: Deterministic cryptographic hashing allowing indexed database lookups without exposing plaintext emails or identity fields.
-  - **Key Rotation Support**: Configured for seamless key transition via current and previous encryption key slots.
+  - **Envelope Encryption & Key Rotation**: Multi-slot key management ensuring seamless credential updates without platform downtime.
+- **Zero-Trust Bot Defense & Distributed Rate Limiting**:
+  - **Cloudflare Turnstile**: Frictionless bot protection and CAPTCHA defense across authentication and proposal forms.
+  - **Upstash Redis**: Edge-ready distributed sliding-window rate limiting safeguarding sensitive API routes.
+- **Full-Stack Observability & Telemetry**:
+  - **Sentry**: Distributed client, server, and edge exception tracking with performance monitoring and session profiling.
+  - **PostHog**: Privacy-preserving product analytics and conversion funnel measurement.
 - **Triple Semantic Theme Engine**: Hand-crafted themes including Clean Light, Modern Dark, and Pure OLED Pitch Black (`#000000`) for developer-friendly night mode.
 - **Zero-Emoji Professional Design Standard**: Strictly professional aesthetics using custom typography and modern SVG iconography (**Lucide React**), backed by automated CI emoji linters.
 - **100% Internationalization (i18n)**: Fully localized Turkish (`tr`) and English (`en`) interfaces with automated dictionary parity verification via **next-intl**.
@@ -90,27 +105,38 @@ Traditional freelance platforms lock users behind opaque rating algorithms, impo
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind_3.4-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL_16+-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Drizzle ORM](https://img.shields.io/badge/Drizzle_0.41-C5F74F?style=for-the-badge&logo=drizzle&logoColor=black)
+![Inngest](https://img.shields.io/badge/Inngest_4.20-533BE5?style=for-the-badge&logo=inngest&logoColor=white)
+![Clerk](https://img.shields.io/badge/Clerk_7.9-6C47FF?style=for-the-badge&logo=clerk&logoColor=white)
 ![Zod](https://img.shields.io/badge/Zod_3.24-3E67B1?style=for-the-badge&logo=zod&logoColor=white)
 
 </div>
 
 ### Frontend & User Interface
 - **Next.js 16.3 (App Router)**: Modern React Server Components (RSC), dynamic metadata generation, route handlers, and streaming SSR
-- **React 19.2**: Concurrent features, Server Actions, hooks, and reactive transitions
+- **React 19.2**: Concurrent features, Server Actions, modern hooks, and reactive transitions
 - **TypeScript 5.8**: Strict type-safety, comprehensive domain models, and zero `any` policy
 - **Tailwind CSS 3.4**: Responsive layout grid, HSL-based design tokens, custom glassmorphism, and OLED true-black support
 - **Lucide React**: Crisp, modern SVG iconography designed for professional enterprise tooling
 - **Zod 3.24**: Runtime input validation for forms, API endpoints, and server action payloads
+- **PostHog JS 1.430**: Privacy-preserving client-side product analytics and event telemetry
 
 ### Backend, Database & Cryptography
-- **PostgreSQL 16+**: High-performance relational database with ACID compliance
-- **Drizzle ORM 0.41**: Type-safe SQL query builder and schema management with zero overhead
+- **PostgreSQL 16+**: High-performance relational database with ACID compliance and PostgREST RLS lockdown
+- **Drizzle ORM 0.41**: Type-safe SQL query builder and schema management with zero runtime overhead
 - **AES-256-GCM & HMAC-SHA256**: Authenticated symmetric cipher for PII encryption with blind indexing
+- **Envelope Encryption (`crypto/envelope`)**: Enterprise data-key wrapping architecture with key rotation support
 - **Transactional Outbox Pattern**: Reliable asynchronous notification delivery preventing lost email alerts
-- **Session Security**: Cryptographically signed, HTTP-only, SameSite cookies with timing-safe validation
+- **Session Security & Clerk SSO**: Cryptographically signed, HTTP-only SameSite cookies and OAuth identity bridging
+
+### Cloud Integrations & Background Workflows
+- **Inngest 4.20**: Serverless event-driven background job orchestration, durable multi-step workflows, retry backoffs, and scheduled crons
+- **Resend**: Transactional email delivery, verified templates, audience contact pool synchronization, and webhook tracking
+- **Upstash Redis**: Edge-compatible distributed sliding-window rate limiting for security-critical endpoints
+- **Cloudflare Turnstile**: Zero-interaction CAPTCHA and anti-bot verification
+- **Sentry 10.74**: Full-stack exception tracking, session replay, and performance tracing across client, server, and edge
 
 ### Quality Assurance & Automated Testing
-- **Vitest 3.0**: Blazing-fast unit and integration test runner (5,000+ assertions)
+- **Vitest 3.0**: Blazing-fast unit and integration test runner (5,000+ assertions across 50 test suites)
 - **Playwright 1.51**: End-to-end browser automation across Chromium, Firefox, and WebKit
 - **@axe-core/playwright**: Automated accessibility audit enforcing WCAG 2.1 Level AA compliance
 - **Custom CI Audits**: Automated linting for emoji usage (`pnpm audit:emoji`) and i18n dictionary key parity (`pnpm audit:i18n`)
@@ -124,17 +150,24 @@ operis-platform/
 ├── .github/                        # GitHub Actions CI/CD workflows
 │   └── workflows/ci.yml            # Automated test, lint, typecheck & build pipeline
 ├── db/                             # Database schema, relations & seed data
+│   ├── migrations/                 # Drizzle SQL migration files (0000 - 0018)
 │   ├── schema/                     # Drizzle ORM relational table definitions
-│   │   ├── users.ts                # User identities, credentials & role state
+│   │   ├── users.ts                # User identities, credentials, roles & Clerk sync
 │   │   ├── listings.ts             # Project postings, lifecycle & categories
 │   │   ├── offers.ts               # Confidential 1-to-1 proposals & acceptance
 │   │   ├── deliveries.ts           # Bilateral delivery confirmations
 │   │   ├── reviews.ts              # Verified mutual feedback & scores
-│   │   └── outbox.ts               # Transactional notification outbox
+│   │   ├── outbox.ts               # Transactional notification outbox
+│   │   └── export-jobs.ts          # GDPR / KVKK export job ledger & lease tokens
+│   ├── seeds/                      # Seed generators (users, listings, offers, engagements)
 │   └── index.ts                    # Drizzle client instance & connection pool
-├── docs/                           # Master specifications & architecture guides
+├── deploy/                         # Production systemd daemon services & timers
+│   ├── operis-worker.service       # Standalone background worker daemon service
+│   └── operis-worker-check.timer   # Worker health check timer
+├── docs/                           # Master specifications & operational guides
 │   ├── FREELANCE_PLATFORM_MASTER_SPEC.md # Core functional specifications
-│   └── AUDIT_AND_COMPLIANCE.md     # Security, privacy & KVKK compliance audit
+│   ├── AUDIT_AND_COMPLIANCE.md     # Security, privacy & KVKK compliance audit
+│   └── OPERIS_WORKER_DAEMON_OPERATIONS.md # Standalone worker daemon operations
 ├── i18n/                           # Internationalization setup (next-intl)
 │   ├── request.ts                  # Server-side locale resolution & dictionary loader
 │   └── routing.ts                  # Localized routing configuration (tr/en prefixes)
@@ -144,16 +177,21 @@ operis-platform/
 ├── messages/                       # Localized translation dictionaries
 │   ├── en.json                     # English locale dictionary
 │   └── tr.json                     # Turkish locale dictionary
-├── public/                         # Public static branding assets
+├── public/                         # Public static branding assets & logos
 │   ├── operis-logo-acik.svg        # Vector logo (Light background)
 │   ├── operis-logo-koyu.svg        # Vector logo (Dark background)
+│   ├── operis-logo-email.png       # High-resolution PNG logo for email clients
 │   ├── operis-favicon.svg          # High-resolution vector circular favicon
-│   └── apple-touch-icon.png        # Mobile touch icon
-├── scripts/                        # Database & code auditing utilities
+│   └── preview-emails.html         # Live transactional email preview gallery
+├── scripts/                        # Database, worker & code auditing utilities
 │   ├── migrate.ts                  # Database migration executor
 │   ├── seed.ts                     # Initial taxonomy & legal versions seed
+│   ├── worker-daemon.ts            # Standalone worker daemon for VPS environments
+│   ├── backfill-pii-keys.ts        # Cryptographic key rotation & backfill tool
+│   ├── check-worker-health.ts      # Automated worker daemon health monitor
 │   ├── check-emojis.ts             # Strict zero-emoji compliance scanner
 │   └── check-i18n-parity.ts        # Automated TR-EN dictionary key parity validator
+├── sentry.*.config.ts              # Sentry configuration (client, server, edge)
 ├── src/                            # Application source code
 │   ├── app/                        # Next.js App Router architecture
 │   │   ├── [locale]/               # Localized route segments (/tr, /en)
@@ -162,23 +200,50 @@ operis-platform/
 │   │   │   ├── listings/           # Public listings catalog, search & details
 │   │   │   ├── profile/            # Public specialist portfolios & reviews
 │   │   │   ├── legal/              # Legal agreements & KVKK consent views
-│   │   │   ├── layout.tsx          # Root localized layout with theme provider
-│   │   │   └── page.tsx            # High-conversion landing & hero page
-│   │   ├── api/                    # API route handlers (health, outbox webhook)
+│   │   │   ├── layout.tsx          # Root localized layout with theme & telemetry
+│   │   │   └── page.tsx            # High-conversion landing & hero showcase
+│   │   ├── admin/                  # Protected administrative console & dispute manager
+│   │   ├── api/                    # API route handlers
+│   │   │   ├── inngest/            # Inngest serverless endpoint (/api/inngest)
+│   │   │   ├── webhooks/           # Clerk and Resend webhook listeners
+│   │   │   ├── listings/           # Feed, search, publish & lifecycle routes
+│   │   │   ├── offers/             # Proposal submissions, revisions & status
+│   │   │   ├── account/            # PII management & asynchronous GDPR export
+│   │   │   └── health/             # Microservice observability endpoint
 │   │   ├── global-error.tsx        # Zero-dependency root crash fallback
 │   │   └── not-found.tsx           # Bilingual 404 handler
 │   ├── components/                 # Reusable UI component library
-│   │   ├── layout/                 # Header, navbar, footer, theme switcher
-│   │   ├── listings/               # Listing card, filters, proposal form
-│   │   └── ui/                     # Button, dialog, input, badge, card
+│   │   ├── admin/                  # Admin tables, disputes & system metrics
+│   │   ├── analytics/              # PostHog privacy-preserving analytics provider
+│   │   ├── auth/                   # Login/register forms, Clerk SSO & social buttons
+│   │   ├── layout/                 # Header, navbar, footer, theme & language switchers
+│   │   ├── listings/               # Listing card, feed, revisions modal, proposal drawer
+│   │   ├── security/               # Turnstile bot widget & 2FA / TOTP controls
+│   │   └── ui/                     # Accessible button, dialog, input, badge, skeleton
+│   ├── config/                     # Type-safe environment validation
+│   │   └── env.ts                  # Zod environment schema with fail-fast validations
+│   ├── instrumentation.ts          # Server runtime instrumentation & Sentry hook
 │   ├── lib/                        # Core utilities, crypto, auth & database services
-│   │   ├── crypto.ts               # AES-256-GCM & HMAC blind indexing engine
-│   │   ├── auth.ts                 # Secure session token handling & cookie management
-│   │   └── outbox.ts               # Transactional outbox notification processor
-│   └── validators/                 # Zod validation schemas
+│   │   ├── crypto/                 # AES-256-GCM, HMAC blind indexing & envelope encryption
+│   │   ├── db/                     # Drizzle client, connection pool, advisory locks
+│   │   ├── email/                  # Resend provider, templates & email preview renderer
+│   │   ├── inngest/                # Inngest client & durable serverless workflow functions
+│   │   │   ├── client.ts           # Resilient Inngest client with typed event schemas
+│   │   │   └── functions/          # Outbox, maintenance, stale-offers, privacy-export
+│   │   └── security/               # Upstash Redis rate limiter, Turnstile & JSON-LD
+│   ├── modules/                    # Domain-driven modular services
+│   │   ├── admin/                  # Administrative service & access guard
+│   │   ├── auth/                   # Session, password reset, 2FA/TOTP & Clerk sync
+│   │   ├── email/                  # Resend audience contact pool manager
+│   │   ├── engagements/            # Active project work, cancellation & mutual delivery
+│   │   ├── listings/               # Listing CRUD, 7-day expiration & feed service
+│   │   ├── notifications/          # Transactional outbox & notification fanout
+│   │   ├── offers/                 # Confidential proposals & stale offer cancellation
+│   │   └── privacy/                # Encrypted GDPR / KVKK streaming export engine
+│   └── styles/                     # CSS tokens and design system variables
 ├── tests/                          # Automated testing suites
-│   ├── unit/                       # Vitest unit tests (crypto, validation, i18n)
-│   ├── integration/                # Database service & state machine tests
+│   ├── unit/                       # Vitest unit tests (crypto, validation, i18n, inngest)
+│   ├── integration/                # Database service, RLS, outbox & lifecycle tests
 │   ├── a11y/                       # Axe-core accessibility compliance tests
 │   └── e2e/                        # Playwright end-to-end browser workflows
 ├── drizzle.config.ts               # Drizzle Kit CLI configuration
@@ -197,18 +262,29 @@ flowchart TD
     subgraph Client["Client Browser (React 19)"]
         UI_Input["Listing / Offer / Profile Input"]
         Theme["Theme Engine (Light / Dark / OLED)"]
+        Turnstile["Cloudflare Turnstile Bot Defense"]
     end
 
     subgraph NextServer["Next.js 16 Server (App Router)"]
         ZodVal["Zod Schema Validation"]
-        AuthMiddleware["Session & Auth Verifier"]
+        RateLimit["Upstash Redis Rate Limiting"]
+        AuthMiddleware["Session & Clerk SSO Verifier"]
         Actions["Server Actions & Domain Services"]
+        InngestRoute["Inngest Serve Endpoint (/api/inngest)"]
+        WebhooksRoute["Webhook Endpoints (Clerk & Resend)"]
+    end
+
+    subgraph BackgroundWorkflows["Serverless Background Workflows (Inngest)"]
+        OutboxJob["Outbox Dispatcher (Cron & Event)"]
+        StaleOffers["Stale Offer Auto-Cancel (3-Day Sleep)"]
+        ExportJob["GDPR / KVKK Asynchronous Export Runner"]
+        MaintenanceJob["Hourly Maintenance & Token Pruning"]
     end
 
     subgraph SecurityCore["Cryptographic Security Core"]
         AES["AES-256-GCM (PII Encryption)"]
         HMAC["HMAC-SHA256 (Blind Indexing)"]
-        KeyRotation["Key Rotation Handler (Current / Previous)"]
+        Envelope["Envelope Encryption & Key Rotation"]
     end
 
     subgraph Storage["PostgreSQL 16 Database"]
@@ -219,17 +295,38 @@ flowchart TD
         DB_Outbox["outbox (Transactional Notifications)"]
     end
 
-    UI_Input -->|Server Action| ZodVal
+    subgraph External["External Cloud Services"]
+        Resend["Resend (Transactional Emails)"]
+        Clerk["Clerk (Identity & SSO)"]
+        Sentry["Sentry (Telemetry & Tracing)"]
+        PostHog["PostHog (Product Analytics)"]
+    end
+
+    UI_Input -->|Action / Request| Turnstile
+    Turnstile --> RateLimit
+    RateLimit --> ZodVal
     ZodVal --> AuthMiddleware
     AuthMiddleware --> Actions
     Actions --> AES
     Actions --> HMAC
+    Actions --> Envelope
     AES --> DB_Users
     HMAC --> DB_Users
     Actions --> DB_Listings
     Actions --> DB_Offers
     Actions --> DB_Deliveries
     Actions --> DB_Outbox
+    Actions -->|Dispatch Event| InngestRoute
+    InngestRoute --> BackgroundWorkflows
+    BackgroundWorkflows --> OutboxJob
+    OutboxJob --> Resend
+    BackgroundWorkflows --> StaleOffers
+    BackgroundWorkflows --> ExportJob
+    BackgroundWorkflows --> MaintenanceJob
+    WebhooksRoute <--> Clerk
+    WebhooksRoute <--> Resend
+    NextServer -.-> Sentry
+    Client -.-> PostHog
 ```
 
 ### Data Storage & Cryptographic Specifications
@@ -237,11 +334,14 @@ flowchart TD
 | Data Domain | Encryption & Integrity Standard | Description |
 | :--- | :--- | :--- |
 | **User Identity & Contact (PII)** | **AES-256-GCM + HMAC Blind Index** | Verified email, phone number, and real name are encrypted at rest; queryable via blind hashes. |
+| **Envelope Encryption** | **KMS-Ready Dual-Key Architecture** | Secure data encryption keys wrapped with system master keys (`crypto/envelope`) with seamless rotation. |
 | **Listings Catalog** | **Relational (Drizzle ORM) + Lifecycle Engine** | Automatic 7-day expiration date enforcement. Immutable initial publication timestamp. |
 | **Confidential Offers** | **Isolated 1-to-1 Access Control** | Visible strictly to listing owner and proposing specialist. Maximum 1 pending proposal per listing. |
 | **Project Delivery** | **Bilateral State Machine** | Mutual confirmation required from both client and specialist before review publication. |
-| **Session Security** | **Signed HTTP-Only Cookies** | Timing-safe token comparison, SameSite=Lax, Secure flags enabled in production. |
+| **Session Security** | **Signed HTTP-Only Cookies & Clerk SSO** | Timing-safe token comparison, SameSite=Lax, Secure flags, and Clerk webhook sync. |
 | **Transactional Outbox** | **Atomic Database Writes** | Notification payloads written in the same SQL transaction as domain operations to guarantee delivery. |
+| **Serverless Workflows** | **Inngest Durable Execution** | Cryptographically signed webhooks (`INNGEST_SIGNING_KEY`) executing outbox, cancel, and maintenance jobs. |
+| **Distributed Rate Limiting** | **Upstash Redis Sliding Window** | Real-time rate limiting for authentication, phone verification, and proposal submission. |
 
 ---
 
@@ -250,7 +350,7 @@ flowchart TD
 ### Prerequisites
 - **Node.js**: Version 20.0.0 or higher (Node 24 LTS recommended)
 - **pnpm**: Version 10.0.0 or higher
-- **PostgreSQL**: Version 16 or higher (Local installation or hosted instance)
+- **PostgreSQL**: Version 16 or higher (Local installation, Docker, or hosted instance)
 
 ### Step-by-Step Developer Setup
 
@@ -278,7 +378,14 @@ flowchart TD
    # Windows PowerShell:
    -join ((1..32) | ForEach-Object { '{0:x2}' -f (Get-Random -Max 256) })
    ```
-   Set these keys to `PII_ENCRYPTION_KEY_CURRENT` and `PII_HMAC_KEY` in your `.env.local`.
+   Configure the following essential credentials in your `.env.local`:
+   - Database: `DATABASE_URL` (PostgreSQL 16 connection string)
+   - Cryptography: `PII_ENCRYPTION_KEY_CURRENT` and `PII_HMAC_KEY`
+   - Inngest (Serverless Jobs): `INNGEST_EVENT_KEY` and `INNGEST_SIGNING_KEY`
+   - Clerk (Authentication): `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY`
+   - Resend (Email Delivery): `RESEND_API_KEY`
+   - Upstash Redis (Rate Limiting): `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`
+   - Turnstile (Bot Defense): `NEXT_PUBLIC_TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY`
 
 4. **Initialize and Seed the Database:**
    ```bash
@@ -292,11 +399,16 @@ flowchart TD
    pnpm db:seed
    ```
 
-5. **Start the Development Server:**
+5. **Start the Development Servers:**
    ```bash
+   # Start Next.js development server
    pnpm dev
+
+   # In a separate terminal, start local Inngest dev server:
+   pnpm inngest:dev
    ```
-   Open [http://localhost:3000](http://localhost:3000) in your browser.
+   Open [http://localhost:3000](http://localhost:3000) in your browser.  
+   The Inngest local dashboard will be accessible at [http://localhost:8288](http://localhost:8288).
 
 6. **Run Quality Verification & Testing Suites:**
    ```bash
@@ -306,14 +418,20 @@ flowchart TD
    # ESLint code quality scan
    pnpm lint
 
+   # Code formatting verification
+   pnpm format:check
+
    # Internationalization dictionary parity check (TR <-> EN)
    pnpm audit:i18n
 
    # Zero-emoji compliance audit
    pnpm audit:emoji
 
-   # Unit and integration test suite (Vitest)
-   pnpm test
+   # Unit test suite (Vitest)
+   pnpm test:unit
+
+   # Integration test suite (PostgreSQL 16)
+   pnpm test:integration
 
    # End-to-end browser tests (Playwright)
    pnpm test:e2e
@@ -335,10 +453,11 @@ flowchart TD
 
 ## 📦 Deployment & Operational Notes
 
+- **Serverless Workflows (Recommended / $0 Overhead)**: When deployed to modern serverless platforms (Vercel, Netlify, Cloudflare), background jobs are automatically executed via **Inngest** (`/api/inngest`). No persistent Linux virtual servers or cron daemons are required, fitting comfortably within Inngest's generous free tier (50,000 monthly executions).
+- **Standalone Daemon Mode (Self-Hosted / VPS)**: For traditional Linux VPS or Docker deployments, Operis provides `scripts/worker-daemon.ts` (`pnpm worker:daemon`) with systemd service files located in `deploy/`.
 - **Docker Containerization**: Operis can be deployed using standard Node.js multi-stage Dockerfiles.
-- **Outbox Worker**: Schedule `NotificationService.processOutboxBatch` as a recurring cron job or background worker (every 30–60s) to dispatch queued email alerts.
 - **Security Headers**: HSTS, CSP (Content Security Policy), X-Frame-Options, and Referrer-Policy are strictly configured in `next.config.ts`.
-- **Health Check**: Microservice observability endpoint available at `/api/health`.
+- **Health Check & Observability**: Microservice observability endpoint available at `/api/health`, complemented by Sentry error tracing and PostHog analytics.
 
 ---
 
@@ -368,7 +487,7 @@ Distributed under the **MIT License**. See [`LICENSE`](./LICENSE) for more infor
 
 ## 💻 Project Overview (Proje Genel Bakışı)
 
-**Operis Platform**, **Next.js 16 (App Router)**, **React 19**, **TypeScript 5.8**, **Tailwind CSS** ve **PostgreSQL** üzerinde **Drizzle ORM** teknolojileriyle geliştirilmiş, kurumsal düzeyde ve gizlilik odaklı bir yazılım/teknoloji serbest çalışma (freelance) pazaryeridir. Yazılım uzmanları ile işverenleri doğrudan bir araya getirerek aracıları, yüksek komisyon kesintilerini ve havuz hesabı (escrow) gecikmelerini tamamen ortadan kaldırır.
+**Operis Platform**, **Next.js 16 (App Router)**, **React 19**, **TypeScript 5.8**, **Tailwind CSS** ve **PostgreSQL** üzerinde **Drizzle ORM** teknolojileriyle geliştirilmiş, kurumsal düzeyde ve gizlilik odaklı bir yazılım/teknoloji serbest çalışma (freelance) pazaryeridir. **Inngest** sunucusuz iş akışları, **Clerk** kurumsal kimlik yönetimi ve **Resend** e-posta dağıtım altyapısıyla güçlendirilen sistem; uzmanlar ile işverenleri doğrudan bir araya getirerek aracıları, yüksek komisyon kesintilerini ve havuz hesabı (escrow) gecikmelerini tamamen ortadan kaldırır.
 
 Geleneksel serbest çalışma platformları kullanıcıları tek yönlü rollere hapseder, %10 ile %20 arasında yüksek komisyonlar keser ve iletişimi platform içine kilitleyerek hantal süreçler yaratır. **Operis Platform**, bu yapıyı dürüstlük, hız ve veri güvenliği ilkeleriyle yeniden inşa eder:
 
@@ -377,7 +496,8 @@ Geleneksel serbest çalışma platformları kullanıcıları tek yönlü rollere
 - **Gizli Bire Bir Teklifler**: Verilen teklifler yalnızca işveren ile uzman arasında gizli kalır. Fiyat kırma yarışları veya açık teklif savaşları engellenir.
 - **Doğrudan ve Güvenli İletişim Devri**: Teklif onaylandığı anda tarafların doğrulanmış doğrudan iletişim bilgileri (doğrulanmış e-posta; isteğe bağlı telefon) güvenli şekilde paylaşılır.
 - **Karşılıklı ve Çift Taraflı Teslim Doğrulaması**: Bir projenin tamamlandığı ve profil değerlendirmeleri, ancak her iki taraf da işin eksiksiz teslim edildiğini onayladığında yayına girer.
-- **Askeri Düzeyde Kişisel Veri Güvenliği (KVKK / GDPR)**: Hassas kişisel veriler veritabanında **AES-256-GCM** şifrelemesi ve **HMAC-SHA256 kör indeksleme (blind indexing)** yöntemiyle korunur.
+- **Sunucusuz Arka Plan İş Akışları (Inngest)**: Sürekli çalışan sunucu kiralama maliyetini sıfıra indirerek bildirim dağıtımını, 3 günlük yanıtsız teklif iptallerini ve KVKK veri aktarımlarını modern sunucusuz iş akışlarıyla yürütür.
+- **Askeri Düzeyde Kişisel Veri Güvenliği (KVKK / GDPR)**: Hassas kişisel veriler veritabanında **AES-256-GCM** şifrelemesi, **HMAC-SHA256 kör indeksleme (blind indexing)** ve **zarf tipi şifreleme (envelope encryption)** yöntemleriyle korunur.
 
 ---
 
@@ -388,10 +508,22 @@ Geleneksel serbest çalışma platformları kullanıcıları tek yönlü rollere
 - **7 Günlük Otomatik Yaşam Döngüsü**: İlanların güncelliğini garanti altına alan otomatik sonlanma ve değişmez ilk yayın tarihi denetimi.
 - **Gizli Bire Bir Teklif Yönetimi**: Açık teklif listeleri yerine işveren ile serbest çalışan arasında gizli kalan teklif ve mesajlaşma süreci.
 - **Çift Taraflı Teslim Doğrulama**: Tek taraflı sahte puanlamaların ve haksız yorumların önüne geçen karşılıklı teslimat onay mekanizması.
-- **Kriptografik Veri Güvenliği**:
+- **Sunucusuz Dayanıklı İş Akışları (Inngest)**:
+  - **Milisaniyelik Outbox Dağıtımı**: Anlık olay tetikleyicisi (`operis/outbox.process`) ve 2 dakikalık yedek cron mekanizması ile e-postaların eksiksiz iletimi.
+  - **3 Günlük Yanıtsız Teklif Otomatik İptali**: `step.sleep("3 days")` ile işverenin yanıtlamadığı teklifleri otomatik serbest bırakma ve iki dilli bildirim.
+  - **Asenkron KVKK / GDPR Veri Dışa Aktarımı**: Büyük boyutlu JSON/ZIP dışa aktarım işlemlerinin sunucu zaman aşımına uğramadan asenkron tamamlanması.
+  - **Saatlik Otomatik Bakım**: Süresi dolan ilanların kapatılması, eski OTP doğrulama kodlarının ve hız sınırlama önbelleklerinin temizlenmesi.
+- **Kurumsal Kimlik Doğrulama & Sosyal Giriş (Clerk)**: Google ve GitHub gibi tek tıkla OAuth entegrasyonu ve kriptografik Svix webhook veritabanı senkronizasyonu.
+- **Kriptografik Veri Güvenliği & Zarf Şifreleme**:
   - **AES-256-GCM Şifreleme**: Telefon, e-posta ve iletişim bilgilerinin disk üzerinde şifreli saklanması.
   - **Kör İndeksleme (HMAC-SHA256)**: Veritabanında açık metin aramaya gerek kalmadan güvenli ve hızlı sorgulama imkanı.
-  - **Anahtar Rotasyonu**: Sistem kesintisi olmadan şifreleme anahtarlarını güncelleyebilme mimarisi.
+  - **Zarf Şifreleme (Envelope Encryption) & Rotasyon**: Çok yuvalı anahtar yönetimi ile kesintisiz güvenlik güncellemesi.
+- **Sıfır Güven Bot Koruması & Dağıtık Hız Sınırlama**:
+  - **Cloudflare Turnstile**: Kullanıcıyı yormayan, CAPTCHA gerektirmeyen akıllı bot koruması.
+  - **Upstash Redis**: Kritik API uç noktalarını koruyan uç nokta uyumlu kayan pencere (sliding-window) hız sınırlayıcı.
+- **Uçtan Uca Telemetri & İzleme**:
+  - **Sentry**: İstemci, sunucu ve edge katmanlarında gerçek zamanlı hata yakalama ve performans analitiği.
+  - **PostHog**: Gizlilik odaklı kullanıcı davranışı ve ürün etkileşim analitiği.
 - **3 Dinamik Arayüz Teması**: Temiz Açık (Light), Modern Koyu (Dark) ve OLED ekranlar için saf siyah (`#000000`) True Black teması.
 - **Sıfır Emoji Standartı**: Profesyonel kurumsal kimliği korumak için tasarlanmış temiz tipografi, modern SVG ikon seti (**Lucide React**) ve otomatik CI emoji denetleyicisi.
 - **%100 İki Dilli Altyapı (i18n)**: **next-intl** ile hazırlanmış, Türkçe (`tr`) ve İngilizce (`en`) sözlük anahtarları %100 senkronize edilmiş yerelleştirme sistemi.
@@ -409,6 +541,8 @@ Geleneksel serbest çalışma platformları kullanıcıları tek yönlü rollere
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind_3.4-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL_16+-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Drizzle ORM](https://img.shields.io/badge/Drizzle_0.41-C5F74F?style=for-the-badge&logo=drizzle&logoColor=black)
+![Inngest](https://img.shields.io/badge/Inngest_4.20-533BE5?style=for-the-badge&logo=inngest&logoColor=white)
+![Clerk](https://img.shields.io/badge/Clerk_7.9-6C47FF?style=for-the-badge&logo=clerk&logoColor=white)
 ![Zod](https://img.shields.io/badge/Zod_3.24-3E67B1?style=for-the-badge&logo=zod&logoColor=white)
 
 </div>
@@ -420,16 +554,25 @@ Geleneksel serbest çalışma platformları kullanıcıları tek yönlü rollere
 - **Tailwind CSS 3.4**: CSS değişkenleri, duyarlı grid sistemi ve OLED True Black renk paleti
 - **Lucide React**: Modern kurumsal uygulamalara özel tutarlı SVG ikon kütüphanesi
 - **Zod 3.24**: Güçlü form, rota ve sunucu eylemi girdi doğrulama şemaları
+- **PostHog JS 1.430**: Gizlilik odaklı istemci taraflı ürün analitiği ve etkileşim takibi
 
 ### Arka Yüz, Veritabanı ve Kriptografi
-- **PostgreSQL 16+**: ACID uyumlu, yüksek performanslı kurumsal ilişkisel veritabanı
+- **PostgreSQL 16+**: ACID uyumlu, yüksek performanslı kurumsal ilişkisel veritabanı ve PostgREST RLS koruması
 - **Drizzle ORM 0.41**: Tip güvenli SQL sorgu kurucusu ve sıfır çalışma zamanı ek yükü
 - **AES-256-GCM & HMAC-SHA256**: Hassas kişisel verilerin (PII) şifrelenmesi ve kör indeksleme motoru
+- **Zarf Şifreleme (`crypto/envelope`)**: Sistem anahtarı ile korunan veri anahtarı mimarisi ve rotasyon desteği
 - **Transactional Outbox Deseni**: Bildirimlerin ve e-postaların kaybolmasını önleyen atomik veritabanı işlem kuyruğu
-- **Oturum Güvenliği**: Kriptografik imzalı, zamanlama saldırılarına dayanıklı (timing-safe), HTTP-Only çerezler
+- **Oturum Güvenliği & Clerk SSO**: Kriptografik imzalı HTTP-Only çerezler ve sosyal kimlik köprüsü
+
+### Bulut Entegrasyonları ve Sunucusuz İş Akışları
+- **Inngest 4.20**: Sunucusuz olay güdümlü arka plan iş orkestrasyonu, dayanıklı çok adımlı iş akışları, otomatik yeniden deneme ve zamanlanmış cron görevleri
+- **Resend**: Yüksek teslimat oranlı kurumsal e-posta servisi, modern şablonlar, kişi havuzu senkronizasyonu ve webhook dinleyicileri
+- **Upstash Redis**: Güvenlik açısından kritik uç noktalar için sunucusuz dağıtık kayan pencere hız sınırlaması
+- **Cloudflare Turnstile**: Kullanıcı dostu akıllı bot savunması ve form güvenliği
+- **Sentry 10.74**: İstemci, sunucu ve edge düzeyinde tam kapsamlı hata izleme ve telemetri
 
 ### Kalite Güvencesi ve Otomasyon
-- **Vitest 3.0**: Hızlı birim ve entegrasyon test motoru (5.000+ doğrulama)
+- **Vitest 3.0**: Hızlı birim ve entegrasyon test motoru (50 test süitinde 5.000+ doğrulama)
 - **Playwright 1.51**: Chromium, Firefox ve WebKit üzerinde uçtan uca (E2E) tarayıcı testleri
 - **@axe-core/playwright**: WCAG 2.1 Seviye AA standartlarında otomatik erişilebilirlik denetimi
 - **Özel CI Denetimleri**: Emoji kullanımını engelleyen `pnpm audit:emoji` ve dil sözlüklerini doğrulayan `pnpm audit:i18n`
@@ -443,17 +586,24 @@ operis-platform/
 ├── .github/                        # GitHub Actions CI/CD iş akışları
 │   └── workflows/ci.yml            # Otomatik test, derleme ve lint kontrolü
 ├── db/                             # Veritabanı şeması, ilişkiler ve tohum verileri
+│   ├── migrations/                 # Drizzle SQL migrasyon dosyaları (0000 - 0018)
 │   ├── schema/                     # Drizzle ORM tablo modelleri
-│   │   ├── users.ts                # Kullanıcı kimlikleri, roller ve oturumlar
+│   │   ├── users.ts                # Kullanıcı kimlikleri, roller ve Clerk senkronizasyonu
 │   │   ├── listings.ts             # İlanlar, kategoriler ve 7 günlük yaşam döngüsü
 │   │   ├── offers.ts               # Bire bir gizli teklifler ve kabul durumu
 │   │   ├── deliveries.ts           # Karşılıklı çift taraflı teslimat onayları
 │   │   ├── reviews.ts              # Doğrulanmış müşteri ve uzman değerlendirmeleri
-│   │   └── outbox.ts               # Atomik bildirim kuyruğu (Transactional Outbox)
+│   │   ├── outbox.ts               # Atomik bildirim kuyruğu (Transactional Outbox)
+│   │   └── export-jobs.ts          # KVKK veri dışa aktarım iş defteri ve kilit tokenları
+│   ├── seeds/                      # Tohum veri üreticileri (kullanıcılar, ilanlar, teklifler)
 │   └── index.ts                    # Drizzle bağlantı havuzu ve veritabanı örneği
+├── deploy/                         # Üretim ortamı için systemd servisleri ve zamanlayıcılar
+│   ├── operis-worker.service       # Bağımsız arka plan işçi servisi
+│   └── operis-worker-check.timer   # İşçi sağlık kontrolü zamanlayıcısı
 ├── docs/                           # Ana şartnameler ve mimari rehberler
 │   ├── FREELANCE_PLATFORM_MASTER_SPEC.md # Ürün ve sistem şartnamesi
-│   └── AUDIT_AND_COMPLIANCE.md     # Güvenlik, KVKK ve gizlilik denetim raporu
+│   ├── AUDIT_AND_COMPLIANCE.md     # Güvenlik, KVKK ve gizlilik denetim raporu
+│   └── OPERIS_WORKER_DAEMON_OPERATIONS.md # Bağımsız işçi çalıştırma rehberi
 ├── i18n/                           # Çoklu dil yönlendirme ve istek yapılandırması
 │   ├── request.ts                  # İstek bazlı yerel dil çözümleme
 │   └── routing.ts                  # /tr ve /en önekli rota yapılandırması
@@ -466,13 +616,18 @@ operis-platform/
 ├── public/                         # Statik marka varlıkları ve logolar
 │   ├── operis-logo-acik.svg        # Vektörel logo (Açık tema)
 │   ├── operis-logo-koyu.svg        # Vektörel logo (Koyu tema)
+│   ├── operis-logo-email.png       # E-posta istemcileri için yüksek çözünürlüklü PNG logo
 │   ├── operis-favicon.svg          # Dairesel vektörel favicon
-│   └── apple-touch-icon.png        # Mobil cihazlar için web ikonu
+│   └── preview-emails.html         # Canlı e-posta şablon önizleme galerisi
 ├── scripts/                        # Veritabanı ve kod denetim betikleri
 │   ├── migrate.ts                  # Veritabanı migrasyon çalıştırıcısı
 │   ├── seed.ts                     # Kategori ve yasal sürüm tohumlama
+│   ├── worker-daemon.ts            # Bağımsız VPS ortamları için arka plan işçisi
+│   ├── backfill-pii-keys.ts        # Kriptografik anahtar rotasyonu ve veri güncelleme aracı
+│   ├── check-worker-health.ts      # İşçi süreci sağlık denetleyicisi
 │   ├── check-emojis.ts             # Sıfır-emoji kuralı denetleyicisi
 │   └── check-i18n-parity.ts        # TR-EN sözlük anahtar eşitliği doğrulayıcısı
+├── sentry.*.config.ts              # Sentry yapılandırması (client, server, edge)
 ├── src/                            # Uygulama kaynak kodları
 │   ├── app/                        # Next.js App Router yapısı
 │   │   ├── [locale]/               # Yerelleştirilmiş sayfalar (/tr, /en)
@@ -481,23 +636,50 @@ operis-platform/
 │   │   │   ├── listings/           # İlan arama, filtreleme ve ilan detayları
 │   │   │   ├── profile/            # Portföy, biyografi ve onaylı puanlar
 │   │   │   ├── legal/              # KVKK, Gizlilik ve Kullanım şartları
-│   │   │   ├── layout.tsx          # Kök yerelleştirilmiş düzen
+│   │   │   ├── layout.tsx          # Kök yerelleştirilmiş düzen ve telemetri sağlayıcı
 │   │   │   └── page.tsx            # Açılış ve vitrin ana sayfası
-│   │   ├── api/                    # API rota işleyicileri (/api/health)
+│   │   ├── admin/                  # Yönetici kontrol paneli ve uyuşmazlık yönetimi
+│   │   ├── api/                    # API rota işleyicileri
+│   │   │   ├── inngest/            # Inngest sunucusuz iş uç noktası (/api/inngest)
+│   │   │   ├── webhooks/           # Clerk ve Resend webhook dinleyicileri
+│   │   │   ├── listings/           # İlan akışı, arama ve yayın rotaları
+│   │   │   ├── offers/             # Teklif gönderme, revizyon ve durum rotaları
+│   │   │   ├── account/            # PII yönetimi ve asenkron KVKK veri aktarımı
+│   │   │   └── health/             # Sistem sağlık izleme uç noktası
 │   │   ├── global-error.tsx        # Kritik hata yakalama bileşeni
 │   │   └── not-found.tsx           # İki dilli 404 sayfası
 │   ├── components/                 # Paylaşılan UI bileşenleri
-│   │   ├── layout/                 # Üst menü (navbar), alt menü (footer), tema seçici
-│   │   ├── listings/               # İlan kartı, filtre paneli, teklif formu
-│   │   └── ui/                     # Buton, modal, rozet, form girdisi
+│   │   ├── admin/                  # Yönetim paneli tabloları ve metrikler
+│   │   ├── analytics/              # PostHog gizlilik odaklı analitik sağlayıcı
+│   │   ├── auth/                   # Formlar, Clerk SSO ve sosyal giriş butonları
+│   │   ├── layout/                 # Üst menü, alt menü, tema ve dil seçiciler
+│   │   ├── listings/               # İlan kartı, revizyon modalı, teklif çekmecesi
+│   │   ├── security/               # Turnstile bot bileşeni ve 2FA / TOTP kontrolleri
+│   │   └── ui/                     # Erişilebilir buton, modal, rozet, iskelet
+│   ├── config/                     # Tip güvenli ortam değişkenleri doğrulaması
+│   │   └── env.ts                  # Hızlı hata fırlatan Zod ortam şeması
+│   ├── instrumentation.ts          # Sunucu çalışma zamanı izleme ve Sentry kancası
 │   ├── lib/                        # Temel yardımcı servisler ve kripto
-│   │   ├── crypto.ts               # AES-256-GCM ve HMAC kör indeksleme motoru
-│   │   ├── auth.ts                 # Güvenli oturum ve çerez doğrulama
-│   │   └── outbox.ts               # E-posta ve bildirim işleme servisi
-│   └── validators/                 # Zod veri doğrulama şemaları
+│   │   ├── crypto/                 # AES-256-GCM, HMAC kör indeks ve zarf şifreleme
+│   │   ├── db/                     # Drizzle bağlantı havuzu ve danışma kilitleri
+│   │   ├── email/                  # Resend sağlayıcı, şablonlar ve e-posta önizleyici
+│   │   ├── inngest/                # Inngest istemcisi ve dayanıklı sunucusuz işler
+│   │   │   ├── client.ts           # Tip güvenli olay şemalı dayanıklı Inngest istemcisi
+│   │   │   └── functions/          # Outbox, bakım, yanıtsız teklif ve veri aktarımı
+│   │   └── security/               # Upstash Redis hız sınırlayıcı ve Turnstile
+│   ├── modules/                    # Alan odaklı modüler servisler
+│   │   ├── admin/                  # Yönetici servisi ve yetki koruması
+│   │   ├── auth/                   # Oturum, şifre sıfırlama, 2FA ve Clerk eşitlemesi
+│   │   ├── email/                  # Resend iletişim havuzu yöneticisi
+│   │   ├── engagements/            # Aktif iş sözleşmeleri, iptal ve teslim onayları
+│   │   ├── listings/               # İlan yönetimi, 7 günlük yaşam döngüsü ve besleme
+│   │   ├── notifications/          # İşlemsel outbox ve bildirim dağıtımı
+│   │   ├── offers/                 # Gizli teklifler ve yanıtsız teklif iptali
+│   │   └── privacy/                # Şifreli KVKK / GDPR akışlı veri aktarım motoru
+│   └── styles/                     # CSS değişkenleri ve tasarım tokenları
 ├── tests/                          # Otomatik test süitleri
-│   ├── unit/                       # Vitest birim testleri (kripto, validasyon, i18n)
-│   ├── integration/                # Veritabanı servis ve durum makinesi testleri
+│   ├── unit/                       # Vitest birim testleri (kripto, validasyon, i18n, inngest)
+│   ├── integration/                # Veritabanı servis, RLS, outbox ve yaşam döngüsü testleri
 │   ├── a11y/                       # Axe-core erişilebilirlik uyumluluk testleri
 │   └── e2e/                        # Playwright tarayıcı senaryoları
 ├── drizzle.config.ts               # Drizzle Kit CLI ayarları
@@ -514,11 +696,14 @@ operis-platform/
 | Veri Alanı | Şifreleme ve Bütünlük Standardı | Açıklama |
 | :--- | :--- | :--- |
 | **Kullanıcı Kimlik ve İletişim (PII)** | **AES-256-GCM + HMAC Kör İndeksleme** | Doğrulanmış e-posta, telefon ve ad-soyad diske şifreli yazılır; kör indeksle hızlıca aranabilir. |
+| **Zarf Tipi Şifreleme (Envelope)** | **KMS Uyumlu Çift Anahtar Modeli** | Veri anahtarlarının sistem anahtarıyla sarmalanarak saklanması (`crypto/envelope`) ve rotasyon desteği. |
 | **İlan Kataloğu** | **İlişkisel (Drizzle ORM) + Yaşam Döngüsü** | 7 günlük kesin süre sonu denetimi. İlanın ilk yayınlanma zaman damgası değiştirilemez. |
 | **Gizli Teklifler** | **Yalıtılmış Bire Bir İzin Modeli** | Yalnızca ilan sahibi ve teklif veren uzman tarafından görülebilir. Açık ihale sistemi yoktur. |
 | **Teslimat ve Puanlama** | **Çift Taraflı Durum Makinesi** | Yorum ve puanların yayına girmesi için hem işveren hem de uzmanın karşılıklı onayı şarttır. |
-| **Oturum Güvenliği** | **İmzalı HTTP-Only Çerezler** | Zamanlama saldırılarına karşı güvenli oturum karşılaştırması, SameSite ve Secure bayrakları. |
+| **Oturum Güvenliği** | **İmzalı HTTP-Only Çerezler & Clerk SSO** | Zamanlama saldırılarına karşı güvenli oturum karşılaştırması, SameSite, Secure bayrakları ve Clerk webhook senkronizasyonu. |
 | **İşlemsel Bildirimler (Outbox)** | **Atomik Veritabanı Yazımı** | Bildirim kayıtları ana işlemle aynı SQL transaction içinde yazılarak bildirim kaybı önlenir. |
+| **Sunucusuz İş Akışları** | **Inngest Dayanıklı Yürütme** | Kriptografik imzalı (`INNGEST_SIGNING_KEY`) webhook uç noktası ile tetiklenen outbox, otomatik iptal ve bakım işleri. |
+| **Dağıtık Hız Sınırlama** | **Upstash Redis Kayan Pencere** | Kimlik doğrulama, telefon değişimi ve teklif gönderme gibi hassas rotalarda gerçek zamanlı limit koruması. |
 
 ---
 
@@ -527,7 +712,7 @@ operis-platform/
 ### Gereksinimler
 - **Node.js**: Sürüm 20.0.0 veya üzeri (Node 24 LTS tavsiye edilir)
 - **pnpm**: Sürüm 10.0.0 veya üzeri
-- **PostgreSQL**: Sürüm 16 veya üzeri (Yerel veya uzak veritabanı)
+- **PostgreSQL**: Sürüm 16 veya üzeri (Yerel kurulum, Docker veya uzak bulut veritabanı)
 
 ### Adım Adım Geliştirici Kurulumu
 
@@ -551,7 +736,14 @@ operis-platform/
    ```powershell
    -join ((1..32) | ForEach-Object { '{0:x2}' -f (Get-Random -Max 256) })
    ```
-   Üretilen anahtarları `.env.local` dosyasındaki `PII_ENCRYPTION_KEY_CURRENT` ve `PII_HMAC_KEY` alanlarına ekleyin.
+   Aşağıdaki temel parametreleri `.env.local` dosyanıza ekleyin:
+   - Veritabanı: `DATABASE_URL` (PostgreSQL 16 bağlantı adresi)
+   - Kriptografi: `PII_ENCRYPTION_KEY_CURRENT` ve `PII_HMAC_KEY`
+   - Inngest (Sunucusuz İşler): `INNGEST_EVENT_KEY` ve `INNGEST_SIGNING_KEY`
+   - Clerk (Kimlik Doğrulama): `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` ve `CLERK_SECRET_KEY`
+   - Resend (E-posta): `RESEND_API_KEY`
+   - Upstash Redis (Hız Sınırı): `UPSTASH_REDIS_REST_URL` ve `UPSTASH_REDIS_REST_TOKEN`
+   - Turnstile (Bot Savunması): `NEXT_PUBLIC_TURNSTILE_SITE_KEY` ve `TURNSTILE_SECRET_KEY`
 
 4. **Veritabanı Migrasyonlarını ve Başlangıç Verilerini Yükleyin:**
    ```bash
@@ -565,11 +757,16 @@ operis-platform/
    pnpm db:seed
    ```
 
-5. **Geliştirici Sunucusunu Başlatın:**
+5. **Geliştirici Sunucularını Başlatın:**
    ```bash
+   # Next.js geliştirici sunucusunu başlatın
    pnpm dev
+
+   # Ayrı bir terminalde yerel Inngest arayüzünü başlatın:
+   pnpm inngest:dev
    ```
-   Tarayıcınızda [http://localhost:3000](http://localhost:3000) adresine gidin.
+   Tarayıcınızda [http://localhost:3000](http://localhost:3000) adresine gidin.  
+   Inngest yerel geliştirici paneline [http://localhost:8288](http://localhost:8288) adresinden erişebilirsiniz.
 
 6. **Test ve Kalite Denetimlerini Çalıştırın:**
    ```bash
@@ -579,14 +776,20 @@ operis-platform/
    # ESLint kod kalitesi taraması
    pnpm lint
 
+   # Kod format kontrolü
+   pnpm format:check
+
    # Türkçe-İngilizce sözlük eşitliği kontrolü
    pnpm audit:i18n
 
    # Sıfır-emoji uyumluluk denetimi
    pnpm audit:emoji
 
-   # Birim ve entegrasyon testleri (Vitest)
-   pnpm test
+   # Birim testleri (Vitest)
+   pnpm test:unit
+
+   # Entegrasyon testleri (PostgreSQL 16)
+   pnpm test:integration
 
    # Tarayıcı E2E testleri (Playwright)
    pnpm test:e2e
@@ -608,10 +811,11 @@ operis-platform/
 
 ## 📦 Dağıtım ve Üretim Ortamı
 
+- **Sunucusuz Arka Plan İşleri (Tavsiye Edilen / $0 Ek Maliyet)**: Vercel, Netlify veya benzeri sunucusuz ortamlarda arka plan işleri **Inngest** (`/api/inngest`) tarafından otomatik olarak yönetilir. Sürekli çalışan bir Linux sanal sunucusuna (VPS) ya da cron yapılandırmasına ihtiyaç kalmaz; Inngest'in aylık 50.000 çalıştırmalık ücretsiz kotası platform için yeterlidir.
+- **Bağımsız İşçi Modu (Self-Hosted / VPS)**: Geleneksel Linux VPS veya Docker ortamları için Operis, `deploy/` dizininde hazır systemd servisleri ile birlikte `scripts/worker-daemon.ts` (`pnpm worker:daemon`) modunu da sunar.
 - **Docker Konteynerizasyonu**: Çok aşamalı Node.js Docker imajı ile kolayca çalıştırılabilir.
-- **Outbox Servisi**: E-posta bildirimlerinin düzenli gönderimi için `NotificationService.processOutboxBatch` fonksiyonunu 30–60 saniyelik cron görevine bağlayın.
 - **Güvenlik Başlıkları**: CSP, HSTS, X-Frame-Options ve Referrer-Policy ayarları `next.config.ts` içinde tam korumalı şekilde yapılandırılmıştır.
-- **Sistem Sağlığı İzleme**: `/api/health` uç noktası üzerinden sağlık durumu izlenebilir.
+- **Sistem Sağlığı ve Gözlemlenebilirlik**: `/api/health` uç noktası üzerinden sağlık durumu izlenebilir, Sentry hata takibi ve PostHog analitiği ile desteklenir.
 
 ---
 
