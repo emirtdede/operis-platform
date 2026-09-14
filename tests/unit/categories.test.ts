@@ -40,7 +40,7 @@ describe("Category Service & Privacy Invariants", () => {
     const sectorsTr = await CategoryService.getSectorsWithCategories("tr");
     expect(sectorsTr.length).toBe(10);
     const totalCategories = sectorsTr.reduce((acc, s) => acc + s.categories.length, 0);
-    expect(totalCategories).toBe(104);
+    expect(totalCategories).toBe(106);
 
     const sectorsEn = await CategoryService.getSectorsWithCategories("en");
     expect(sectorsEn.length).toBe(10);

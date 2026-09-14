@@ -62,6 +62,7 @@ import {
   Calculator,
   Receipt,
   LogIn,
+  Glasses,
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "../ui/button";
@@ -97,6 +98,7 @@ const CATEGORY_ICONS: Record<string, LucideIcon> = {
   "it-systems-network": Network,
   "computer-hardware": Wrench,
   "other-technology": Code2,
+  "nocode-lowcode-development": Workflow,
 
   // Sektör 2: AI & Veri
   "ai-ml": Cpu,
@@ -204,6 +206,7 @@ const CATEGORY_ICONS: Record<string, LucideIcon> = {
   "game-audio-music": Headphones,
   "architectural-exterior-rendering": Building,
   "3d-printing-stl-modeling": Box,
+  "xr-spatial-computing-vr-ar": Glasses,
   "ecommerce-store-operations": ShoppingBag,
   "lead-data-enrichment": Search,
   "transcription-audio-to-text": Mic,
@@ -412,8 +415,8 @@ export function CategoryListInteractive({
         listingCount: totalListings,
         icon: Layers,
         subText: isTr
-          ? `10 sektör, 104 uzmanlık • ${totalListings} aktif ilan`
-          : `10 sectors, 104 specializations • ${totalListings} active listings`,
+          ? `10 sektör, ${categories.length} uzmanlık • ${totalListings} aktif ilan`
+          : `10 sectors, ${categories.length} specializations • ${totalListings} active listings`,
         allKeywords: "all tüm hepsi",
       },
       ...SEED_SECTORS.map((sec) => {

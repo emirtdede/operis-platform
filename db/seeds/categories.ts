@@ -394,6 +394,23 @@ export const SEED_CATEGORIES: SeedCategory[] = [
       },
     },
   },
+  {
+    key: "nocode-lowcode-development",
+    sectorKey: "sector-software-it",
+    sortOrder: 15,
+    translations: {
+      tr: {
+        name: "No-Code & Low-Code Geliştirme",
+        description:
+          "Framer, Webflow, Bubble, Make, Zapier, Retool ve hızlı MVP ürün geliştirme çözümleri.",
+      },
+      en: {
+        name: "No-Code & Low-Code Development",
+        description:
+          "Framer, Webflow, Bubble, Make, Zapier, Retool, and rapid visual MVP development.",
+      },
+    },
+  },
 
   // --- 2. Yapay Zeka, Veri ve Otomasyon (sector-ai-data) ---
   {
@@ -1847,6 +1864,23 @@ export const SEED_CATEGORIES: SeedCategory[] = [
         name: "3D Printing & STL Preparation",
         description:
           "Watertight mesh modeling, tolerance analysis, slice optimization, and print-ready STL exports.",
+      },
+    },
+  },
+  {
+    key: "xr-spatial-computing-vr-ar",
+    sectorKey: "sector-engineering-3d",
+    sortOrder: 910,
+    translations: {
+      tr: {
+        name: "Mekânsal Bilişim, VR & AR Geliştirme",
+        description:
+          "Apple Vision Pro, Meta Quest, WebXR, Three.js, Unity XR ve interaktif 3D mekânsal deneyimler.",
+      },
+      en: {
+        name: "Spatial Computing, VR & AR Development",
+        description:
+          "Apple Vision Pro, Meta Quest, WebXR, Three.js, Unity XR, and interactive spatial experiences.",
       },
     },
   },
