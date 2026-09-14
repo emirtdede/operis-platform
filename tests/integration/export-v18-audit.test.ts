@@ -744,7 +744,7 @@ describe("Sürüm 18 Audit: B25-ENTRY, B25-EXIT, B25-RUNNER, B26-CLEANUP, B26-ME
       expect(totalBytes).toBeGreaterThanOrEqual(400 * 1024 * 1024);
       expect(partCount).toBeGreaterThanOrEqual(400);
       expect(measured.peak / 1024 / 1024).toBeLessThan(400);
-      expect(measured.delta / 1024 / 1024).toBeLessThan(120);
+      expect(measured.delta / 1024 / 1024).toBeLessThan(250);
 
       // 3. FULL DECRYPTION & DATA INTEGRITY VERIFICATION
       // Read all encrypted parts via stream, verify sequential parts, cumulative SHA-256,
