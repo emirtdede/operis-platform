@@ -104,7 +104,7 @@ for (const entry of rootFiles) {
         for (const match of matches) {
           const isAllowedStub = ALLOWED_TEST_PREFIXES.some((prefix) => match.startsWith(prefix));
           if (!isAllowedStub) {
-            violationsPush: allViolations.push(
+            allViolations.push(
               `[${name}] ${fullPath}: hardcoded gizli anahtar bulundu (${match.slice(0, 7)}...)`
             );
           }
