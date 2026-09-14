@@ -886,7 +886,12 @@ export class ExportJobManager {
   static async processNextExportJob(
     _workerId?: string,
     onActiveJob?: ((jobId: string | null) => void) | ExportJobProgressListener,
-    options?: { pool?: pg.Pool; signal?: AbortSignal; maxDurationMs?: number }
+    options?: {
+      pool?: pg.Pool;
+      signal?: AbortSignal;
+      maxDurationMs?: number;
+      testProcessingBarrier?: ClaimAndProcessOptions["testProcessingBarrier"];
+    }
   ): Promise<{
     status: "IDLE" | "COMPLETED" | "LEASE_LOST" | "FAILED" | "RETRY_SCHEDULED";
     jobId?: string;
@@ -944,6 +949,7 @@ export class ExportJobManager {
         pool: options?.pool,
         signal: options?.signal,
         maxDurationMs: options?.maxDurationMs,
+        testProcessingBarrier: options?.testProcessingBarrier,
         onProgress: (prog) => {
           if (prog.phase === "claimed") {
             if (typeof onActiveJob === "function") {
