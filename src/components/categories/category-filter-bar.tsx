@@ -10,68 +10,58 @@ import {
   Sparkles,
   Code2,
   Cpu,
-  Cloud,
   Palette,
+  TrendingUp,
+  Video,
+  PenTool,
+  Briefcase,
+  Scale,
+  Box,
+  Headphones,
   Check,
   LayoutGrid,
+  type LucideIcon,
 } from "lucide-react";
 import type { CategoryDto } from "@/src/modules/categories/service";
+import { SEED_SECTORS } from "@/db/seeds/categories";
 
-// Grouping the 21 seed categories into 4 coherent technical disciplines
-const DISCIPLINE_GROUPS = [
-  {
-    key: "software",
-    icon: Code2,
-    color: "text-blue-400 bg-blue-500/10 border-blue-500/20",
-    label: { tr: "Yazılım & Uygulama", en: "Software & Applications" },
-    slugs: [
-      "web-development",
-      "mobile-development",
-      "desktop-development",
-      "backend-api",
-      "frontend-ui",
-    ],
-  },
-  {
-    key: "data_ai",
-    icon: Cpu,
-    color: "text-purple-400 bg-purple-500/10 border-purple-500/20",
-    label: { tr: "Yapay Zeka & Veri", en: "AI & Data Engineering" },
-    slugs: ["ai-ml", "data-engineering", "database", "automation-integrations"],
-  },
-  {
-    key: "infra_sec",
-    icon: Cloud,
-    color: "text-cyan-400 bg-cyan-500/10 border-cyan-500/20",
-    label: { tr: "Bulut, DevOps & Güvenlik", en: "Cloud, DevOps & Security" },
-    slugs: ["devops-cloud", "cybersecurity", "qa-testing", "it-systems-network"],
-  },
-  {
-    key: "design_specialty",
-    icon: Palette,
-    color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
-    label: { tr: "Tasarım, Donanım & Niş", en: "Design, Hardware & Niche" },
-    slugs: [
-      "ui-ux-design",
-      "game-development",
-      "blockchain",
-      "embedded-iot",
-      "computer-hardware",
-      "technical-consulting",
-      "other-technology",
-    ],
-  },
-];
+const SECTOR_ICON_MAP: Record<string, LucideIcon> = {
+  "sector-software-it": Code2,
+  "sector-ai-data": Cpu,
+  "sector-design-creative": Palette,
+  "sector-marketing-growth": TrendingUp,
+  "sector-video-audio": Video,
+  "sector-writing-translation": PenTool,
+  "sector-business-finance": Briefcase,
+  "sector-legal-compliance": Scale,
+  "sector-engineering-3d": Box,
+  "sector-operations-support": Headphones,
+};
 
-// Top 7 most popular categories for the quick horizontal scroll rail
+const SECTOR_COLOR_MAP: Record<string, string> = {
+  "sector-software-it": "text-blue-400 bg-blue-500/10 border-blue-500/20",
+  "sector-ai-data": "text-purple-400 bg-purple-500/10 border-purple-500/20",
+  "sector-design-creative": "text-amber-400 bg-amber-500/10 border-amber-500/20",
+  "sector-marketing-growth": "text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
+  "sector-video-audio": "text-rose-400 bg-rose-500/10 border-rose-500/20",
+  "sector-writing-translation": "text-indigo-400 bg-indigo-500/10 border-indigo-500/20",
+  "sector-business-finance": "text-cyan-400 bg-cyan-500/10 border-cyan-500/20",
+  "sector-legal-compliance": "text-yellow-400 bg-yellow-500/10 border-yellow-500/20",
+  "sector-engineering-3d": "text-teal-400 bg-teal-500/10 border-teal-500/20",
+  "sector-operations-support": "text-fuchsia-400 bg-fuchsia-500/10 border-fuchsia-500/20",
+};
+
+// Featured rail categories representing key sectors
 const FEATURED_RAIL_SLUGS = [
   "web-development",
-  "mobile-development",
-  "backend-api",
-  "frontend-ui",
   "ai-ml",
-  "devops-cloud",
   "ui-ux-design",
+  "search-engine-optimization",
+  "short-form-video",
+  "copywriting-sales",
+  "game-development",
+  "financial-modeling",
+  "contract-drafting-review",
 ];
 
 export interface CategoryFilterBarProps {
@@ -98,6 +88,28 @@ export function CategoryFilterBar({
   const [searchFilter, setSearchFilter] = useState("");
   const modalRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Group categories dynamically under the 10 official industry sectors
+  const sectorGroups = useMemo(() => {
+    return SEED_SECTORS.map((sec) => {
+      const trans = isTr ? sec.translations.tr : sec.translations.en;
+      const cats = categories.filter((c) => c.sectorKey === sec.key);
+      const Icon = SECTOR_ICON_MAP[sec.key] || Briefcase;
+      const color = SECTOR_COLOR_MAP[sec.key] || "text-blue-400 bg-blue-500/10 border-blue-500/20";
+      return {
+        key: sec.key,
+        name: trans.name,
+        icon: Icon,
+        color,
+        categories: cats,
+      };
+    }).filter((g) => g.categories.length > 0);
+  }, [categories, isTr]);
+
+  const fallbackCats = useMemo(() => {
+    const knownKeys = new Set(SEED_SECTORS.map((s) => s.key));
+    return categories.filter((c) => !c.sectorKey || !knownKeys.has(c.sectorKey));
+  }, [categories]);
 
   // Helper to build URLs preserving extra query params and search query
   const buildHref = (catSlug?: string) => {
@@ -262,7 +274,7 @@ export function CategoryFilterBar({
         >
           <div
             ref={modalRef}
-            className="relative w-full max-w-2xl max-h-[85vh] flex flex-col rounded-3xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200"
+            className="relative w-full max-w-4xl max-h-[88vh] flex flex-col rounded-3xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200"
           >
             {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-[var(--color-border-subtle)] p-5 pb-4">
@@ -272,12 +284,16 @@ export function CategoryFilterBar({
                   className="text-base font-bold text-[var(--color-text-primary)] flex items-center gap-2"
                 >
                   <Sparkles className="h-4 w-4 text-blue-400" aria-hidden="true" />
-                  <span>{isTr ? "Tüm Teknoloji Kategorileri" : "All Tech Categories"}</span>
+                  <span>
+                    {isTr
+                      ? "Tüm Sektör ve Uzmanlık Kategorileri"
+                      : "All Sectors & Specialization Categories"}
+                  </span>
                 </h2>
                 <p className="text-xs text-[var(--color-text-secondary)]">
                   {isTr
-                    ? "İhtiyacınıza uygun uzmanlık disiplinini seçin."
-                    : "Select a specialized discipline to filter projects."}
+                    ? "İhtiyacınıza uygun sektör ve uzmanlık disiplinini seçin."
+                    : "Select your relevant industry sector and specialization."}
                 </p>
               </div>
 
@@ -336,9 +352,16 @@ export function CategoryFilterBar({
                         : "No matching categories found."}
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                       {filteredModalCategories.map((cat) => {
                         const isSelected = selectedCategory === cat.slug;
+                        const sector = SEED_SECTORS.find((s) => s.key === cat.sectorKey);
+                        const sectorName = sector
+                          ? isTr
+                            ? sector.translations.tr.name
+                            : sector.translations.en.name
+                          : "";
+
                         return (
                           <Link
                             key={cat.id}
@@ -351,6 +374,11 @@ export function CategoryFilterBar({
                             }`}
                           >
                             <div className="space-y-0.5 pr-2">
+                              {sectorName && (
+                                <div className="text-[10px] font-medium text-blue-400">
+                                  {sectorName}
+                                </div>
+                              )}
                               <div className="font-semibold text-xs">{cat.name}</div>
                               {cat.description && (
                                 <div className="text-[11px] text-[var(--color-text-secondary)] line-clamp-1">
@@ -366,28 +394,68 @@ export function CategoryFilterBar({
                   )}
                 </div>
               ) : (
-                /* 4 Structured Discipline Groups */
-                DISCIPLINE_GROUPS.map((group) => {
-                  const Icon = group.icon;
-                  const groupCats = group.slugs
-                    .map((slug) => categories.find((c) => c.slug === slug))
-                    .filter((c): c is CategoryDto => Boolean(c));
+                /* Dynamic 10 Sector Groups */
+                <>
+                  {sectorGroups.map((group) => {
+                    const Icon = group.icon;
+                    return (
+                      <div key={group.key} className="space-y-2.5">
+                        <div className="flex items-center justify-between gap-2 border-b border-[var(--color-border-subtle)]/40 pb-1.5">
+                          <div className="flex items-center gap-2">
+                            <div
+                              className={`flex h-6 w-6 items-center justify-center rounded-lg border ${group.color}`}
+                            >
+                              <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                            </div>
+                            <h3 className="font-bold text-xs text-[var(--color-text-primary)] uppercase tracking-wider">
+                              {group.name}
+                            </h3>
+                          </div>
+                          <span className="text-[10px] font-mono text-[var(--color-text-tertiary)] bg-[var(--color-surface-hover)] px-2 py-0.5 rounded-full">
+                            {group.categories.length}
+                          </span>
+                        </div>
 
-                  return (
-                    <div key={group.key} className="space-y-2.5">
-                      <div className="flex items-center gap-2">
-                        <div
-                          className={`flex h-6 w-6 items-center justify-center rounded-lg border ${group.color}`}
-                        >
-                          <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                          {group.categories.map((cat) => {
+                            const isSelected = selectedCategory === cat.slug;
+                            return (
+                              <Link
+                                key={cat.id}
+                                href={buildHref(cat.slug)}
+                                onClick={() => setModalOpen(false)}
+                                className={`flex items-center justify-between p-2.5 px-3 rounded-xl border transition-all cursor-pointer ${
+                                  isSelected
+                                    ? "border-blue-500/60 bg-blue-500/10 text-blue-400 font-semibold shadow-xs"
+                                    : "border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/70 hover:border-blue-500/30 hover:bg-[var(--color-surface-hover)] text-[var(--color-text-primary)]"
+                                }`}
+                              >
+                                <div className="truncate pr-2">
+                                  <span className="font-medium text-xs">{cat.name}</span>
+                                </div>
+                                {isSelected && (
+                                  <Check className="h-3.5 w-3.5 text-blue-400 shrink-0" />
+                                )}
+                              </Link>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {fallbackCats.length > 0 && (
+                    <div className="space-y-2.5">
+                      <div className="flex items-center gap-2 border-b border-[var(--color-border-subtle)]/40 pb-1.5">
+                        <div className="flex h-6 w-6 items-center justify-center rounded-lg border text-blue-400 bg-blue-500/10 border-blue-500/20">
+                          <Code2 className="h-3.5 w-3.5" aria-hidden="true" />
                         </div>
                         <h3 className="font-bold text-xs text-[var(--color-text-primary)] uppercase tracking-wider">
-                          {isTr ? group.label.tr : group.label.en}
+                          {isTr ? "Diğer Kategoriler" : "Other Categories"}
                         </h3>
                       </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        {groupCats.map((cat) => {
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                        {fallbackCats.map((cat) => {
                           const isSelected = selectedCategory === cat.slug;
                           return (
                             <Link
@@ -411,8 +479,8 @@ export function CategoryFilterBar({
                         })}
                       </div>
                     </div>
-                  );
-                })
+                  )}
+                </>
               )}
             </div>
 

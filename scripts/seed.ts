@@ -177,7 +177,7 @@ export async function runSeed(customConnectionString?: string) {
     const withDemo = process.argv.includes("--demo") || process.env.SEED_DEMO_DATA === "true";
     if (!withDemo) {
       console.info(
-        "Official taxonomy (10 sectors, 60 categories) verified & synced. Skipping demo data (mock users, listings, offers) for production readiness. (Use --demo to include mock data)."
+        `Official taxonomy (${SEED_SECTORS.length} sectors, ${SEED_CATEGORIES.length} categories) verified & synced. Skipping demo data (mock users, listings, offers) for production readiness. (Use --demo to include mock data).`
       );
       return;
     }
