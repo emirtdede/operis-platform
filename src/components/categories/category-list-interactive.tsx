@@ -738,9 +738,7 @@ export function CategoryListInteractive({
 
                 <div className="mt-5 flex items-center justify-between pt-4 border-t border-[var(--color-border-subtle)]/60 shrink-0">
                   <Link
-                    href={
-                      isTr ? `/tr/akis?category=${cat.slug}` : `/en/feed?category=${cat.slug}`
-                    }
+                    href={isTr ? `/tr/akis?category=${cat.slug}` : `/en/feed?category=${cat.slug}`}
                     className="inline-flex items-center gap-1 text-xs font-semibold text-blue-500 hover:text-blue-400 transition-colors"
                   >
                     <span>{isTr ? "Projeler" : "Projects"}</span>
