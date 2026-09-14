@@ -163,7 +163,7 @@ export function OwnerListingsDashboard({
       )}
 
       {/* Top Bar: Status Filter Tabs */}
-      <div className="flex items-center gap-1 border-b border-[var(--color-border-subtle)] pb-4 overflow-x-auto">
+      <div className="flex flex-wrap items-center gap-1.5 border-b border-[var(--color-border-subtle)] pb-4">
         {(["all", "active", "inactive", "matched"] as const).map((t) => (
           <button
             key={t}

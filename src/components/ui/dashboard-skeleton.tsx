@@ -17,7 +17,7 @@ export function DashboardSkeleton({ cardsCount = 4 }: DashboardSkeletonProps) {
       </div>
 
       {/* Tabs Skeleton */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-2 border-b border-[var(--color-border-subtle)]">
+      <div className="flex flex-wrap items-center gap-2 pb-2 border-b border-[var(--color-border-subtle)]">
         <Skeleton className="h-9 w-28 rounded-xl" />
         <Skeleton className="h-9 w-32 rounded-xl" />
         <Skeleton className="h-9 w-32 rounded-xl" />

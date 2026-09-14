@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -9,6 +9,8 @@ import {
   BookmarkCheck,
   Search,
   X,
+  ChevronDown,
+  Filter,
   Globe,
   Smartphone,
   Monitor,
@@ -334,6 +336,102 @@ export function CategoryListInteractive({
     }
   };
 
+  const [isSectorDropdownOpen, setIsSectorDropdownOpen] = useState(false);
+  const [sectorSearchQuery, setSectorSearchQuery] = useState("");
+  const sectorDropdownRef = useRef<HTMLDivElement>(null);
+  const sectorInputRef = useRef<HTMLInputElement>(null);
+
+  // Close sector dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (sectorDropdownRef.current && !sectorDropdownRef.current.contains(event.target as Node)) {
+        setIsSectorDropdownOpen(false);
+      }
+    }
+    if (isSectorDropdownOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isSectorDropdownOpen]);
+
+  // Close sector dropdown on Escape
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setIsSectorDropdownOpen(false);
+      }
+    }
+    if (isSectorDropdownOpen) {
+      document.addEventListener("keydown", handleKeyDown);
+    }
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isSectorDropdownOpen]);
+
+  const selectedSectorObj = useMemo(() => {
+    if (selectedSector === "all") return null;
+    return SEED_SECTORS.find((s) => s.key === selectedSector) || null;
+  }, [selectedSector]);
+
+  const currentSectorLabel = selectedSectorObj
+    ? isTr
+      ? selectedSectorObj.translations.tr.name
+      : selectedSectorObj.translations.en.name
+    : isTr
+      ? "Tüm Sektörler"
+      : "All Sectors";
+
+  const currentSectorCount =
+    selectedSector === "all"
+      ? categories.length
+      : categories.filter((c) => c.sectorKey === selectedSector).length;
+
+  const ActiveSectorIcon = selectedSectorObj
+    ? SECTOR_ICONS[selectedSectorObj.key] || Briefcase
+    : Layers;
+
+  const sectorOptions = useMemo(() => {
+    const list = [
+      {
+        key: "all",
+        name: isTr ? "Tüm Sektörler" : "All Sectors",
+        count: categories.length,
+        icon: Layers,
+        subText: isTr
+          ? "Tüm resmi sektörler ve 104 uzmanlık"
+          : "All 10 sectors & 104 specializations",
+        allKeywords: "all tüm hepsi",
+      },
+      ...SEED_SECTORS.map((sec) => {
+        const name = isTr ? sec.translations.tr.name : sec.translations.en.name;
+        const subCats = categories.filter((c) => c.sectorKey === sec.key);
+        const subText = subCats
+          .slice(0, 3)
+          .map((c) => c.name)
+          .join(", ");
+        const allKeywords =
+          `${name} ${subCats.map((c) => `${c.name} ${c.slug}`).join(" ")}`.toLowerCase();
+
+        return {
+          key: sec.key,
+          name,
+          count: subCats.length,
+          icon: SECTOR_ICONS[sec.key] || Briefcase,
+          subText,
+          allKeywords,
+        };
+      }),
+    ];
+
+    const q = sectorSearchQuery.toLowerCase().trim();
+    if (!q) return list;
+
+    return list.filter((item) => item.allKeywords.includes(q));
+  }, [categories, isTr, sectorSearchQuery]);
+
   return (
     <div className="space-y-8">
       {/* Top Glass Action Control Panel with Search */}
@@ -350,8 +448,8 @@ export function CategoryListInteractive({
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder={
               isTr
-                ? "Kategori ara (örn. Frontend, Yapay Zeka)..."
-                : "Filter categories (e.g. Frontend, Cloud)..."
+                ? "Kategori ara (örn. Frontend, Unity, Yapay Zeka)..."
+                : "Filter categories (e.g. Frontend, Unity, Cloud)..."
             }
             aria-label={isTr ? "Kategori filtrele" : "Filter categories"}
             className="w-full h-10 rounded-xl bg-[var(--color-surface-hover)] border border-[var(--color-border-subtle)] pl-10 pr-9 text-xs text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
@@ -392,60 +490,186 @@ export function CategoryListInteractive({
         </div>
       </div>
 
-      {/* Horizontal Scrollable Sector Filter Pills */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
-        <button
-          type="button"
-          onClick={() => setSelectedSector("all")}
-          className={`px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${
-            selectedSector === "all"
-              ? "bg-blue-600 text-white shadow-md shadow-blue-500/20"
-              : "bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-active)]"
-          }`}
-        >
-          <span>{isTr ? "Tüm Sektörler" : "All Sectors"}</span>
-          <span
-            className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${
-              selectedSector === "all"
-                ? "bg-white/20 text-white"
-                : "bg-[var(--color-surface-base)] text-[var(--color-text-tertiary)]"
-            }`}
-          >
-            {categories.length}
+      {/* Modern Searchable Sector Dropdown Combobox Menu (Replaces horizontal pill scrollbar) */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-3xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/50 backdrop-blur-md">
+        <div className="flex items-center gap-3 flex-wrap">
+          <span className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider flex items-center gap-1.5">
+            <Filter className="h-3.5 w-3.5 text-blue-500" aria-hidden="true" />
+            <span>{isTr ? "Sektör:" : "Sector:"}</span>
           </span>
-        </button>
 
-        {SEED_SECTORS.map((sec) => {
-          const Icon = SECTOR_ICONS[sec.key] || Briefcase;
-          const isSelected = selectedSector === sec.key;
-          const count = categories.filter((c) => c.sectorKey === sec.key).length;
-          const name = isTr ? sec.translations.tr.name : sec.translations.en.name;
-
-          return (
-            <button
-              key={sec.key}
-              type="button"
-              onClick={() => setSelectedSector(sec.key)}
-              className={`px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center gap-2 border ${
-                isSelected
-                  ? "bg-blue-600 text-white border-blue-500 shadow-md shadow-blue-500/20"
-                  : "bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)] border-[var(--color-border-subtle)] hover:text-[var(--color-text-primary)] hover:border-blue-500/40"
+          {/* Interactive Combobox Trigger Button */}
+          <div className="relative w-full sm:w-80 md:w-96" ref={sectorDropdownRef}>
+            <div
+              className={`w-full h-11 px-3.5 rounded-2xl bg-[var(--color-surface-hover)] border transition-all flex items-center gap-2.5 shadow-xs ${
+                isSectorDropdownOpen
+                  ? "border-blue-500 ring-2 ring-blue-500/20 bg-[var(--color-surface-base)]"
+                  : "border-[var(--color-border-subtle)] hover:border-blue-500/40"
               }`}
             >
-              <Icon className="h-3.5 w-3.5" aria-hidden="true" />
-              <span>{name}</span>
-              <span
-                className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${
-                  isSelected
-                    ? "bg-white/20 text-white"
-                    : "bg-[var(--color-surface-base)] text-[var(--color-text-tertiary)]"
-                }`}
+              <div className="h-7 w-7 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center shrink-0">
+                <ActiveSectorIcon className="h-4 w-4" aria-hidden="true" />
+              </div>
+
+              <input
+                type="text"
+                ref={sectorInputRef}
+                value={isSectorDropdownOpen ? sectorSearchQuery : currentSectorLabel}
+                onChange={(e) => {
+                  setSectorSearchQuery(e.target.value);
+                  if (!isSectorDropdownOpen) setIsSectorDropdownOpen(true);
+                }}
+                onFocus={() => {
+                  setIsSectorDropdownOpen(true);
+                }}
+                placeholder={isTr ? "Sektör ara veya yazın..." : "Search or type sector..."}
+                aria-label={isTr ? "Sektör filtresi" : "Sector filter"}
+                className="flex-1 min-w-0 bg-transparent text-xs text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:outline-none font-medium truncate"
+              />
+
+              {isSectorDropdownOpen && sectorSearchQuery ? (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSectorSearchQuery("");
+                  }}
+                  className="p-1 rounded-md text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-base)]"
+                  aria-label={isTr ? "Temizle" : "Clear"}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              ) : (
+                <span className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-[var(--color-surface-base)] text-[var(--color-text-secondary)] border border-[var(--color-border-subtle)] shrink-0">
+                  {currentSectorCount}
+                </span>
+              )}
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsSectorDropdownOpen((prev) => !prev);
+                  if (!isSectorDropdownOpen) {
+                    setTimeout(() => sectorInputRef.current?.focus(), 50);
+                  }
+                }}
+                className="p-1 text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] transition-colors cursor-pointer"
+                aria-label={isTr ? "Menüyü Aç" : "Toggle Menu"}
               >
-                {count}
-              </span>
-            </button>
-          );
-        })}
+                <ChevronDown
+                  className={`h-4 w-4 transition-transform duration-200 ${
+                    isSectorDropdownOpen ? "rotate-180 text-blue-400" : ""
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* Dropdown Menu (Shows 10 items in viewport, scrollable) */}
+            {isSectorDropdownOpen && (
+              <div className="absolute top-full left-0 mt-2 w-full min-w-[320px] rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/95 backdrop-blur-xl shadow-2xl p-1.5 z-40 animate-in fade-in zoom-in-95 duration-150">
+                <div className="max-h-[415px] overflow-y-auto space-y-1 p-0.5 scrollbar-thin">
+                  {sectorOptions.length === 0 ? (
+                    <div className="p-6 text-center space-y-2">
+                      <p className="text-xs text-[var(--color-text-tertiary)]">
+                        {isTr
+                          ? "Aramanızla eşleşen sektör bulunamadı."
+                          : "No matching sector found."}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setSectorSearchQuery("")}
+                        className="text-xs text-blue-400 hover:underline cursor-pointer"
+                      >
+                        {isTr ? "Aramayı temizle" : "Clear search"}
+                      </button>
+                    </div>
+                  ) : (
+                    sectorOptions.map((item) => {
+                      const Icon = item.icon;
+                      const isSelected = selectedSector === item.key;
+
+                      return (
+                        <button
+                          key={item.key}
+                          type="button"
+                          onClick={() => {
+                            setSelectedSector(item.key);
+                            setIsSectorDropdownOpen(false);
+                            setSectorSearchQuery("");
+                          }}
+                          className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs transition-colors cursor-pointer text-left ${
+                            isSelected
+                              ? "bg-blue-600/15 text-blue-400 border border-blue-500/30 font-semibold"
+                              : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                            <div
+                              className={`h-7 w-7 rounded-lg flex items-center justify-center shrink-0 ${
+                                isSelected
+                                  ? "bg-blue-500/20 text-blue-400"
+                                  : "bg-[var(--color-surface-hover)] text-[var(--color-text-tertiary)]"
+                              }`}
+                            >
+                              <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-semibold truncate">{item.name}</p>
+                              {item.subText && (
+                                <p className="text-[10px] text-[var(--color-text-tertiary)] truncate opacity-80">
+                                  {item.subText}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span
+                              className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${
+                                isSelected
+                                  ? "bg-blue-500/20 text-blue-300"
+                                  : "bg-[var(--color-surface-hover)] text-[var(--color-text-tertiary)]"
+                              }`}
+                            >
+                              {item.count}
+                            </span>
+                            {isSelected && (
+                              <Check className="h-4 w-4 text-blue-400" aria-hidden="true" />
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Active Sector Reset Chip */}
+          {selectedSector !== "all" && (
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/10 border border-blue-500/30 text-blue-400 animate-in fade-in zoom-in-95">
+              <span>{currentSectorLabel}</span>
+              <button
+                type="button"
+                onClick={() => setSelectedSector("all")}
+                className="p-0.5 rounded-full hover:bg-blue-500/20 text-blue-300 hover:text-white transition-colors cursor-pointer"
+                aria-label={isTr ? "Sektör filtresini kaldır" : "Remove sector filter"}
+                title={isTr ? "Sektör filtresini kaldır" : "Remove sector filter"}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Counter readout */}
+        <div className="text-xs text-[var(--color-text-tertiary)] shrink-0 self-end sm:self-center">
+          <span className="font-bold text-[var(--color-text-primary)]">
+            {filteredCategories.length}
+          </span>{" "}
+          {isTr ? "uzmanlık listeleniyor" : "specializations listed"}
+        </div>
       </div>
 
       {/* Empty Filter State */}

@@ -3,9 +3,10 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import Link from "next/link";
 import {
-  Filter,
   X,
   ChevronRight,
+  ChevronDown,
+  Globe,
   Search,
   Sparkles,
   Code2,
@@ -50,19 +51,6 @@ const SECTOR_COLOR_MAP: Record<string, string> = {
   "sector-engineering-3d": "text-teal-400 bg-teal-500/10 border-teal-500/20",
   "sector-operations-support": "text-fuchsia-400 bg-fuchsia-500/10 border-fuchsia-500/20",
 };
-
-// Featured rail categories representing key sectors
-const FEATURED_RAIL_SLUGS = [
-  "web-development",
-  "ai-ml",
-  "ui-ux-design",
-  "search-engine-optimization",
-  "short-form-video",
-  "copywriting-sales",
-  "game-development",
-  "financial-modeling",
-  "contract-drafting-review",
-];
 
 export interface CategoryFilterBarProps {
   categories: CategoryDto[];
@@ -130,12 +118,40 @@ export function CategoryFilterBar({
     [categories, selectedCategory]
   );
 
-  // Featured categories for the primary horizontal rail
-  const railCategories = useMemo(() => {
-    return FEATURED_RAIL_SLUGS.map((slug) => categories.find((c) => c.slug === slug)).filter(
-      (c): c is CategoryDto => Boolean(c)
-    );
-  }, [categories]);
+  const [quickDropdownOpen, setQuickDropdownOpen] = useState(false);
+  const [quickSearchQuery, setQuickSearchQuery] = useState("");
+  const quickDropdownRef = useRef<HTMLDivElement>(null);
+  const quickInputRef = useRef<HTMLInputElement>(null);
+
+  // Close quick dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (quickDropdownRef.current && !quickDropdownRef.current.contains(e.target as Node)) {
+        setQuickDropdownOpen(false);
+      }
+    }
+    if (quickDropdownOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [quickDropdownOpen]);
+
+  // Close quick dropdown on Escape
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setQuickDropdownOpen(false);
+      }
+    }
+    if (quickDropdownOpen) {
+      document.addEventListener("keydown", handleKeyDown);
+    }
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [quickDropdownOpen]);
 
   // Categories filtered inside the popover/modal
   const filteredModalCategories = useMemo(() => {
@@ -148,6 +164,25 @@ export function CategoryFilterBar({
         (c.description && c.description.toLowerCase().includes(q))
     );
   }, [categories, searchFilter]);
+
+  // Categories filtered inside the quick combobox dropdown
+  const quickFilteredCategories = useMemo(() => {
+    const q = quickSearchQuery.toLowerCase().trim();
+    if (!q) return categories;
+    return categories.filter((c) => {
+      const sector = SEED_SECTORS.find((s) => s.key === c.sectorKey);
+      const sectorName = sector
+        ? isTr
+          ? sector.translations.tr.name
+          : sector.translations.en.name
+        : "";
+      return (
+        c.name.toLowerCase().includes(q) ||
+        c.slug.toLowerCase().includes(q) ||
+        sectorName.toLowerCase().includes(q)
+      );
+    });
+  }, [categories, quickSearchQuery, isTr]);
 
   // Close modal on Escape or outside click
   useEffect(() => {
@@ -170,98 +205,238 @@ export function CategoryFilterBar({
     };
   }, [modalOpen]);
 
+  const selectedSector = selectedCatObj
+    ? SEED_SECTORS.find((s) => s.key === selectedCatObj.sectorKey)
+    : null;
+  const ActiveQuickIcon = selectedSector
+    ? SECTOR_ICON_MAP[selectedSector.key] || Code2
+    : selectedCategory
+      ? Code2
+      : Globe;
+
   return (
     <div className="space-y-2.5">
-      {/* Top Header Bar: Title, Active Chip & "All Categories" Action */}
-      <div className="flex flex-wrap items-center justify-between gap-2.5 text-xs">
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-center gap-1.5 font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider text-[11px]">
-            <Filter className="h-3.5 w-3.5 text-blue-500" aria-hidden="true" />
-            <span>{isTr ? "Kategori Filtresi" : "Category Filter"}</span>
-          </div>
-
-          {/* Active Category Chip */}
-          {selectedCatObj && (
-            <div className="inline-flex items-center gap-1.5 rounded-full bg-blue-500/10 border border-blue-500/30 px-3 py-1 text-xs font-semibold text-blue-400 animate-in fade-in zoom-in-95 duration-200">
-              <span>{selectedCatObj.name}</span>
-              <Link
-                href={buildHref(undefined)}
-                className="rounded-full hover:bg-blue-500/20 p-0.5 text-blue-300 hover:text-white transition-colors"
-                aria-label={isTr ? "Filtreyi Kaldır" : "Remove Filter"}
-                title={isTr ? "Filtreyi Kaldır" : "Remove Filter"}
-              >
-                <X className="h-3 w-3" aria-hidden="true" />
-              </Link>
-            </div>
-          )}
-
-          {typeof resultCount === "number" && (
-            <span className="text-[11px] text-[var(--color-text-tertiary)] hidden sm:inline">
-              ({resultCount} {isTr ? "ilan" : "listings"})
-            </span>
-          )}
-        </div>
-
-        {/* Modal / Drawer Trigger */}
-        <button
-          type="button"
-          onClick={() => setModalOpen(true)}
-          className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-hover)] px-3 py-1.5 text-xs font-medium text-[var(--color-text-primary)] hover:border-blue-500/40 hover:text-blue-400 transition-all cursor-pointer shadow-xs"
-        >
-          <LayoutGrid className="h-3.5 w-3.5 text-blue-400" aria-hidden="true" />
-          <span>
-            {isTr
-              ? `Tüm Kategoriler (${categories.length})`
-              : `All Categories (${categories.length})`}
-          </span>
-          <ChevronRight className="h-3.5 w-3.5 opacity-60" aria-hidden="true" />
-        </button>
-      </div>
-
-      {/* Horizontal Scroll Rail (Single Clean Row) */}
-      <div className="relative group">
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-0.5 scrollbar-none [-ms-overflow-style:none] [scrollbar-width:none]">
-          {/* "All" button */}
-          <Link
-            href={buildHref(undefined)}
-            className={`rounded-xl px-3.5 py-1.5 text-xs font-medium shrink-0 transition-all cursor-pointer ${
-              !selectedCategory
-                ? "bg-blue-600 text-white shadow-xs font-semibold"
-                : "border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/80 text-[var(--color-text-secondary)] hover:border-[var(--color-border-strong)] hover:text-[var(--color-text-primary)]"
+      {/* Searchable Quick Category Combobox Button (Replaces horizontal scroll rail) */}
+      <div className="relative" ref={quickDropdownRef}>
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+          {/* Combobox Trigger Button / Input */}
+          <div
+            className={`relative flex-1 max-w-xl h-11 px-3.5 rounded-2xl bg-[var(--color-surface-hover)] border transition-all flex items-center gap-2.5 shadow-xs ${
+              quickDropdownOpen
+                ? "border-blue-500 ring-2 ring-blue-500/20 bg-[var(--color-surface-base)]"
+                : "border-[var(--color-border-subtle)] hover:border-blue-500/40"
             }`}
           >
-            {isTr ? "Tüm Alanlar" : "All Fields"}
-          </Link>
+            <div className="h-7 w-7 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center shrink-0">
+              <ActiveQuickIcon className="h-4 w-4" aria-hidden="true" />
+            </div>
 
-          {/* Featured Top Categories */}
-          {railCategories.map((cat) => {
-            const isSelected = selectedCategory === cat.slug;
-            return (
+            <input
+              type="text"
+              ref={quickInputRef}
+              value={
+                quickDropdownOpen
+                  ? quickSearchQuery
+                  : selectedCatObj
+                    ? selectedCatObj.name
+                    : isTr
+                      ? `Tüm Alanlar & Kategoriler (${categories.length})`
+                      : `All Fields & Categories (${categories.length})`
+              }
+              onChange={(e) => {
+                setQuickSearchQuery(e.target.value);
+                if (!quickDropdownOpen) setQuickDropdownOpen(true);
+              }}
+              onFocus={() => setQuickDropdownOpen(true)}
+              placeholder={
+                isTr
+                  ? "Kategori ara veya yazın (örn: Unity, Frontend, UI/UX)..."
+                  : "Search or type category (e.g. Unity, Frontend)..."
+              }
+              aria-label={isTr ? "Kategori filtresi" : "Category filter"}
+              className="flex-1 min-w-0 bg-transparent text-xs text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:outline-none font-medium truncate"
+            />
+
+            {quickDropdownOpen && quickSearchQuery ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setQuickSearchQuery("");
+                }}
+                className="p-1 rounded-md text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-base)]"
+                aria-label={isTr ? "Aramayı temizle" : "Clear search"}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            ) : selectedCategory ? (
               <Link
-                key={cat.id}
-                href={buildHref(cat.slug)}
-                className={`rounded-xl px-3.5 py-1.5 text-xs font-medium shrink-0 transition-all cursor-pointer ${
-                  isSelected
-                    ? "bg-blue-600 text-white shadow-xs font-semibold"
-                    : "border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/80 text-[var(--color-text-secondary)] hover:border-[var(--color-border-strong)] hover:text-[var(--color-text-primary)]"
+                href={buildHref(undefined)}
+                onClick={(e) => e.stopPropagation()}
+                className="p-1 rounded-md text-blue-400 hover:text-white hover:bg-blue-500/20 transition-colors"
+                aria-label={isTr ? "Filtreyi kaldır" : "Clear filter"}
+                title={isTr ? "Filtreyi kaldır" : "Clear filter"}
+              >
+                <X className="h-3 w-3" />
+              </Link>
+            ) : null}
+
+            <button
+              type="button"
+              onClick={() => {
+                setQuickDropdownOpen((prev) => !prev);
+                if (!quickDropdownOpen) {
+                  setTimeout(() => quickInputRef.current?.focus(), 50);
+                }
+              }}
+              className="p-1 text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] transition-colors cursor-pointer"
+              aria-label={isTr ? "Kategori menüsünü aç" : "Toggle category menu"}
+            >
+              <ChevronDown
+                className={`h-4 w-4 transition-transform duration-200 ${
+                  quickDropdownOpen ? "rotate-180 text-blue-400" : ""
+                }`}
+              />
+            </button>
+          </div>
+
+          {/* Action Buttons & Counter */}
+          <div className="flex items-center gap-2.5 self-end sm:self-center shrink-0">
+            {typeof resultCount === "number" && (
+              <span className="text-xs text-[var(--color-text-tertiary)] hidden sm:inline">
+                <strong className="text-[var(--color-text-primary)]">{resultCount}</strong>{" "}
+                {isTr ? "ilan" : "listings"}
+              </span>
+            )}
+
+            {/* Modal / Grid Matrix Trigger */}
+            <button
+              type="button"
+              onClick={() => setModalOpen(true)}
+              className="inline-flex items-center gap-2 h-11 px-4 rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-hover)] text-xs font-semibold text-[var(--color-text-primary)] hover:border-blue-500/40 hover:text-blue-400 transition-all cursor-pointer shadow-xs whitespace-nowrap"
+            >
+              <LayoutGrid className="h-4 w-4 text-blue-400" aria-hidden="true" />
+              <span>
+                {isTr
+                  ? `Sektör Matrisi (${categories.length})`
+                  : `Sector Matrix (${categories.length})`}
+              </span>
+              <ChevronRight className="h-3.5 w-3.5 opacity-60" aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+
+        {/* Dropdown Menu (Shows 10 items in viewport, scrollable) */}
+        {quickDropdownOpen && (
+          <div className="absolute top-full left-0 mt-2 w-full max-w-xl rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/95 backdrop-blur-xl shadow-2xl p-1.5 z-40 animate-in fade-in zoom-in-95 duration-150">
+            <div className="max-h-[415px] overflow-y-auto space-y-1 p-0.5 scrollbar-thin">
+              {/* Option 0: All Categories */}
+              <Link
+                href={buildHref(undefined)}
+                onClick={() => {
+                  setQuickDropdownOpen(false);
+                  setQuickSearchQuery("");
+                }}
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs transition-colors cursor-pointer ${
+                  !selectedCategory
+                    ? "bg-blue-600/15 text-blue-400 border border-blue-500/30 font-semibold"
+                    : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]"
                 }`}
               >
-                {cat.name}
+                <div className="flex items-center gap-2.5">
+                  <div className="h-7 w-7 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center shrink-0">
+                    <Globe className="h-3.5 w-3.5" aria-hidden="true" />
+                  </div>
+                  <div>
+                    <p className="font-semibold">{isTr ? "Tüm Alanlar" : "All Fields"}</p>
+                    <p className="text-[10px] text-[var(--color-text-tertiary)]">
+                      {isTr
+                        ? `10 sektördeki ${categories.length} uzmanlık kategorisinin tamamı`
+                        : `All ${categories.length} categories across 10 sectors`}
+                    </p>
+                  </div>
+                </div>
+                {!selectedCategory && (
+                  <Check className="h-4 w-4 text-blue-400" aria-hidden="true" />
+                )}
               </Link>
-            );
-          })}
 
-          {/* "More..." button on rail */}
-          <button
-            type="button"
-            onClick={() => setModalOpen(true)}
-            className="rounded-xl border border-dashed border-[var(--color-border-strong)] bg-[var(--color-surface-base)]/40 px-3 py-1.5 text-xs font-medium text-blue-400 hover:border-blue-500 hover:bg-blue-500/10 shrink-0 transition-all cursor-pointer inline-flex items-center gap-1"
-          >
-            <span>
-              +{categories.length - railCategories.length} {isTr ? "daha..." : "more..."}
-            </span>
-          </button>
-        </div>
+              {/* Matching Categories */}
+              {quickFilteredCategories.length === 0 ? (
+                <div className="p-6 text-center space-y-2">
+                  <p className="text-xs text-[var(--color-text-tertiary)]">
+                    {isTr
+                      ? "Aramanızla eşleşen kategori bulunamadı."
+                      : "No matching categories found."}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setQuickSearchQuery("")}
+                    className="text-xs text-blue-400 hover:underline cursor-pointer"
+                  >
+                    {isTr ? "Aramayı temizle" : "Clear search"}
+                  </button>
+                </div>
+              ) : (
+                quickFilteredCategories.map((cat) => {
+                  const isSelected = selectedCategory === cat.slug;
+                  const sector = SEED_SECTORS.find((s) => s.key === cat.sectorKey);
+                  const sectorName = sector
+                    ? isTr
+                      ? sector.translations.tr.name
+                      : sector.translations.en.name
+                    : "";
+                  const SectorIcon = (sector && SECTOR_ICON_MAP[sector.key]) || Code2;
+
+                  return (
+                    <Link
+                      key={cat.id}
+                      href={buildHref(cat.slug)}
+                      onClick={() => {
+                        setQuickDropdownOpen(false);
+                        setQuickSearchQuery("");
+                      }}
+                      className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs transition-colors cursor-pointer ${
+                        isSelected
+                          ? "bg-blue-600/15 text-blue-400 border border-blue-500/30 font-semibold"
+                          : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                        <div
+                          className={`h-7 w-7 rounded-lg flex items-center justify-center shrink-0 ${
+                            isSelected
+                              ? "bg-blue-500/20 text-blue-400"
+                              : "bg-[var(--color-surface-hover)] text-[var(--color-text-tertiary)]"
+                          }`}
+                        >
+                          <SectorIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-semibold truncate">{cat.name}</p>
+                          {sectorName && (
+                            <p className="text-[10px] text-[var(--color-text-tertiary)] truncate opacity-80">
+                              {sectorName}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="font-mono text-[10px] text-[var(--color-text-tertiary)] bg-[var(--color-surface-hover)] px-1.5 py-0.5 rounded">
+                          /{cat.slug}
+                        </span>
+                        {isSelected && (
+                          <Check className="h-4 w-4 text-blue-400" aria-hidden="true" />
+                        )}
+                      </div>
+                    </Link>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Categorized Popover / Modal with Live Search */}

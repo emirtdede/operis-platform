@@ -107,7 +107,7 @@ export function SentOffersDashboard({ initialOffers, locale }: SentOffersDashboa
   return (
     <div className="space-y-6">
       {/* Filter Tabs */}
-      <div className="flex items-center gap-1 border-b border-[var(--color-border-subtle)] pb-4 overflow-x-auto">
+      <div className="flex flex-wrap items-center gap-1.5 border-b border-[var(--color-border-subtle)] pb-4">
         {(["all", "pending", "accepted", "rejected", "cancelled", "withdrawn"] as const).map(
           (f) => (
             <button
