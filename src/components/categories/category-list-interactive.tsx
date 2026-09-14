@@ -570,7 +570,15 @@ export function CategoryListInteractive({
 
             {/* Dropdown Menu (Shows 10 items in viewport, scrollable) */}
             {isSectorDropdownOpen && (
-              <div className="absolute top-full left-0 mt-2 w-full min-w-[320px] rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/98 backdrop-blur-2xl shadow-2xl p-1.5 z-[100] animate-in fade-in zoom-in-95 duration-150">
+              <div
+                className="absolute top-full left-0 mt-2 w-full min-w-[320px] sm:min-w-[420px] rounded-2xl border p-1.5 z-[100] animate-in fade-in zoom-in-95 duration-150"
+                style={{
+                  backgroundColor: "var(--bg-elevated)",
+                  borderColor: "var(--border-strong)",
+                  boxShadow:
+                    "0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--border-subtle)",
+                }}
+              >
                 <div className="max-h-[415px] overflow-y-auto space-y-1 p-0.5 scrollbar-thin">
                   {sectorOptions.length === 0 ? (
                     <div className="p-6 text-center space-y-2">
