@@ -175,6 +175,7 @@ export interface CategoryListInteractiveProps {
   initialFollowedIds: string[];
   locale: string;
   hasSession?: boolean;
+  initialSector?: string;
 }
 
 export function CategoryListInteractive({
@@ -182,9 +183,10 @@ export function CategoryListInteractive({
   initialFollowedIds,
   locale,
   hasSession = false,
+  initialSector = "all",
 }: CategoryListInteractiveProps) {
   const isTr = locale === "tr";
-  const [selectedSector, setSelectedSector] = useState<string>("all");
+  const [selectedSector, setSelectedSector] = useState<string>(initialSector);
   const [searchQuery, setSearchQuery] = useState("");
   const [followedIds, setFollowedIds] = useState<Set<string>>(new Set(initialFollowedIds));
   const [isLoading, setIsLoading] = useState(false);

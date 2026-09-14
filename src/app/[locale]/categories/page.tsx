@@ -52,8 +52,16 @@ export async function generateMetadata({
 
 export const dynamic = "force-dynamic";
 
-export default async function CategoriesPage({ params }: { params: Promise<{ locale: string }> }) {
+export default async function CategoriesPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ locale: string }>;
+  searchParams?: Promise<{ sector?: string }>;
+}) {
   const { locale } = await params;
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  const initialSector = resolvedSearchParams?.sector || "all";
   setRequestLocale(locale);
 
   const isTr = locale === "tr";
@@ -165,6 +173,7 @@ export default async function CategoriesPage({ params }: { params: Promise<{ loc
           initialFollowedIds={initialFollowedIds}
           locale={locale}
           hasSession={Boolean(session?.userId)}
+          initialSector={initialSector}
         />
       </section>
     </main>

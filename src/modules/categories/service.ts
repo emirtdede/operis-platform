@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { eq, and, asc, inArray } from "drizzle-orm";
+import { eq, and, asc, inArray, isNotNull } from "drizzle-orm";
 import { getDb, schema } from "@/src/lib/db";
 import { Locale } from "@/src/lib/i18n/config";
 import { SEED_CATEGORIES, SEED_SECTORS } from "@/db/seeds/categories";
@@ -136,7 +136,7 @@ export class CategoryService {
           isActive: schema.categories.isActive,
         })
         .from(schema.categories)
-        .where(eq(schema.categories.isActive, true))
+        .where(and(eq(schema.categories.isActive, true), isNotNull(schema.categories.parentId)))
         .orderBy(asc(schema.categories.sortOrder));
 
       if (categoryRows && categoryRows.length > 0) {
