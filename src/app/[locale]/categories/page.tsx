@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { setRequestLocale } from "next-intl/server";
-import { ShieldCheck, Lock } from "lucide-react";
+import { ShieldCheck } from "lucide-react";
 import { getSession } from "@/src/modules/auth/session";
 import { CategoryService } from "@/src/modules/categories/service";
 import { CategoryListInteractive } from "@/src/components/categories/category-list-interactive";
@@ -128,43 +128,22 @@ export default async function CategoriesPage({
       />
 
       {/* Header */}
-      <header className="border-b border-[var(--color-border-subtle)] pb-8 space-y-3">
-        <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-[var(--color-text-primary)]">
-          {isTr ? "Sektörler ve Uzmanlık Kategorileri" : "Sectors & Expertise Categories"}
-        </h1>
-        <p className="text-sm sm:text-base text-[var(--color-text-secondary)] max-w-2xl leading-relaxed">
-          {isTr
-            ? "Yazılım, tasarım, pazarlama, yapay zeka, finans ve hukuk gibi 10 ana sektördeki kategorileri takip ederek ilan akışınızı kişiselleştirin. Takip tercihleriniz tamamen gizlidir."
-            : "Follow categories across 10 major industry sectors to customize your direct listings feed. Your follow choices are strictly private."}
-        </p>
-      </header>
-
-      {/* Privacy & Follow Guidance Banner */}
-      <section
-        aria-label={isTr ? "Kategori Rehberi" : "Category Guide"}
-        className="rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-      >
-        <div className="flex items-start gap-3">
-          <Lock className="h-5 w-5 text-indigo-400 shrink-0 mt-0.5" aria-hidden="true" />
-          <div className="space-y-1 text-xs sm:text-sm text-[var(--color-text-secondary)] leading-relaxed">
-            <span className="font-semibold text-[var(--color-text-primary)] block">
-              {isTr
-                ? "Gizli Takip ve Doğrudan Akış Entegrasyonu"
-                : "Private Following & Direct Feed Integration"}
-            </span>
-            <p>
-              {isTr
-                ? "Bir kategoriyi takip ettiğinizde o alandaki tüm yeni ve yenilenen ilanlar 'Takip Ettiklerim' akışınıza eklenir. Takip tercihleriniz tamamen gizlidir."
-                : "Following a category adds fresh listings directly to your personalized 'Following' feed. Your follow choices are never publicly visible."}
-            </p>
+      <header className="space-y-3 pb-2">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-[var(--color-text-primary)]">
+            {isTr ? "Sektörler ve Uzmanlık Kategorileri" : "Sectors & Expertise Categories"}
+          </h1>
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold self-start sm:self-auto shrink-0 shadow-xs">
+            <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
+            <span>{isTr ? "Uçtan Uca Gizli Takip" : "100% Private Follow"}</span>
           </div>
         </div>
-
-        <div className="shrink-0 flex items-center gap-1.5 text-xs font-semibold text-emerald-400 self-end sm:self-center">
-          <ShieldCheck className="h-4 w-4" aria-hidden="true" />
-          <span>{isTr ? "Tamamen Gizli" : "100% Private"}</span>
-        </div>
-      </section>
+        <p className="text-sm sm:text-base text-[var(--color-text-secondary)] max-w-3xl leading-relaxed">
+          {isTr
+            ? "10 ana sektördeki 106 uzmanlık alanını takip ederek doğrudan ilan akışınızı kişiselleştirin. Takip tercihleriniz profilinizde asla herkese açık paylaşılmaz."
+            : "Explore and follow specializations across 10 major industry sectors to personalize your direct feed. Your choices remain strictly confidential."}
+        </p>
+      </header>
 
       {/* Interactive Category List */}
       <section aria-label={isTr ? "Kategori Listesi" : "Category List"}>

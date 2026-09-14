@@ -10,7 +10,6 @@ import {
   Search,
   X,
   ChevronDown,
-  Filter,
   Globe,
   Smartphone,
   Monitor,
@@ -253,6 +252,10 @@ export function CategoryListInteractive({
     return matchesSearch && matchesSector;
   });
 
+  const filteredListingCount = useMemo(() => {
+    return filteredCategories.reduce((acc, cat) => acc + (cat.listingCount || 0), 0);
+  }, [filteredCategories]);
+
   const loginUrl = `${isTr ? "/tr/giris" : "/en/login"}?returnUrl=${encodeURIComponent(isTr ? "/tr/kategoriler" : "/en/categories")}`;
 
   const handleToggle = async (categoryId: string) => {
@@ -449,142 +452,51 @@ export function CategoryListInteractive({
   }, [categories, isTr, sectorSearchQuery]);
 
   return (
-    <div className="space-y-8">
-      {/* Top Glass Action Control Panel with Search */}
-      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 rounded-3xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/80 p-5 backdrop-blur-xl shadow-sm">
-        {/* Search Bar */}
-        <div className="relative flex-1 max-w-md">
-          <Search
-            className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--color-text-tertiary)]"
-            aria-hidden="true"
-          />
-          <input
-            type="search"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={
-              isTr
-                ? "Kategori ara (örn. Frontend, Unity, Yapay Zeka)..."
-                : "Filter categories (e.g. Frontend, Unity, Cloud)..."
-            }
-            aria-label={isTr ? "Kategori filtrele" : "Filter categories"}
-            className="w-full h-10 rounded-xl bg-[var(--color-surface-hover)] border border-[var(--color-border-subtle)] pl-10 pr-9 text-xs text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
-          />
-          {searchQuery && (
-            <button
-              type="button"
-              onClick={() => setSearchQuery("")}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-md text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-base)] transition-colors"
-              aria-label={isTr ? "Aramayı temizle" : "Clear search"}
-              title={isTr ? "Aramayı temizle" : "Clear search"}
-            >
-              <X className="h-3.5 w-3.5" aria-hidden="true" />
-            </button>
-          )}
-        </div>
-
-        {/* Status Count & Batch Actions */}
-        <div className="flex flex-wrap items-center justify-between md:justify-end gap-3.5">
-          <div className="flex items-center gap-2 text-xs text-[var(--color-text-secondary)]">
-            <BookmarkCheck className="h-4 w-4 text-blue-500 shrink-0" aria-hidden="true" />
-            <span>
-              <strong className="font-bold text-[var(--color-text-primary)]">
-                {followedIds.size}
-              </strong>{" "}
-              {isTr ? "takip ediliyor" : "actively followed"}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Button variant="secondary" size="sm" onClick={handleFollowAll} disabled={isLoading}>
-              {isTr ? "Tümünü Takip Et" : "Follow All"}
-            </Button>
-            <Button variant="ghost" size="sm" onClick={handleUnfollowAll} disabled={isLoading}>
-              {isTr ? "Tümünü Bırak" : "Unfollow All"}
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      {/* Modern Searchable Sector Dropdown Combobox Menu (Replaces horizontal pill scrollbar) */}
+    <div className="space-y-6">
+      {/* Single Unified Modern Command Bar (Seçenek A) */}
       <div
-        className={`relative flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-3xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/50 backdrop-blur-md transition-all ${
-          isSectorDropdownOpen ? "z-50 ring-1 ring-blue-500/20" : "z-20"
+        className={`relative rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/85 backdrop-blur-xl p-2 sm:p-2.5 shadow-sm transition-all ${
+          isSectorDropdownOpen ? "z-50 ring-1 ring-blue-500/25 border-blue-500/40" : "z-20"
         }`}
       >
-        <div className="flex items-center gap-3 flex-wrap">
-          <span className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider flex items-center gap-1.5">
-            <Filter className="h-3.5 w-3.5 text-blue-500" aria-hidden="true" />
-            <span>{isTr ? "Sektör:" : "Sector:"}</span>
-          </span>
-
-          {/* Interactive Combobox Trigger Button */}
-          <div className="relative z-50 w-full sm:w-80 md:w-96" ref={sectorDropdownRef}>
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+          {/* Sektör Seçici Combobox Tetikleyici (Sol Entegre) */}
+          <div className="relative z-50 shrink-0 w-full sm:w-auto" ref={sectorDropdownRef}>
             <div
-              className={`w-full h-11 px-3.5 rounded-2xl bg-[var(--color-surface-hover)] border transition-all flex items-center gap-2.5 shadow-xs ${
+              className={`w-full sm:w-72 md:w-80 h-10 px-3 rounded-xl transition-all flex items-center justify-between gap-2 text-left cursor-pointer border select-none ${
                 isSectorDropdownOpen
-                  ? "border-blue-500 ring-2 ring-blue-500/20 bg-[var(--color-surface-base)]"
-                  : "border-[var(--color-border-subtle)] hover:border-blue-500/40"
+                  ? "bg-blue-500/10 border-blue-500/40 text-[var(--color-text-primary)]"
+                  : "bg-[var(--color-surface-hover)] hover:bg-[var(--color-surface-hover)]/80 border-[var(--color-border-subtle)]/70 text-[var(--color-text-primary)]"
               }`}
+              onClick={() => {
+                setIsSectorDropdownOpen((prev) => !prev);
+                if (!isSectorDropdownOpen) {
+                  setTimeout(() => sectorInputRef.current?.focus(), 50);
+                }
+              }}
             >
-              <div className="h-7 w-7 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center shrink-0">
-                <ActiveSectorIcon className="h-4 w-4" aria-hidden="true" />
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                <div className="h-6 w-6 rounded-lg bg-blue-500/15 text-blue-400 flex items-center justify-center shrink-0">
+                  <ActiveSectorIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                </div>
+                <span className="text-xs font-semibold truncate">
+                  {currentSectorLabel}
+                </span>
               </div>
 
-              <input
-                type="text"
-                ref={sectorInputRef}
-                value={isSectorDropdownOpen ? sectorSearchQuery : currentSectorLabel}
-                onChange={(e) => {
-                  setSectorSearchQuery(e.target.value);
-                  if (!isSectorDropdownOpen) setIsSectorDropdownOpen(true);
-                }}
-                onFocus={() => {
-                  setIsSectorDropdownOpen(true);
-                }}
-                placeholder={isTr ? "Sektör ara veya yazın..." : "Search or type sector..."}
-                aria-label={isTr ? "Sektör filtresi" : "Sector filter"}
-                className="flex-1 min-w-0 bg-transparent text-xs text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:outline-none font-medium truncate"
-              />
-
-              {isSectorDropdownOpen && sectorSearchQuery ? (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSectorSearchQuery("");
-                  }}
-                  className="p-1 rounded-md text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-base)]"
-                  aria-label={isTr ? "Temizle" : "Clear"}
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              ) : (
-                <span className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-[var(--color-surface-base)] text-[var(--color-text-secondary)] border border-[var(--color-border-subtle)] shrink-0">
+              <div className="flex items-center gap-1.5 shrink-0">
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[var(--color-surface-base)] text-[var(--color-text-secondary)] border border-[var(--color-border-subtle)]">
                   {currentSectorCount} {isTr ? "alan" : "areas"} • {currentSectorListingCount} {isTr ? "ilan" : "listings"}
                 </span>
-              )}
-
-              <button
-                type="button"
-                onClick={() => {
-                  setIsSectorDropdownOpen((prev) => !prev);
-                  if (!isSectorDropdownOpen) {
-                    setTimeout(() => sectorInputRef.current?.focus(), 50);
-                  }
-                }}
-                className="p-1 text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] transition-colors cursor-pointer"
-                aria-label={isTr ? "Menüyü Aç" : "Toggle Menu"}
-              >
                 <ChevronDown
-                  className={`h-4 w-4 transition-transform duration-200 ${
+                  className={`h-3.5 w-3.5 text-[var(--color-text-tertiary)] transition-transform duration-200 ${
                     isSectorDropdownOpen ? "rotate-180 text-blue-400" : ""
                   }`}
                 />
-              </button>
+              </div>
             </div>
 
-            {/* Dropdown Menu (Shows 10 items in viewport, scrollable) */}
+            {/* Dropdown Menu (With Search Filter Inside Popover) */}
             {isSectorDropdownOpen && (
               <div
                 className="absolute top-full left-0 mt-2 w-full min-w-[320px] sm:min-w-[440px] rounded-2xl border p-1.5 z-[100] animate-in fade-in zoom-in-95 duration-150"
@@ -595,7 +507,30 @@ export function CategoryListInteractive({
                     "0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--border-subtle)",
                 }}
               >
-                <div className="max-h-[415px] overflow-y-auto space-y-1 p-0.5 scrollbar-thin">
+                <div className="p-1 mb-1">
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--color-text-tertiary)]" />
+                    <input
+                      type="text"
+                      ref={sectorInputRef}
+                      value={sectorSearchQuery}
+                      onChange={(e) => setSectorSearchQuery(e.target.value)}
+                      placeholder={isTr ? "Sektör ara..." : "Filter sector..."}
+                      className="w-full h-8 pl-8 pr-7 rounded-lg bg-[var(--color-surface-hover)] border border-[var(--color-border-subtle)] text-xs text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:outline-none focus:border-blue-500"
+                    />
+                    {sectorSearchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setSectorSearchQuery("")}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)]"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="max-h-[380px] overflow-y-auto space-y-1 p-0.5 scrollbar-thin">
                   {sectorOptions.length === 0 ? (
                     <div className="p-6 text-center space-y-2">
                       <p className="text-xs text-[var(--color-text-tertiary)]">
@@ -674,34 +609,109 @@ export function CategoryListInteractive({
             )}
           </div>
 
-          {/* Active Sector Reset Chip */}
-          {selectedSector !== "all" && (
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/10 border border-blue-500/30 text-blue-400 animate-in fade-in zoom-in-95">
-              <span>{currentSectorLabel}</span>
+          {/* Dikey İnce Ayraç (Masaüstü) */}
+          <div className="hidden sm:block h-6 w-px bg-[var(--color-border-subtle)]/70 mx-0.5" />
+
+          {/* Akıcı Kategori ve Beceri Arama Girdisi */}
+          <div className="relative flex-1">
+            <Search
+              className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--color-text-tertiary)]"
+              aria-hidden="true"
+            />
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={
+                isTr
+                  ? "Kategori veya beceri ara (örn. Frontend, Unity, Next.js, SEO)..."
+                  : "Filter specializations (e.g. Frontend, Unity, Next.js, Cloud)..."
+              }
+              aria-label={isTr ? "Kategori filtrele" : "Filter categories"}
+              className="w-full h-10 rounded-xl bg-transparent border-none pl-9 pr-8 text-xs text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:outline-none transition-all"
+            />
+            {searchQuery && (
               <button
                 type="button"
-                onClick={() => setSelectedSector("all")}
-                className="p-0.5 rounded-full hover:bg-blue-500/20 text-blue-300 hover:text-white transition-colors cursor-pointer"
-                aria-label={isTr ? "Sektör filtresini kaldır" : "Remove sector filter"}
-                title={isTr ? "Sektör filtresini kaldır" : "Remove sector filter"}
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-md text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)] transition-colors"
+                aria-label={isTr ? "Aramayı temizle" : "Clear search"}
+                title={isTr ? "Aramayı temizle" : "Clear search"}
               >
-                <X className="h-3 w-3" />
+                <X className="h-3.5 w-3.5" aria-hidden="true" />
               </button>
-            </div>
+            )}
+          </div>
+
+          {/* Aktif Sektör Sıfırlama Rozeti (Eğer sektör seçiliyse) */}
+          {selectedSector !== "all" && (
+            <button
+              type="button"
+              onClick={() => setSelectedSector("all")}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 transition-colors shrink-0 cursor-pointer"
+              title={isTr ? "Sektör filtresini sıfırla" : "Reset sector filter"}
+            >
+              <span>{isTr ? "Filtreyi Sıfırla" : "Reset Filter"}</span>
+              <X className="h-3 w-3" />
+            </button>
           )}
         </div>
+      </div>
 
-        {/* Counter readout */}
-        <div className="text-xs text-[var(--color-text-tertiary)] shrink-0 self-end sm:self-center flex items-center gap-1.5">
-          <span className="font-bold text-[var(--color-text-primary)]">
-            {filteredCategories.length}
-          </span>{" "}
-          <span>{isTr ? "uzmanlık" : "specializations"}</span>
+      {/* Frameless Meta Bar (Kutusuz, Temiz Zemin Bilgi & Aksiyon Satırı) */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-1 text-xs -mt-2">
+        {/* Sol: Canlı İlan ve Uzmanlık Sayacı */}
+        <div className="flex items-center gap-2 text-[var(--color-text-secondary)] font-medium">
+          <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+          <span>
+            <strong className="font-bold text-[var(--color-text-primary)]">
+              {filteredCategories.length}
+            </strong>{" "}
+            {isTr ? "uzmanlık" : "specializations"}
+          </span>
           <span className="opacity-40">•</span>
-          <span className="font-bold text-blue-400">
-            {filteredCategories.reduce((acc, cat) => acc + (cat.listingCount || 0), 0)}
-          </span>{" "}
-          <span>{isTr ? "aktif ilan listeleniyor" : "active listings live"}</span>
+          <span>
+            <strong className="font-bold text-blue-400">
+              {filteredListingCount}
+            </strong>{" "}
+            {isTr ? "aktif ilan listeleniyor" : "active listings"}
+          </span>
+        </div>
+
+        {/* Sağ: Takip Durumu & Toplu Aksiyonlar */}
+        <div className="flex items-center gap-3 self-end sm:self-auto flex-wrap">
+          <div className="inline-flex items-center gap-1.5 text-xs text-[var(--color-text-secondary)]">
+            <BookmarkCheck className="h-3.5 w-3.5 text-blue-400" aria-hidden="true" />
+            <span>
+              <strong className="font-semibold text-[var(--color-text-primary)]">
+                {followedIds.size}
+              </strong>{" "}
+              {isTr ? "takip ediliyor" : "followed"}
+            </span>
+          </div>
+
+          <div className="h-3.5 w-px bg-[var(--color-border-subtle)] hidden sm:block" />
+
+          <div className="flex items-center gap-1.5">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleFollowAll}
+              disabled={isLoading}
+              className="h-7 px-2.5 text-xs font-medium"
+            >
+              {isTr ? "Tümünü Takip Et" : "Follow All"}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleUnfollowAll}
+              disabled={isLoading}
+              className="h-7 px-2.5 text-xs text-[var(--color-text-tertiary)] hover:text-red-400 font-medium"
+            >
+              {isTr ? "Tümünü Bırak" : "Unfollow All"}
+            </Button>
+          </div>
         </div>
       </div>
 
