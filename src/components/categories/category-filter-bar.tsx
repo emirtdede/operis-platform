@@ -217,7 +217,7 @@ export function CategoryFilterBar({
   return (
     <div className="space-y-2.5">
       {/* Searchable Quick Category Combobox Button (Replaces horizontal scroll rail) */}
-      <div className="relative" ref={quickDropdownRef}>
+      <div className={`relative ${quickDropdownOpen ? "z-50" : "z-10"}`} ref={quickDropdownRef}>
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
           {/* Combobox Trigger Button / Input */}
           <div
@@ -328,7 +328,7 @@ export function CategoryFilterBar({
 
         {/* Dropdown Menu (Shows 10 items in viewport, scrollable) */}
         {quickDropdownOpen && (
-          <div className="absolute top-full left-0 mt-2 w-full max-w-xl rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/95 backdrop-blur-xl shadow-2xl p-1.5 z-40 animate-in fade-in zoom-in-95 duration-150">
+          <div className="absolute top-full left-0 mt-2 w-full max-w-xl rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/98 backdrop-blur-2xl shadow-2xl p-1.5 z-[100] animate-in fade-in zoom-in-95 duration-150">
             <div className="max-h-[415px] overflow-y-auto space-y-1 p-0.5 scrollbar-thin">
               {/* Option 0: All Categories */}
               <Link

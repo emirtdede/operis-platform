@@ -491,7 +491,11 @@ export function CategoryListInteractive({
       </div>
 
       {/* Modern Searchable Sector Dropdown Combobox Menu (Replaces horizontal pill scrollbar) */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-3xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/50 backdrop-blur-md">
+      <div
+        className={`relative flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-3xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/50 backdrop-blur-md transition-all ${
+          isSectorDropdownOpen ? "z-50 ring-1 ring-blue-500/20" : "z-20"
+        }`}
+      >
         <div className="flex items-center gap-3 flex-wrap">
           <span className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider flex items-center gap-1.5">
             <Filter className="h-3.5 w-3.5 text-blue-500" aria-hidden="true" />
@@ -499,7 +503,7 @@ export function CategoryListInteractive({
           </span>
 
           {/* Interactive Combobox Trigger Button */}
-          <div className="relative w-full sm:w-80 md:w-96" ref={sectorDropdownRef}>
+          <div className="relative z-50 w-full sm:w-80 md:w-96" ref={sectorDropdownRef}>
             <div
               className={`w-full h-11 px-3.5 rounded-2xl bg-[var(--color-surface-hover)] border transition-all flex items-center gap-2.5 shadow-xs ${
                 isSectorDropdownOpen
@@ -566,7 +570,7 @@ export function CategoryListInteractive({
 
             {/* Dropdown Menu (Shows 10 items in viewport, scrollable) */}
             {isSectorDropdownOpen && (
-              <div className="absolute top-full left-0 mt-2 w-full min-w-[320px] rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/95 backdrop-blur-xl shadow-2xl p-1.5 z-40 animate-in fade-in zoom-in-95 duration-150">
+              <div className="absolute top-full left-0 mt-2 w-full min-w-[320px] rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/98 backdrop-blur-2xl shadow-2xl p-1.5 z-[100] animate-in fade-in zoom-in-95 duration-150">
                 <div className="max-h-[415px] overflow-y-auto space-y-1 p-0.5 scrollbar-thin">
                   {sectorOptions.length === 0 ? (
                     <div className="p-6 text-center space-y-2">
@@ -693,7 +697,7 @@ export function CategoryListInteractive({
         </div>
       ) : (
         /* Grid of Dynamic Category Spotlight Cards */
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="relative z-0 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredCategories.map((cat) => {
             const isFollowed = followedIds.has(cat.id);
             const Icon = CATEGORY_ICONS[cat.slug] || Code2;
@@ -733,25 +737,15 @@ export function CategoryListInteractive({
                 </div>
 
                 <div className="mt-5 flex items-center justify-between pt-4 border-t border-[var(--color-border-subtle)]/60 shrink-0">
-                  <div className="flex items-center gap-2">
-                    <Link
-                      href={
-                        isTr ? `/tr/akis?category=${cat.slug}` : `/en/feed?category=${cat.slug}`
-                      }
-                      className="inline-flex items-center gap-1 text-xs font-semibold text-blue-500 hover:text-blue-400 transition-colors"
-                    >
-                      <span>{isTr ? "Projeler" : "Projects"}</span>
-                      <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
-                    </Link>
-
-                    <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-medium text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
-                      <span
-                        className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse"
-                        aria-hidden="true"
-                      />
-                      <span>{isTr ? "Aktif Radar" : "Live Radar"}</span>
-                    </span>
-                  </div>
+                  <Link
+                    href={
+                      isTr ? `/tr/akis?category=${cat.slug}` : `/en/feed?category=${cat.slug}`
+                    }
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-blue-500 hover:text-blue-400 transition-colors"
+                  >
+                    <span>{isTr ? "Projeler" : "Projects"}</span>
+                    <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                  </Link>
 
                   <Button
                     variant={isFollowed ? "secondary" : "primary"}
