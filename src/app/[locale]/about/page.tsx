@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { setRequestLocale } from "next-intl/server";
-import { Sparkles, ArrowRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 
 export async function generateMetadata({
@@ -36,10 +36,6 @@ export default async function AboutPage({ params }: { params: Promise<{ locale: 
     <main className="mx-auto max-w-4xl px-4 py-12 sm:px-6 lg:px-8 space-y-16">
       {/* Manifesto Hero */}
       <section className="text-center space-y-6 max-w-2xl mx-auto">
-        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-blue-500/30 bg-blue-500/10 text-xs font-semibold text-blue-400 shadow-sm">
-          <Sparkles className="h-4 w-4" aria-hidden="true" />
-          <span>{isTr ? "Operis Manifestosu" : "The Operis Manifesto"}</span>
-        </div>
         <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight text-[var(--color-text-primary)] leading-tight">
           {isTr
             ? "Mühendislerin Kazancına Ortak Olmayan Bağımsız Teknoloji Ağı"

@@ -1,6 +1,6 @@
 "use client";
 
-import { Star, CheckCircle2, MessageSquare, Building2, Code2, Cloud } from "lucide-react";
+import { Star, CheckCircle2, Building2, Code2, Cloud } from "lucide-react";
 import { SpotlightCard } from "@/src/components/ui/spotlight-card";
 
 interface TestimonialsSectionProps {
@@ -54,11 +54,6 @@ export function TestimonialsSection({ isTr = true }: TestimonialsSectionProps) {
     <section className="w-full max-w-6xl mx-auto px-4 py-10 sm:py-14">
       {/* Section Header */}
       <div className="text-center space-y-3 max-w-3xl mx-auto mb-10">
-        <div className="inline-flex items-center gap-2 rounded-full border border-blue-500/30 bg-blue-500/10 px-3.5 py-1 text-xs font-semibold text-blue-400">
-          <MessageSquare className="h-3.5 w-3.5" aria-hidden="true" />
-          <span>{isTr ? "DOĞRULANMIŞ DENEYİMLER" : "VERIFIED COMMUNITY EXPERIENCES"}</span>
-        </div>
-
         <h2 className="text-2xl sm:text-4xl font-extrabold text-[var(--color-text-primary)] tracking-tight">
           {isTr ? (
             <>

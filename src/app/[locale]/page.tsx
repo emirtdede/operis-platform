@@ -1,17 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { setRequestLocale } from "next-intl/server";
-import {
-  ArrowRight,
-  Code,
-  Server,
-  Layers,
-  Smartphone,
-  Cloud,
-  Cpu,
-  Zap,
-  Sparkles,
-} from "lucide-react";
+import { ArrowRight, Code, Server, Layers, Smartphone, Cloud, Cpu, Zap } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 import { SpotlightCard } from "@/src/components/ui/spotlight-card";
 import { InteractiveArchitectureShowcase } from "@/src/components/diagrams/interactive-architecture-showcase";
@@ -196,16 +186,6 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
       {/* 1. Expansive Hero Section */}
       <section className="relative flex flex-col justify-center items-center w-full px-4 sm:px-6 lg:px-8 text-center py-8 sm:py-16 snap-start scroll-mt-16">
         <div className="mx-auto max-w-6xl w-full space-y-8 sm:space-y-10">
-          {/* Eyebrow Modern Badge */}
-          <div className="inline-flex items-center gap-2 rounded-full border border-blue-500/30 bg-blue-500/10 px-4 py-1.5 text-xs font-semibold text-blue-400 backdrop-blur-md shadow-sm">
-            <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
-            <span>
-              {isTr
-                ? "YENİ NESİL YAZILIM EKOSİSTEMİ • %0 KOMİSYON"
-                : "NEXT-GEN SOFTWARE ECOSYSTEM • 0% COMMISSION"}
-            </span>
-          </div>
-
           {/* Display Typography with Masked Gradients */}
           <div className="space-y-4 sm:space-y-6">
             <h1 className="text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight text-[var(--color-text-primary)] max-w-5xl mx-auto leading-[1.1]">

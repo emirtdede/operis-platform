@@ -4,7 +4,6 @@ import { useState } from "react";
 import {
   CheckCircle2,
   XCircle,
-  ShieldCheck,
   Percent,
   Lock,
   MessageSquare,
@@ -128,11 +127,6 @@ export function PlatformComparisonTable({
       <div className="w-full max-w-6xl mx-auto">
         {/* Section Header */}
         <div className="text-center space-y-4 max-w-3xl mx-auto mb-12">
-          <div className="inline-flex items-center gap-2 rounded-full border border-blue-500/30 bg-blue-500/10 px-3.5 py-1 text-xs font-semibold text-blue-400">
-            <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
-            <span>{isTr ? "FARK YARATAN MODEL" : "WHY OPERIS IS DIFFERENT"}</span>
-          </div>
-
           <h2 className="text-2xl sm:text-4xl font-extrabold text-[var(--color-text-primary)] tracking-tight">
             {isTr ? (
               <>

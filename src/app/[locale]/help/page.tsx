@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { setRequestLocale } from "next-intl/server";
-import { HelpCircle, Clock, Lock, Handshake, Percent, MessageSquare } from "lucide-react";
+import { Clock, Lock, Handshake, Percent, MessageSquare } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 
 export async function generateMetadata({
@@ -71,10 +71,6 @@ export default async function HelpPage({ params }: { params: Promise<{ locale: s
     <main className="mx-auto max-w-5xl px-4 py-12 sm:px-6 lg:px-8 space-y-12">
       {/* Hero Header */}
       <header className="text-center space-y-4 max-w-2xl mx-auto">
-        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-blue-500/30 bg-blue-500/10 text-xs font-semibold text-blue-400 shadow-sm">
-          <HelpCircle className="h-4 w-4" aria-hidden="true" />
-          <span>{isTr ? "Bilgi Bankası & Destek" : "Knowledge Base"}</span>
-        </div>
         <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-[var(--color-text-primary)]">
           {isTr ? "Nasıl Çalışır? Nelere Dikkat Edilmeli?" : "How Operis Works & Guidelines"}
         </h1>

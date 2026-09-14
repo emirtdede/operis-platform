@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { setRequestLocale } from "next-intl/server";
-import { Palette } from "lucide-react";
 import { BrandKitClient } from "@/src/components/brand/brand-kit-client";
 
 export async function generateMetadata({
@@ -76,11 +75,6 @@ export default async function BrandPage({ params }: { params: Promise<{ locale: 
 
       {/* Hero Header Section */}
       <header className="text-center space-y-4 max-w-3xl mx-auto pt-4 pb-2">
-        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-blue-500/20 bg-blue-500/10 text-xs font-semibold text-blue-400 shadow-sm">
-          <Palette className="h-4 w-4" aria-hidden="true" />
-          <span>{isTr ? "Resmi Marka & Medya Kiti" : "Official Brand & Media Kit"}</span>
-        </div>
-
         <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-[var(--color-text-primary)]">
           {isTr ? "Operis Marka Kılavuzu" : "Operis Brand Identity"}
         </h1>

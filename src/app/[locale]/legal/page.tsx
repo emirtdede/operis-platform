@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { setRequestLocale } from "next-intl/server";
-import { ShieldCheck } from "lucide-react";
 import { LegalCenterClient } from "@/src/components/legal/legal-center-client";
 
 export async function generateMetadata({
@@ -75,11 +74,6 @@ export default async function LegalCenterPage({ params }: { params: Promise<{ lo
 
       {/* Hero Header Section */}
       <header className="text-center space-y-4 max-w-3xl mx-auto pt-4 pb-2">
-        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-blue-500/20 bg-blue-500/10 text-xs font-semibold text-blue-400 shadow-sm">
-          <ShieldCheck className="h-4 w-4" aria-hidden="true" />
-          <span>{isTr ? "Resmi Yasal ve Güven Portalı" : "Official Legal & Trust Portal"}</span>
-        </div>
-
         <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-[var(--color-text-primary)]">
           {isTr ? "Yasal ve Güven Merkezi" : "Legal & Trust Center"}
         </h1>

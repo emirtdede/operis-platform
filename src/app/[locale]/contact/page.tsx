@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { setRequestLocale } from "next-intl/server";
-import { Mail, MessageSquare, Building, ShieldCheck } from "lucide-react";
+import { Mail, Building, ShieldCheck } from "lucide-react";
 import { ContactForm } from "@/src/components/contact/contact-form";
 
 export async function generateMetadata({
@@ -36,10 +36,6 @@ export default async function ContactPage({ params }: { params: Promise<{ locale
     <main className="mx-auto max-w-5xl px-4 py-12 sm:px-6 lg:px-8 space-y-12">
       {/* Header */}
       <header className="text-center space-y-4 max-w-2xl mx-auto">
-        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-blue-500/30 bg-blue-500/10 text-xs font-semibold text-blue-400 shadow-sm">
-          <MessageSquare className="h-4 w-4" aria-hidden="true" />
-          <span>{isTr ? "İletişim & Destek" : "Get In Touch"}</span>
-        </div>
         <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-[var(--color-text-primary)]">
           {isTr ? "Bizimle İletişime Geçin" : "We'd Love to Hear From You"}
         </h1>
