@@ -148,21 +148,21 @@ export function CookieConsentModal({ locale }: CookieConsentModalProps) {
   if (view === "main") {
     return (
       <aside
-        className="fixed bottom-4 sm:bottom-6 left-4 sm:left-6 z-[950] w-[calc(100vw-2rem)] sm:w-[370px] max-w-[calc(100vw-2rem)] pt-6 transition-all duration-300 ease-out animate-in fade-in-0 slide-in-from-bottom-5"
+        className="fixed bottom-4 sm:bottom-6 left-4 sm:left-6 z-[950] w-[calc(100vw-2rem)] sm:w-[410px] max-w-[calc(100vw-2rem)] pt-7 transition-all duration-300 ease-out animate-in fade-in-0 slide-in-from-bottom-5"
         role="region"
         aria-label={isTr ? "Çerez Bildirimi" : "Cookie Notice"}
       >
-        <div className="relative rounded-2xl sm:rounded-3xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/98 backdrop-blur-2xl px-4 sm:px-5 pb-4 sm:pb-5 pt-6 shadow-2xl shadow-black/30 dark:shadow-black/80">
-          {/* Top Left Circular Cookie Badge */}
-          <div className="absolute -top-5 left-5 flex items-center justify-center h-10 w-10 rounded-full border-2 border-amber-500/40 bg-[var(--color-surface-base)] shadow-md shadow-black/20 z-10">
-            <div className="flex items-center justify-center h-7 w-7 rounded-full bg-amber-500/15">
-              <Cookie className="h-4 w-4 text-amber-500 dark:text-amber-400" aria-hidden="true" />
+        <div className="relative rounded-[28px] sm:rounded-[32px] border border-[var(--color-border-subtle)] bg-[var(--color-surface-base)]/98 backdrop-blur-2xl px-5 sm:px-6 pb-5 sm:pb-6 pt-8 shadow-2xl shadow-black/30 dark:shadow-black/80">
+          {/* Top Center Circular Cookie Badge (Exactly preserved original design) */}
+          <div className="absolute -top-7 left-1/2 -translate-x-1/2 flex items-center justify-center h-14 w-14 rounded-full border-2 border-amber-500/40 bg-[var(--color-surface-base)] shadow-lg shadow-black/20 z-10">
+            <div className="flex items-center justify-center h-10 w-10 rounded-full bg-amber-500/15">
+              <Cookie className="h-6 w-6 text-amber-500 dark:text-amber-400" aria-hidden="true" />
             </div>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-3.5">
             {/* Description Text with Bold and Underlined Links */}
-            <p className="text-[11px] sm:text-xs leading-relaxed text-[var(--color-text-secondary)] font-normal text-left">
+            <p className="text-xs leading-relaxed text-[var(--color-text-secondary)] font-normal text-left sm:text-center">
               {isTr ? (
                 <>
                   <strong className="font-bold text-[var(--color-text-primary)]">
@@ -212,12 +212,12 @@ export function CookieConsentModal({ locale }: CookieConsentModalProps) {
               )}
             </p>
 
-            {/* 3 Horizontal Action Buttons Row: Compact & clean */}
-            <div className="grid grid-cols-3 gap-1.5 pt-0.5">
+            {/* 3 Horizontal Action Buttons Row: Preserved original styling and radii */}
+            <div className="grid grid-cols-3 gap-2 pt-0.5">
               <button
                 type="button"
                 onClick={handleOnlyEssential}
-                className="whitespace-nowrap px-2 py-2 rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-hover)] hover:bg-[var(--color-surface-active)] text-[11px] font-semibold text-[var(--color-text-primary)] transition-all shadow-xs active:scale-[0.98] text-center cursor-pointer"
+                className="whitespace-nowrap px-2 sm:px-2.5 py-2.5 rounded-xl sm:rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-hover)] hover:bg-[var(--color-surface-active)] text-xs font-semibold text-[var(--color-text-primary)] transition-all shadow-sm active:scale-[0.98] text-center cursor-pointer"
               >
                 {isTr ? "Yalnızca Gerekli" : "Only Essential"}
               </button>
@@ -225,7 +225,7 @@ export function CookieConsentModal({ locale }: CookieConsentModalProps) {
               <button
                 type="button"
                 onClick={() => setView("preferences")}
-                className="whitespace-nowrap px-2 py-2 rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-hover)] hover:bg-[var(--color-surface-active)] text-[11px] font-semibold text-[var(--color-text-primary)] transition-all shadow-xs active:scale-[0.98] text-center cursor-pointer"
+                className="whitespace-nowrap px-2 sm:px-2.5 py-2.5 rounded-xl sm:rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-hover)] hover:bg-[var(--color-surface-active)] text-xs font-semibold text-[var(--color-text-primary)] transition-all shadow-sm active:scale-[0.98] text-center cursor-pointer"
               >
                 {isTr ? "Tercihler" : "Preferences"}
               </button>
@@ -233,7 +233,7 @@ export function CookieConsentModal({ locale }: CookieConsentModalProps) {
               <button
                 type="button"
                 onClick={handleAcceptAll}
-                className="whitespace-nowrap px-2 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-[11px] shadow-md shadow-blue-500/20 transition-all active:scale-[0.98] text-center cursor-pointer"
+                className="whitespace-nowrap px-2 sm:px-2.5 py-2.5 rounded-xl sm:rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-blue-500/25 transition-all active:scale-[0.98] text-center cursor-pointer"
               >
                 {isTr ? "Tümünü Kabul Et" : "Accept All"}
               </button>
