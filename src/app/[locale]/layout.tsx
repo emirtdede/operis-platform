@@ -39,9 +39,7 @@ export async function generateMetadata({
       template: `%s | Operis`,
     },
     metadataBase: new URL(
-      process.env.APP_URL ||
-        process.env.NEXT_PUBLIC_APP_URL ||
-        "https://operis.vercel.app"
+      process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || "https://operis.vercel.app"
     ),
     alternates: {
       canonical: `/${locale}`,
